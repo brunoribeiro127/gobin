@@ -4,6 +4,7 @@ import (
 	"context"
 	"debug/buildinfo"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -41,6 +43,10 @@ Env Vars:        {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{e
 Commit Hash:     {{.VCSRevision}}{{.VCSModified}}
 Commit Time:     {{.VCSTime}}
 `
+)
+
+var (
+	ErrNotFound = errors.New("not found")
 )
 
 type BinInfo struct {
@@ -134,6 +140,10 @@ func fetchModuleLatestVersion(module string) (string, error) {
 			return "", readErr
 		}
 
+		if resp.StatusCode == http.StatusNotFound {
+			return "", ErrNotFound
+		}
+
 		err = fmt.Errorf("unexpected response [code=%s, body=%s]", resp.Status, string(bytes))
 		log.Printf("error fetching latest version for module '%s': %v\n", module, err)
 		return "", err
@@ -150,7 +160,50 @@ func fetchModuleLatestVersion(module string) (string, error) {
 	return response.Version, nil
 }
 
-func getBinInfo(fullPath string) (BinInfo, error) {
+func nextMajorVersion(version string) (string, error) {
+	if !semver.IsValid(version) {
+		err := fmt.Errorf("invalid module version '%s'", version)
+		log.Println(err)
+		return "", err
+	}
+
+	major := semver.Major(version)
+	majorNumStr := strings.TrimPrefix(major, "v")
+
+	majorNum, err := strconv.Atoi(majorNumStr)
+	if err != nil {
+		log.Printf("error parsing major version number '%s': %v\n", majorNumStr, err)
+		return "", err
+	}
+
+	return fmt.Sprintf("v%d", majorNum+1), nil
+}
+
+func checkModuleMajorUpgrade(module, version string) (string, error) {
+	latestMajorVersion := version
+
+	for {
+		nextMajorVersion, err := nextMajorVersion(latestMajorVersion)
+		if err != nil {
+			return "", err
+		}
+
+		majorVersion, err := fetchModuleLatestVersion(fmt.Sprintf("%s/%s", module, nextMajorVersion))
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				break
+			}
+
+			return "", err
+		}
+
+		latestMajorVersion = majorVersion
+	}
+
+	return latestMajorVersion, nil
+}
+
+func getBinInfo(fullPath string, checkMajorUpgrade bool) (BinInfo, error) {
 	info, err := buildinfo.ReadFile(fullPath)
 	if err != nil {
 		log.Printf("error reading binary build info '%s': %v\n", fullPath, err)
@@ -160,6 +213,13 @@ func getBinInfo(fullPath string) (BinInfo, error) {
 	latestVersion, err := fetchModuleLatestVersion(info.Main.Path)
 	if err != nil {
 		return BinInfo{}, err
+	}
+
+	if checkMajorUpgrade {
+		latestVersion, err = checkModuleMajorUpgrade(info.Main.Path, info.Main.Version)
+		if err != nil {
+			return BinInfo{}, err
+		}
 	}
 
 	return BinInfo{
@@ -173,7 +233,7 @@ func getBinInfo(fullPath string) (BinInfo, error) {
 	}, nil
 }
 
-func GetAllBinInfos() ([]BinInfo, error) {
+func GetAllBinInfos(checkMajorUpgrade bool) ([]BinInfo, error) {
 	binFullPath, err := getBinFullPath()
 	if err != nil {
 		return nil, err
@@ -186,7 +246,7 @@ func GetAllBinInfos() ([]BinInfo, error) {
 
 	binInfos := make([]BinInfo, 0, len(bins))
 	for _, bin := range bins {
-		info, infoErr := getBinInfo(bin)
+		info, infoErr := getBinInfo(bin, checkMajorUpgrade)
 		if infoErr != nil {
 			continue
 		}
