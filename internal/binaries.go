@@ -14,15 +14,19 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 
 	"golang.org/x/mod/semver"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
-	BinaryListTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
+	binaryListTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
 | {{printf "%-*s" .BinaryNameWidth "Name"}} | {{printf "%-*s" .ModulePathWidth "Module Path"}} | {{printf "%-*s" .ModuleVersionWidth "Version"}} | {{printf "%-*s" .ModuleLatestVersionWidth "Latest Version"}} |
 +{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
 {{- range .Binaries }}
@@ -31,7 +35,7 @@ const (
 +{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
 `
 
-	VersionTemplate = `Main Path:       {{.MainPath}}
+	versionTemplate = `Main Path:       {{.MainPath}}
 Main Version:    {{.MainVersion}}
 Main Sum:        {{.MainSum}}
 Go Version:      {{.GoVersion}}
@@ -43,6 +47,9 @@ Env Vars:        {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{e
 Commit Hash:     {{.VCSRevision}}{{.VCSModified}}
 Commit Time:     {{.VCSTime}}
 `
+
+	checkVersionMaxParallelism = 10
+	installMaxParallelism      = 3
 )
 
 var (
@@ -74,15 +81,24 @@ func UpgradeAllBinaries(majorUpgrade bool) error {
 		return err
 	}
 
+	grp := new(errgroup.Group)
+	sem := semaphore.NewWeighted(installMaxParallelism)
+
 	for _, info := range binInfos {
 		if info.NeedsUpgrade {
-			if err = installGoBin(info); err != nil {
-				return err
-			}
+			grp.Go(func() error {
+				if acqErr := sem.Acquire(context.Background(), 1); acqErr != nil {
+					slog.Default().Error("failed to acquire semaphore", "err", acqErr)
+					return acqErr
+				}
+				defer sem.Release(1)
+
+				return installGoBin(info)
+			})
 		}
 	}
 
-	return nil
+	return grp.Wait()
 }
 
 func UpgradeBinary(binary string, majorUpgrade bool) error {
@@ -173,7 +189,7 @@ func PrintVersion() error {
 		}
 	}
 
-	tmplParsed := template.Must(template.New("version").Parse(VersionTemplate))
+	tmplParsed := template.Must(template.New("version").Parse(versionTemplate))
 	err := tmplParsed.Execute(os.Stdout, data)
 	if err != nil {
 		logger.Error("error executing template", "err", err)
@@ -385,15 +401,40 @@ func getAllBinInfos(checkMajorUpgrade bool) ([]BinInfo, error) {
 		return nil, err
 	}
 
-	binInfos := make([]BinInfo, 0, len(bins))
-	for _, bin := range bins {
-		info, infoErr := getBinInfo(bin, checkMajorUpgrade)
-		if infoErr != nil {
-			continue
-		}
+	var (
+		mutex    sync.Mutex
+		binInfos []BinInfo
+	)
 
-		binInfos = append(binInfos, info)
+	grp := new(errgroup.Group)
+	sem := semaphore.NewWeighted(checkVersionMaxParallelism)
+
+	for _, bin := range bins {
+		grp.Go(func() error {
+			if acqErr := sem.Acquire(context.Background(), 1); acqErr != nil {
+				slog.Default().Error("failed to acquire semaphore", "err", acqErr)
+				return acqErr
+			}
+			defer sem.Release(1)
+
+			info, infoErr := getBinInfo(bin, checkMajorUpgrade)
+			if infoErr == nil {
+				mutex.Lock()
+				binInfos = append(binInfos, info)
+				mutex.Unlock()
+			}
+
+			return nil
+		})
 	}
+
+	if err = grp.Wait(); err != nil {
+		return nil, err
+	}
+
+	sort.Slice(binInfos, func(i, j int) bool {
+		return binInfos[i].Name < binInfos[j].Name
+	})
 
 	return binInfos, nil
 }
@@ -465,7 +506,7 @@ func printTabularBinInfos(binInfos []BinInfo) error {
 	tmplParsed := template.Must(template.New("table").Funcs(template.FuncMap{
 		"repeat": strings.Repeat,
 		"color":  colorize,
-	}).Parse(BinaryListTemplate))
+	}).Parse(binaryListTemplate))
 
 	err := tmplParsed.Execute(os.Stdout, data)
 	if err != nil {
