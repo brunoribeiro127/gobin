@@ -329,13 +329,19 @@ func nextMajorVersion(version string) (string, error) {
 func checkModuleMajorUpgrade(module, version string) (string, error) {
 	latestMajorVersion := version
 
+	pkg := module
+	major := semver.Major(version)
+	if major != "v0" && major != "v1" {
+		pkg = stripVersionSuffix(module)
+	}
+
 	for {
 		nextMajorVersion, err := nextMajorVersion(latestMajorVersion)
 		if err != nil {
 			return "", err
 		}
 
-		majorVersion, err := fetchModuleLatestVersion(fmt.Sprintf("%s/%s", module, nextMajorVersion))
+		majorVersion, err := fetchModuleLatestVersion(fmt.Sprintf("%s/%s", pkg, nextMajorVersion))
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				break
@@ -523,21 +529,12 @@ func installGoBin(info BinInfo) error {
 		"latest_version", info.ModuleLatestVersion,
 	)
 
-	if !semver.IsValid(info.ModuleLatestVersion) {
-		err := errors.New("invalid module version")
-		logger.Error(err.Error())
-		return err
-	}
-
-	var pkg string
+	pkg := fmt.Sprintf("%s@%s", info.PackagePath, info.ModuleLatestVersion)
 	major := semver.Major(info.ModuleLatestVersion)
-	switch major {
-	case "v0", "v1":
-		pkg = fmt.Sprintf("%s@%s", info.PackagePath, info.ModuleLatestVersion)
-	default:
+	if major != "v0" && major != "v1" {
 		pkg = fmt.Sprintf(
 			"%s/%s%s@%s",
-			info.ModulePath,
+			stripVersionSuffix(info.ModulePath),
 			major,
 			strings.TrimPrefix(info.PackagePath, info.ModulePath),
 			info.ModuleLatestVersion,
@@ -555,4 +552,17 @@ func installGoBin(info BinInfo) error {
 	}
 
 	return err
+}
+
+func stripVersionSuffix(module string) string {
+	parts := strings.Split(module, "/")
+	lastPart := parts[len(parts)-1]
+
+	if strings.HasPrefix(lastPart, "v") {
+		if _, err := strconv.Atoi(lastPart[1:]); err == nil {
+			return strings.Join(parts[:len(parts)-1], "/")
+		}
+	}
+
+	return module
 }
