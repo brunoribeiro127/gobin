@@ -23,10 +23,13 @@ func newListCmd() *cobra.Command {
 	var checkMajor bool
 
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List installed Go binaries",
-		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		Use:           "list",
+		Short:         "List installed Go binaries",
+		Args:          cobra.NoArgs,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SilenceUsage = true
+
 			return internal.ListBinaries(checkMajor)
 		},
 	}
@@ -46,10 +49,13 @@ func newUpgradeCmd() *cobra.Command {
 	var majorUpgrade bool
 
 	cmd := &cobra.Command{
-		Use:   "upgrade [binary|all]",
-		Short: "Upgrade installed Go binaries",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		Use:           "upgrade [binary|all]",
+		Short:         "Upgrade installed Go binaries",
+		Args:          cobra.ExactArgs(1),
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
 			if args[0] == "all" {
 				return internal.UpgradeAllBinaries(majorUpgrade)
 			}
@@ -73,10 +79,13 @@ func newVersionCmd() *cobra.Command {
 	var short bool
 
 	var cmd = &cobra.Command{
-		Use:   "version",
-		Short: "Shows the package version",
-		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		Use:           "version",
+		Short:         "Shows the package version",
+		Args:          cobra.NoArgs,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SilenceUsage = true
+
 			if short {
 				internal.PrintShortVersion()
 				return nil
