@@ -72,7 +72,28 @@ func ListBinaries(checkMajor bool) error {
 		return err
 	}
 
-	return printTabularBinInfos(binInfos)
+	return printOutdatedBinInfos(binInfos)
+}
+
+func ListOutdatedBinaries(checkMajor bool) error {
+	binInfos, err := getAllBinInfos(checkMajor)
+	if err != nil {
+		return err
+	}
+
+	outdated := make([]BinInfo, 0, len(binInfos))
+	for _, info := range binInfos {
+		if info.NeedsUpgrade {
+			outdated = append(outdated, info)
+		}
+	}
+
+	if len(outdated) == 0 {
+		fmt.Fprintln(os.Stdout, "✅ All binaries are up to date.")
+		return nil
+	}
+
+	return printOutdatedBinInfos(outdated)
 }
 
 func UpgradeAllBinaries(majorUpgrade bool) error {
@@ -445,7 +466,7 @@ func getAllBinInfos(checkMajorUpgrade bool) ([]BinInfo, error) {
 	return binInfos, nil
 }
 
-func printTabularBinInfos(binInfos []BinInfo) error {
+func printOutdatedBinInfos(binInfos []BinInfo) error {
 	getMaxWidth := func(header string, binaries []BinInfo, f func(BinInfo) string) int {
 		maxWidth := len(header)
 		for _, bin := range binaries {

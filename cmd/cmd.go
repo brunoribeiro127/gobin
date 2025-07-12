@@ -13,6 +13,7 @@ func Execute() error {
 	}
 
 	rootCmd.AddCommand(newListCmd())
+	rootCmd.AddCommand(newOutdatedCmd())
 	rootCmd.AddCommand(newUpgradeCmd())
 	rootCmd.AddCommand(newVersionCmd())
 
@@ -31,6 +32,32 @@ func newListCmd() *cobra.Command {
 			cmd.SilenceUsage = true
 
 			return internal.ListBinaries(checkMajor)
+		},
+	}
+
+	cmd.Flags().BoolVarP(
+		&checkMajor,
+		"major",
+		"m",
+		false,
+		"Checks for major versions",
+	)
+
+	return cmd
+}
+
+func newOutdatedCmd() *cobra.Command {
+	var checkMajor bool
+
+	cmd := &cobra.Command{
+		Use:           "outdated",
+		Short:         "List outdated Go binaries",
+		Args:          cobra.NoArgs,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SilenceUsage = true
+
+			return internal.ListOutdatedBinaries(checkMajor)
 		},
 	}
 
