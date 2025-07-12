@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -108,7 +108,7 @@ func UpgradeBinary(binary string, majorUpgrade bool) error {
 func PrintShortVersion() {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		log.Println("no build info available")
+		slog.Default().Error("no build info available")
 		return
 	}
 
@@ -116,9 +116,11 @@ func PrintShortVersion() {
 }
 
 func PrintVersion() error {
+	logger := slog.Default()
+
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		log.Println("no build info available")
+		logger.Error("no build info available")
 		return nil
 	}
 
@@ -174,7 +176,7 @@ func PrintVersion() error {
 	tmplParsed := template.Must(template.New("version").Parse(VersionTemplate))
 	err := tmplParsed.Execute(os.Stdout, data)
 	if err != nil {
-		log.Printf("error executing template: %v\n", err)
+		logger.Error("error executing template", "err", err)
 	}
 
 	return err
@@ -191,7 +193,7 @@ func getBinFullPath() (string, error) {
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Printf("error getting user home directory: %v\n", err)
+		slog.Default().Error("error getting user home directory", "err", err)
 		return "", err
 	}
 
@@ -199,11 +201,12 @@ func getBinFullPath() (string, error) {
 }
 
 func listBinaryFullPaths(dir string) ([]string, error) {
+	logger := slog.Default().With("dir", dir)
 	var binaries []string
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf("error while reading binaries directory: %v\n", err)
+		logger.Error("error while reading binaries directory", "err", err)
 		return nil, err
 	}
 
@@ -221,7 +224,7 @@ func listBinaryFullPaths(dir string) ([]string, error) {
 		} else {
 			info, infoErr := entry.Info()
 			if infoErr != nil {
-				log.Printf("error while reading file info '%s': %v\n", dir, infoErr)
+				logger.Error("error while reading file info", "file", entry.Name(), "err", infoErr)
 				continue
 			}
 
@@ -236,6 +239,8 @@ func listBinaryFullPaths(dir string) ([]string, error) {
 }
 
 func fetchModuleLatestVersion(module string) (string, error) {
+	logger := slog.Default().With("module", module)
+
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
@@ -243,13 +248,13 @@ func fetchModuleLatestVersion(module string) (string, error) {
 		nil,
 	)
 	if err != nil {
-		log.Printf("error creating request for module '%s': %v\n", module, err)
+		logger.Error("error creating request for module", "err", err)
 		return "", err
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("error fetching latest version for module '%s': %v\n", module, err)
+		logger.Error("error fetching latest version for module", "err", err)
 		return "", err
 	}
 	defer resp.Body.Close()
@@ -257,7 +262,7 @@ func fetchModuleLatestVersion(module string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		bytes, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
-			log.Printf("error reading response body: %v\n", readErr)
+			logger.Error("error reading response body", "err", readErr)
 			return "", readErr
 		}
 
@@ -266,7 +271,7 @@ func fetchModuleLatestVersion(module string) (string, error) {
 		}
 
 		err = fmt.Errorf("unexpected response [code=%s, body=%s]", resp.Status, string(bytes))
-		log.Printf("error fetching latest version for module '%s': %v\n", module, err)
+		logger.Error("error fetching latest version for module", "err", err)
 		return "", err
 	}
 
@@ -274,7 +279,7 @@ func fetchModuleLatestVersion(module string) (string, error) {
 		Version string `json:"Version"`
 	}
 	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		log.Printf("error decoding response body: %v\n", err)
+		logger.Error("error decoding response body", "err", err)
 		return "", err
 	}
 
@@ -282,9 +287,11 @@ func fetchModuleLatestVersion(module string) (string, error) {
 }
 
 func nextMajorVersion(version string) (string, error) {
+	logger := slog.Default().With("version", version)
+
 	if !semver.IsValid(version) {
-		err := fmt.Errorf("invalid module version '%s'", version)
-		log.Println(err)
+		err := errors.New("invalid module version")
+		logger.Error(err.Error())
 		return "", err
 	}
 
@@ -296,7 +303,7 @@ func nextMajorVersion(version string) (string, error) {
 	majorNumStr := strings.TrimPrefix(major, "v")
 	majorNum, err := strconv.Atoi(majorNumStr)
 	if err != nil {
-		log.Printf("error parsing major version number '%s': %v\n", majorNumStr, err)
+		logger.Error("error parsing major version number", "err", err)
 		return "", err
 	}
 
@@ -328,14 +335,19 @@ func checkModuleMajorUpgrade(module, version string) (string, error) {
 }
 
 func getBinInfo(fullPath string, checkMajorUpgrade bool) (BinInfo, error) {
+	logger := slog.Default().With(
+		"full_path", fullPath,
+		"check_major_upgrade", checkMajorUpgrade,
+	)
+
 	info, err := buildinfo.ReadFile(fullPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			log.Printf("binary not found '%s': %v\n", fullPath, err)
+			logger.Error("binary not found", "err", err)
 			return BinInfo{}, ErrNotFound
 		}
 
-		log.Printf("error reading binary build info '%s': %v\n", fullPath, err)
+		logger.Error("error reading binary build info", "err", err)
 		return BinInfo{}, err
 	}
 
@@ -457,16 +469,22 @@ func printTabularBinInfos(binInfos []BinInfo) error {
 
 	err := tmplParsed.Execute(os.Stdout, data)
 	if err != nil {
-		log.Printf("error executing template: %v\n", err)
+		slog.Default().Error("error executing template", "err", err)
 	}
 
 	return err
 }
 
 func installGoBin(info BinInfo) error {
+	logger := slog.Default().With(
+		"package", info.PackagePath,
+		"module", info.ModulePath,
+		"latest_version", info.ModuleLatestVersion,
+	)
+
 	if !semver.IsValid(info.ModuleLatestVersion) {
-		err := fmt.Errorf("invalid module version '%s'", info.ModuleLatestVersion)
-		log.Println(err)
+		err := errors.New("invalid module version")
+		logger.Error(err.Error())
 		return err
 	}
 
@@ -492,7 +510,7 @@ func installGoBin(info BinInfo) error {
 
 	err := cmd.Run()
 	if err != nil {
-		log.Printf("error installing binaries: %v\n", err)
+		logger.Error("error installing binaries", "err", err)
 	}
 
 	return err
