@@ -59,6 +59,127 @@ type BinInfo struct {
 	NeedsUpgrade        bool
 }
 
+func ListBinaries(checkMajor bool) error {
+	binInfos, err := getAllBinInfos(checkMajor)
+	if err != nil {
+		return err
+	}
+
+	return printTabularBinInfos(binInfos)
+}
+
+func UpgradeAllBinaries(majorUpgrade bool) error {
+	binInfos, err := getAllBinInfos(majorUpgrade)
+	if err != nil {
+		return err
+	}
+
+	for _, info := range binInfos {
+		if info.NeedsUpgrade {
+			if err = installGoBin(info); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func UpgradeBinary(binary string, majorUpgrade bool) error {
+	binPath, err := getBinFullPath()
+	if err != nil {
+		return err
+	}
+
+	info, err := getBinInfo(filepath.Join(binPath, binary), majorUpgrade)
+	if err != nil {
+		return err
+	}
+
+	if info.NeedsUpgrade {
+		if err = installGoBin(info); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func PrintShortVersion() {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		log.Println("no build info available")
+		return
+	}
+
+	fmt.Fprintln(os.Stdout, info.Main.Version)
+}
+
+func PrintVersion() error {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		log.Println("no build info available")
+		return nil
+	}
+
+	data := struct {
+		MainPath    string
+		MainVersion string
+		MainSum     string
+		GoVersion   string
+		BuildMode   string
+		Compiler    string
+		VCSRevision string
+		VCSTime     string
+		VCSModified string
+		OS          string
+		Arch        string
+		Feature     string
+		EnvVars     []string
+	}{
+		MainPath:    info.Main.Path,
+		MainVersion: info.Main.Version,
+		MainSum:     info.Main.Sum,
+		GoVersion:   info.GoVersion,
+	}
+
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			data.VCSRevision = s.Value
+		case "vcs.time":
+			data.VCSTime = s.Value
+		case "vcs.modified":
+			if s.Value == "true" {
+				data.VCSModified = " (dirty)"
+			}
+		case "-buildmode":
+			data.BuildMode = s.Value
+		case "-compiler":
+			data.Compiler = s.Value
+		case "GOOS":
+			data.OS = s.Value
+		case "GOARCH":
+			data.Arch = s.Value
+		default:
+			if strings.HasPrefix(s.Key, "GO") {
+				data.Feature = s.Value
+			}
+			if strings.HasPrefix(s.Key, "CGO_") {
+				data.EnvVars = append(data.EnvVars, s.Key+"="+s.Value)
+			}
+		}
+	}
+
+	tmplParsed := template.Must(template.New("version").Parse(VersionTemplate))
+	err := tmplParsed.Execute(os.Stdout, data)
+	if err != nil {
+		log.Printf("error executing template: %v\n", err)
+	}
+
+	return err
+}
+
 func getBinFullPath() (string, error) {
 	if gobin := os.Getenv("GOBIN"); gobin != "" {
 		return gobin, nil
@@ -168,8 +289,11 @@ func nextMajorVersion(version string) (string, error) {
 	}
 
 	major := semver.Major(version)
-	majorNumStr := strings.TrimPrefix(major, "v")
+	if major == "v0" || major == "v1" {
+		return "v2", nil
+	}
 
+	majorNumStr := strings.TrimPrefix(major, "v")
 	majorNum, err := strconv.Atoi(majorNumStr)
 	if err != nil {
 		log.Printf("error parsing major version number '%s': %v\n", majorNumStr, err)
@@ -206,6 +330,11 @@ func checkModuleMajorUpgrade(module, version string) (string, error) {
 func getBinInfo(fullPath string, checkMajorUpgrade bool) (BinInfo, error) {
 	info, err := buildinfo.ReadFile(fullPath)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			log.Printf("binary not found '%s': %v\n", fullPath, err)
+			return BinInfo{}, ErrNotFound
+		}
+
 		log.Printf("error reading binary build info '%s': %v\n", fullPath, err)
 		return BinInfo{}, err
 	}
@@ -216,7 +345,7 @@ func getBinInfo(fullPath string, checkMajorUpgrade bool) (BinInfo, error) {
 	}
 
 	if checkMajorUpgrade {
-		latestVersion, err = checkModuleMajorUpgrade(info.Main.Path, info.Main.Version)
+		latestVersion, err = checkModuleMajorUpgrade(info.Main.Path, latestVersion)
 		if err != nil {
 			return BinInfo{}, err
 		}
@@ -233,7 +362,7 @@ func getBinInfo(fullPath string, checkMajorUpgrade bool) (BinInfo, error) {
 	}, nil
 }
 
-func GetAllBinInfos(checkMajorUpgrade bool) ([]BinInfo, error) {
+func getAllBinInfos(checkMajorUpgrade bool) ([]BinInfo, error) {
 	binFullPath, err := getBinFullPath()
 	if err != nil {
 		return nil, err
@@ -257,7 +386,7 @@ func GetAllBinInfos(checkMajorUpgrade bool) ([]BinInfo, error) {
 	return binInfos, nil
 }
 
-func PrintTabularBinInfos(binInfos []BinInfo) error {
+func printTabularBinInfos(binInfos []BinInfo) error {
 	getMaxWidth := func(header string, binaries []BinInfo, f func(BinInfo) string) int {
 		maxWidth := len(header)
 		for _, bin := range binaries {
@@ -334,8 +463,28 @@ func PrintTabularBinInfos(binInfos []BinInfo) error {
 	return err
 }
 
-func InstallGoBin(info BinInfo) error {
-	pkg := fmt.Sprintf("%s@%s", info.PackagePath, info.ModuleLatestVersion)
+func installGoBin(info BinInfo) error {
+	if !semver.IsValid(info.ModuleLatestVersion) {
+		err := fmt.Errorf("invalid module version '%s'", info.ModuleLatestVersion)
+		log.Println(err)
+		return err
+	}
+
+	var pkg string
+	major := semver.Major(info.ModuleLatestVersion)
+	switch major {
+	case "v0", "v1":
+		pkg = fmt.Sprintf("%s@%s", info.PackagePath, info.ModuleLatestVersion)
+	default:
+		pkg = fmt.Sprintf(
+			"%s/%s%s@%s",
+			info.ModulePath,
+			major,
+			strings.TrimPrefix(info.PackagePath, info.ModulePath),
+			info.ModuleLatestVersion,
+		)
+	}
+
 	cmd := exec.Command("go", "install", pkg)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -344,81 +493,6 @@ func InstallGoBin(info BinInfo) error {
 	err := cmd.Run()
 	if err != nil {
 		log.Printf("error installing binaries: %v\n", err)
-	}
-
-	return err
-}
-
-func PrintShortVersion() {
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		log.Println("no build info available")
-		return
-	}
-
-	fmt.Fprintln(os.Stdout, info.Main.Version)
-}
-
-func PrintVersion() error {
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		log.Println("no build info available")
-		return nil
-	}
-
-	data := struct {
-		MainPath    string
-		MainVersion string
-		MainSum     string
-		GoVersion   string
-		BuildMode   string
-		Compiler    string
-		VCSRevision string
-		VCSTime     string
-		VCSModified string
-		OS          string
-		Arch        string
-		Feature     string
-		EnvVars     []string
-	}{
-		MainPath:    info.Main.Path,
-		MainVersion: info.Main.Version,
-		MainSum:     info.Main.Sum,
-		GoVersion:   info.GoVersion,
-	}
-
-	for _, s := range info.Settings {
-		switch s.Key {
-		case "vcs.revision":
-			data.VCSRevision = s.Value
-		case "vcs.time":
-			data.VCSTime = s.Value
-		case "vcs.modified":
-			if s.Value == "true" {
-				data.VCSModified = " (dirty)"
-			}
-		case "-buildmode":
-			data.BuildMode = s.Value
-		case "-compiler":
-			data.Compiler = s.Value
-		case "GOOS":
-			data.OS = s.Value
-		case "GOARCH":
-			data.Arch = s.Value
-		default:
-			if strings.HasPrefix(s.Key, "GO") {
-				data.Feature = s.Value
-			}
-			if strings.HasPrefix(s.Key, "CGO_") {
-				data.EnvVars = append(data.EnvVars, s.Key+"="+s.Value)
-			}
-		}
-	}
-
-	tmplParsed := template.Must(template.New("version").Parse(VersionTemplate))
-	err := tmplParsed.Execute(os.Stdout, data)
-	if err != nil {
-		log.Printf("error executing template: %v\n", err)
 	}
 
 	return err

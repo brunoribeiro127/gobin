@@ -27,12 +27,7 @@ func newListCmd() *cobra.Command {
 		Short: "List installed Go binaries",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			binInfos, err := internal.GetAllBinInfos(checkMajor)
-			if err != nil {
-				return err
-			}
-
-			return internal.PrintTabularBinInfos(binInfos)
+			return internal.ListBinaries(checkMajor)
 		},
 	}
 
@@ -51,24 +46,15 @@ func newUpgradeCmd() *cobra.Command {
 	var majorUpgrade bool
 
 	cmd := &cobra.Command{
-		Use:   "upgrade",
+		Use:   "upgrade [binary|all]",
 		Short: "Upgrade installed Go binaries",
-		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			binInfos, err := internal.GetAllBinInfos(majorUpgrade)
-			if err != nil {
-				return err
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if args[0] == "all" {
+				return internal.UpgradeAllBinaries(majorUpgrade)
 			}
 
-			for _, info := range binInfos {
-				if info.NeedsUpgrade {
-					if err = internal.InstallGoBin(info); err != nil {
-						return err
-					}
-				}
-			}
-
-			return nil
+			return internal.UpgradeBinary(args[0], majorUpgrade)
 		},
 	}
 
