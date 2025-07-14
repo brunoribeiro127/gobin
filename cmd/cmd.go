@@ -12,6 +12,7 @@ func Execute() error {
 		Short: "gobin - CLI tool to manage Go binaries",
 	}
 
+	rootCmd.AddCommand(newInfoCmd())
 	rootCmd.AddCommand(newListCmd())
 	rootCmd.AddCommand(newOutdatedCmd())
 	rootCmd.AddCommand(newUninstallCmd())
@@ -19,6 +20,20 @@ func Execute() error {
 	rootCmd.AddCommand(newVersionCmd())
 
 	return rootCmd.Execute()
+}
+
+func newInfoCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:           "info [binary]",
+		Short:         "Print information about a binary",
+		Args:          cobra.ExactArgs(1),
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
+			return internal.PrintBinaryInfo(args[0])
+		},
+	}
 }
 
 func newListCmd() *cobra.Command {
@@ -113,15 +128,14 @@ func newVersionCmd() *cobra.Command {
 		Short:         "Shows the package version",
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Run: func(cmd *cobra.Command, _ []string) {
 			cmd.SilenceUsage = true
 
 			if short {
 				internal.PrintShortVersion()
-				return nil
+			} else {
+				internal.PrintVersion()
 			}
-
-			return internal.PrintVersion()
 		},
 	}
 

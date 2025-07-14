@@ -43,17 +43,17 @@ const (
 +{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
 `
 
-	versionTemplate = `Main Path:       {{.MainPath}}
-Main Version:    {{.MainVersion}}
-Main Sum:        {{.MainSum}}
-Go Version:      {{.GoVersion}}
-OS/Arch/Feat:    {{.OS}}/{{.Arch}}/{{.Feature}}
-Compiler:        {{.Compiler}}
-Build Mode:      {{.BuildMode}}
-Env Vars:        {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else}}
-                 {{$env}}{{end}}{{end}}
-Commit Hash:     {{.VCSRevision}}{{.VCSModified}}
-Commit Time:     {{.VCSTime}}
+	infoTemplate = `Path:          {{.FullPath}}
+Package:       {{.PackagePath}}
+Module:        {{.ModulePath}}@{{.ModuleVersion}}
+Module Sum:    {{if .ModuleSum}}{{.ModuleSum}}{{else}}<none>{{end}}
+{{- if .CommitRevision}}
+Commit:        {{.CommitRevision}}{{if .CommitTime}} ({{.CommitTime}}){{end}}
+{{- end}}
+Go Version:    {{.GoVersion}}
+Platform:      {{.OS}}/{{.Arch}}/{{.Feature}}
+Env Vars:      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else}}
+               {{$env}}{{end}}{{end}}
 `
 
 	maxParallelism = 5
@@ -64,11 +64,15 @@ var (
 )
 
 type BinInfo struct {
-	Name                string
-	FullPath            string
-	PackagePath         string
-	ModulePath          string
-	ModuleVersion       string
+	Name          string
+	FullPath      string
+	PackagePath   string
+	ModulePath    string
+	ModuleVersion string
+	ModuleSum     string
+	GoVersion     string
+	Settings      map[string]string
+
 	ModuleLatestVersion string
 	NeedsUpgrade        bool
 }
@@ -199,12 +203,74 @@ func UninstallBinary(binary string) error {
 		return err
 	}
 
-	if err := os.Remove(filepath.Join(binPath, binary)); err != nil {
-		slog.Error("failed to remove binary", "binary", binary, "err", err)
+	if err = os.Remove(filepath.Join(binPath, binary)); err != nil {
+		slog.Default().Error("failed to remove binary", "binary", binary, "err", err)
 		return err
 	}
 
 	return nil
+}
+
+func PrintBinaryInfo(binary string) error {
+	binPath, err := getBinFullPath()
+	if err != nil {
+		return err
+	}
+
+	info, err := getBinInfo(filepath.Join(binPath, binary))
+	if err != nil {
+		return err
+	}
+
+	data := struct {
+		FullPath       string
+		PackagePath    string
+		ModulePath     string
+		ModuleVersion  string
+		ModuleSum      string
+		GoVersion      string
+		CommitRevision string
+		CommitTime     string
+		OS             string
+		Arch           string
+		Feature        string
+		EnvVars        []string
+	}{
+		FullPath:      info.FullPath,
+		PackagePath:   info.PackagePath,
+		ModulePath:    info.ModulePath,
+		ModuleVersion: info.ModuleVersion,
+		ModuleSum:     info.ModuleSum,
+		GoVersion:     info.GoVersion,
+	}
+
+	for k, v := range info.Settings {
+		switch k {
+		case "vcs.revision":
+			data.CommitRevision = v
+		case "vcs.time":
+			data.CommitTime = v
+		case "GOOS":
+			data.OS = v
+		case "GOARCH":
+			data.Arch = v
+		default:
+			if strings.HasPrefix(k, "GO") {
+				data.Feature = v
+			}
+			if strings.HasPrefix(k, "CGO_") && v != "" {
+				data.EnvVars = append(data.EnvVars, k+"="+v)
+			}
+		}
+	}
+
+	tmplParsed := template.Must(template.New("info").Parse(infoTemplate))
+	err = tmplParsed.Execute(os.Stdout, data)
+	if err != nil {
+		slog.Default().Error("error executing template", "err", err)
+	}
+
+	return err
 }
 
 func PrintShortVersion() {
@@ -217,71 +283,26 @@ func PrintShortVersion() {
 	fmt.Fprintln(os.Stdout, info.Main.Version)
 }
 
-func PrintVersion() error {
+func PrintVersion() {
 	logger := slog.Default()
 
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		logger.Error("no build info available")
-		return nil
+		return
 	}
 
-	data := struct {
-		MainPath    string
-		MainVersion string
-		MainSum     string
-		GoVersion   string
-		BuildMode   string
-		Compiler    string
-		VCSRevision string
-		VCSTime     string
-		VCSModified string
-		OS          string
-		Arch        string
-		Feature     string
-		EnvVars     []string
-	}{
-		MainPath:    info.Main.Path,
-		MainVersion: info.Main.Version,
-		MainSum:     info.Main.Sum,
-		GoVersion:   info.GoVersion,
-	}
-
+	var goOS, goArch string
 	for _, s := range info.Settings {
 		switch s.Key {
-		case "vcs.revision":
-			data.VCSRevision = s.Value
-		case "vcs.time":
-			data.VCSTime = s.Value
-		case "vcs.modified":
-			if s.Value == "true" {
-				data.VCSModified = " (dirty)"
-			}
-		case "-buildmode":
-			data.BuildMode = s.Value
-		case "-compiler":
-			data.Compiler = s.Value
 		case "GOOS":
-			data.OS = s.Value
+			goOS = s.Value
 		case "GOARCH":
-			data.Arch = s.Value
-		default:
-			if strings.HasPrefix(s.Key, "GO") {
-				data.Feature = s.Value
-			}
-			if strings.HasPrefix(s.Key, "CGO_") {
-				data.EnvVars = append(data.EnvVars, s.Key+"="+s.Value)
-			}
+			goArch = s.Value
 		}
 	}
 
-	tmplParsed := template.Must(template.New("version").Parse(versionTemplate))
-	err := tmplParsed.Execute(os.Stdout, data)
-	if err != nil {
-		logger.Error("error executing template", "err", err)
-	}
-
-	return err
+	fmt.Fprintf(os.Stdout, "%s (%s %s/%s)\n", info.Main.Version, info.GoVersion, goOS, goArch)
 }
 
 func getBinFullPath() (string, error) {
@@ -456,12 +477,20 @@ func getBinInfo(fullPath string) (BinInfo, error) {
 		return BinInfo{}, err
 	}
 
+	settings := make(map[string]string)
+	for _, setting := range info.Settings {
+		settings[setting.Key] = setting.Value
+	}
+
 	return BinInfo{
 		Name:          filepath.Base(fullPath),
 		FullPath:      fullPath,
 		PackagePath:   info.Path,
 		ModulePath:    info.Main.Path,
 		ModuleVersion: info.Main.Version,
+		ModuleSum:     info.Main.Sum,
+		GoVersion:     info.GoVersion,
+		Settings:      settings,
 	}, nil
 }
 
