@@ -9,11 +9,12 @@ import (
 func Execute() error {
 	rootCmd := &cobra.Command{
 		Use:   "gobin",
-		Short: "gobin is a CLI tool for managing Go binaries",
+		Short: "gobin - CLI tool to manage Go binaries",
 	}
 
 	rootCmd.AddCommand(newListCmd())
 	rootCmd.AddCommand(newOutdatedCmd())
+	rootCmd.AddCommand(newUninstallCmd())
 	rootCmd.AddCommand(newUpgradeCmd())
 	rootCmd.AddCommand(newVersionCmd())
 
@@ -23,7 +24,7 @@ func Execute() error {
 func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:           "list",
-		Short:         "List installed Go binaries",
+		Short:         "List installed binaries",
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -39,7 +40,7 @@ func newOutdatedCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "outdated",
-		Short:         "List outdated Go binaries",
+		Short:         "List outdated binaries",
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -60,12 +61,26 @@ func newOutdatedCmd() *cobra.Command {
 	return cmd
 }
 
+func newUninstallCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:           "uninstall [binary]",
+		Short:         "Uninstall a binary",
+		Args:          cobra.ExactArgs(1),
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
+			return internal.UninstallBinary(args[0])
+		},
+	}
+}
+
 func newUpgradeCmd() *cobra.Command {
 	var majorUpgrade bool
 
 	cmd := &cobra.Command{
 		Use:           "upgrade [binary|all]",
-		Short:         "Upgrade installed Go binaries",
+		Short:         "Upgrade one or all binaries",
 		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

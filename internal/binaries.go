@@ -193,6 +193,20 @@ func UpgradeBinary(binary string, majorUpgrade bool) error {
 	return nil
 }
 
+func UninstallBinary(binary string) error {
+	binPath, err := getBinFullPath()
+	if err != nil {
+		return err
+	}
+
+	if err := os.Remove(filepath.Join(binPath, binary)); err != nil {
+		slog.Error("failed to remove binary", "binary", binary, "err", err)
+		return err
+	}
+
+	return nil
+}
+
 func PrintShortVersion() {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
