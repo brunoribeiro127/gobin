@@ -21,9 +21,7 @@ func Execute() error {
 }
 
 func newListCmd() *cobra.Command {
-	var checkMajor bool
-
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:           "list",
 		Short:         "List installed Go binaries",
 		Args:          cobra.NoArgs,
@@ -31,19 +29,9 @@ func newListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.ListBinaries(checkMajor)
+			return internal.ListInstalledBinaries()
 		},
 	}
-
-	cmd.Flags().BoolVarP(
-		&checkMajor,
-		"major",
-		"m",
-		false,
-		"Checks for major versions",
-	)
-
-	return cmd
 }
 
 func newOutdatedCmd() *cobra.Command {

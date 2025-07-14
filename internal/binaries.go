@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,7 +25,16 @@ import (
 )
 
 const (
-	binaryListTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
+	listTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+
+| {{printf "%-*s" .BinaryNameWidth "Name"}} | {{printf "%-*s" .ModulePathWidth "Module Path"}} | {{printf "%-*s" .ModuleVersionWidth "Version"}} |
++{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+
+{{- range .Binaries }}
+| {{printf "%-*s" $.BinaryNameWidth .Name}} | {{printf "%-*s" $.ModulePathWidth .ModulePath}} | {{printf "%-*s" $.ModuleVersionWidth .ModuleVersion}} |
+{{- end }}
++{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}
+`
+
+	outdatedTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
 | {{printf "%-*s" .BinaryNameWidth "Name"}} | {{printf "%-*s" .ModulePathWidth "Module Path"}} | {{printf "%-*s" .ModuleVersionWidth "Version"}} | {{printf "%-*s" .ModuleLatestVersionWidth "Latest Version"}} |
 +{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
 {{- range .Binaries }}
@@ -48,8 +56,7 @@ Commit Hash:     {{.VCSRevision}}{{.VCSModified}}
 Commit Time:     {{.VCSTime}}
 `
 
-	checkVersionMaxParallelism = 10
-	installMaxParallelism      = 3
+	maxParallelism = 5
 )
 
 var (
@@ -66,26 +73,59 @@ type BinInfo struct {
 	NeedsUpgrade        bool
 }
 
-func ListBinaries(checkMajor bool) error {
-	binInfos, err := getAllBinInfos(checkMajor)
+func ListInstalledBinaries() error {
+	binInfos, err := getAllBinInfos()
 	if err != nil {
 		return err
 	}
 
-	return printOutdatedBinInfos(binInfos)
+	return printInstalledBinaries(binInfos)
 }
 
 func ListOutdatedBinaries(checkMajor bool) error {
-	binInfos, err := getAllBinInfos(checkMajor)
+	binInfos, err := getAllBinInfos()
 	if err != nil {
 		return err
 	}
 
-	outdated := make([]BinInfo, 0, len(binInfos))
+	var (
+		mutex    sync.Mutex
+		outdated []BinInfo
+	)
+
+	grp := new(errgroup.Group)
+	sem := semaphore.NewWeighted(maxParallelism)
+
 	for _, info := range binInfos {
-		if info.NeedsUpgrade {
-			outdated = append(outdated, info)
-		}
+		grp.Go(func() error {
+			if acqErr := sem.Acquire(context.Background(), 1); acqErr != nil {
+				slog.Default().Error("failed to acquire semaphore", "err", acqErr)
+				return acqErr
+			}
+			defer sem.Release(1)
+
+			if enrErr := enrichBinInfoMinorVersionUpgrade(&info); enrErr != nil {
+				return enrErr
+			}
+
+			if checkMajor {
+				if enrErr := enrichBinInfoMajorVersionUpgrade(&info); enrErr != nil {
+					return enrErr
+				}
+			}
+
+			if info.NeedsUpgrade {
+				mutex.Lock()
+				outdated = append(outdated, info)
+				mutex.Unlock()
+			}
+
+			return nil
+		})
+	}
+
+	if err = grp.Wait(); err != nil {
+		return err
 	}
 
 	if len(outdated) == 0 {
@@ -93,30 +133,33 @@ func ListOutdatedBinaries(checkMajor bool) error {
 		return nil
 	}
 
-	return printOutdatedBinInfos(outdated)
+	return printOutdatedBinaries(outdated)
 }
 
 func UpgradeAllBinaries(majorUpgrade bool) error {
-	binInfos, err := getAllBinInfos(majorUpgrade)
+	binFullPath, err := getBinFullPath()
+	if err != nil {
+		return err
+	}
+
+	bins, err := listBinaryFullPaths(binFullPath)
 	if err != nil {
 		return err
 	}
 
 	grp := new(errgroup.Group)
-	sem := semaphore.NewWeighted(installMaxParallelism)
+	sem := semaphore.NewWeighted(maxParallelism)
 
-	for _, info := range binInfos {
-		if info.NeedsUpgrade {
-			grp.Go(func() error {
-				if acqErr := sem.Acquire(context.Background(), 1); acqErr != nil {
-					slog.Default().Error("failed to acquire semaphore", "err", acqErr)
-					return acqErr
-				}
-				defer sem.Release(1)
+	for _, bin := range bins {
+		grp.Go(func() error {
+			if acqErr := sem.Acquire(context.Background(), 1); acqErr != nil {
+				slog.Default().Error("failed to acquire semaphore", "err", acqErr)
+				return acqErr
+			}
+			defer sem.Release(1)
 
-				return installGoBin(info)
-			})
-		}
+			return UpgradeBinary(filepath.Base(bin), majorUpgrade)
+		})
 	}
 
 	return grp.Wait()
@@ -128,15 +171,23 @@ func UpgradeBinary(binary string, majorUpgrade bool) error {
 		return err
 	}
 
-	info, err := getBinInfo(filepath.Join(binPath, binary), majorUpgrade)
+	info, err := getBinInfo(filepath.Join(binPath, binary))
 	if err != nil {
 		return err
 	}
 
-	if info.NeedsUpgrade {
-		if err = installGoBin(info); err != nil {
+	if err = enrichBinInfoMinorVersionUpgrade(&info); err != nil {
+		return err
+	}
+
+	if majorUpgrade {
+		if err = enrichBinInfoMajorVersionUpgrade(&info); err != nil {
 			return err
 		}
+	}
+
+	if info.NeedsUpgrade {
+		return installGoBin(info)
 	}
 
 	return nil
@@ -377,11 +428,8 @@ func checkModuleMajorUpgrade(module, version string) (string, error) {
 	return latestMajorVersion, nil
 }
 
-func getBinInfo(fullPath string, checkMajorUpgrade bool) (BinInfo, error) {
-	logger := slog.Default().With(
-		"full_path", fullPath,
-		"check_major_upgrade", checkMajorUpgrade,
-	)
+func getBinInfo(fullPath string) (BinInfo, error) {
+	logger := slog.Default().With("full_path", fullPath)
 
 	info, err := buildinfo.ReadFile(fullPath)
 	if err != nil {
@@ -394,30 +442,45 @@ func getBinInfo(fullPath string, checkMajorUpgrade bool) (BinInfo, error) {
 		return BinInfo{}, err
 	}
 
-	latestVersion, err := fetchModuleLatestVersion(info.Main.Path)
-	if err != nil {
-		return BinInfo{}, err
-	}
-
-	if checkMajorUpgrade {
-		latestVersion, err = checkModuleMajorUpgrade(info.Main.Path, latestVersion)
-		if err != nil {
-			return BinInfo{}, err
-		}
-	}
-
 	return BinInfo{
-		Name:                filepath.Base(fullPath),
-		FullPath:            fullPath,
-		PackagePath:         info.Path,
-		ModulePath:          info.Main.Path,
-		ModuleVersion:       info.Main.Version,
-		ModuleLatestVersion: latestVersion,
-		NeedsUpgrade:        semver.Compare(info.Main.Version, latestVersion) < 0,
+		Name:          filepath.Base(fullPath),
+		FullPath:      fullPath,
+		PackagePath:   info.Path,
+		ModulePath:    info.Main.Path,
+		ModuleVersion: info.Main.Version,
 	}, nil
 }
 
-func getAllBinInfos(checkMajorUpgrade bool) ([]BinInfo, error) {
+func enrichBinInfoMinorVersionUpgrade(info *BinInfo) error {
+	version, err := fetchModuleLatestVersion(info.ModulePath)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			info.ModuleLatestVersion = info.ModuleVersion
+			return nil
+		}
+
+		return err
+	}
+
+	info.ModuleLatestVersion = version
+	info.NeedsUpgrade = semver.Compare(info.ModuleVersion, version) < 0
+
+	return nil
+}
+
+func enrichBinInfoMajorVersionUpgrade(info *BinInfo) error {
+	version, err := checkModuleMajorUpgrade(info.ModulePath, info.ModuleLatestVersion)
+	if err != nil {
+		return err
+	}
+
+	info.ModuleLatestVersion = version
+	info.NeedsUpgrade = semver.Compare(info.ModuleVersion, version) < 0
+
+	return nil
+}
+
+func getAllBinInfos() ([]BinInfo, error) {
 	binFullPath, err := getBinFullPath()
 	if err != nil {
 		return nil, err
@@ -428,72 +491,81 @@ func getAllBinInfos(checkMajorUpgrade bool) ([]BinInfo, error) {
 		return nil, err
 	}
 
-	var (
-		mutex    sync.Mutex
-		binInfos []BinInfo
-	)
-
-	grp := new(errgroup.Group)
-	sem := semaphore.NewWeighted(checkVersionMaxParallelism)
-
+	binInfos := make([]BinInfo, 0, len(bins))
 	for _, bin := range bins {
-		grp.Go(func() error {
-			if acqErr := sem.Acquire(context.Background(), 1); acqErr != nil {
-				slog.Default().Error("failed to acquire semaphore", "err", acqErr)
-				return acqErr
-			}
-			defer sem.Release(1)
-
-			info, infoErr := getBinInfo(bin, checkMajorUpgrade)
-			if infoErr == nil {
-				mutex.Lock()
-				binInfos = append(binInfos, info)
-				mutex.Unlock()
-			}
-
-			return nil
-		})
+		info, infoErr := getBinInfo(bin)
+		if infoErr == nil {
+			binInfos = append(binInfos, info)
+		}
 	}
-
-	if err = grp.Wait(); err != nil {
-		return nil, err
-	}
-
-	sort.Slice(binInfos, func(i, j int) bool {
-		return binInfos[i].Name < binInfos[j].Name
-	})
 
 	return binInfos, nil
 }
 
-func printOutdatedBinInfos(binInfos []BinInfo) error {
-	getMaxWidth := func(header string, binaries []BinInfo, f func(BinInfo) string) int {
-		maxWidth := len(header)
-		for _, bin := range binaries {
-			width := len(f(bin))
-			if width > maxWidth {
-				maxWidth = width
-			}
-		}
-		return maxWidth
-	}
-
-	maxBinaryNameWidth := getMaxWidth(
+func printInstalledBinaries(binInfos []BinInfo) error {
+	maxBinaryNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
 		func(bin BinInfo) string { return bin.Name },
 	)
-	maxModulePathWidth := getMaxWidth(
+	maxModulePathWidth := getColumnMaxWidth(
 		"Module",
 		binInfos,
 		func(bin BinInfo) string { return bin.ModulePath },
 	)
-	maxModuleVersionWidth := getMaxWidth(
+	maxModuleVersionWidth := getColumnMaxWidth(
 		"Version",
 		binInfos,
 		func(bin BinInfo) string { return bin.ModuleVersion },
 	)
-	maxModuleLatestVersionWidth := getMaxWidth(
+
+	data := struct {
+		Binaries                 []BinInfo
+		BinaryNameWidth          int
+		BinaryNameHeaderWidth    int
+		ModulePathWidth          int
+		ModulePathHeaderWidth    int
+		ModuleVersionWidth       int
+		ModuleVersionHeaderWidth int
+	}{
+		Binaries:                 binInfos,
+		BinaryNameWidth:          maxBinaryNameWidth,
+		BinaryNameHeaderWidth:    maxBinaryNameWidth + 2,
+		ModulePathWidth:          maxModulePathWidth,
+		ModulePathHeaderWidth:    maxModulePathWidth + 2,
+		ModuleVersionWidth:       maxModuleVersionWidth,
+		ModuleVersionHeaderWidth: maxModuleVersionWidth + 2,
+	}
+
+	tmplParsed := template.Must(template.New("list").Funcs(template.FuncMap{
+		"repeat": strings.Repeat,
+	}).Parse(listTemplate))
+
+	err := tmplParsed.Execute(os.Stdout, data)
+	if err != nil {
+		slog.Default().Error("error executing template", "err", err)
+	}
+
+	return err
+}
+
+func printOutdatedBinaries(binInfos []BinInfo) error {
+	maxBinaryNameWidth := getColumnMaxWidth(
+		"Name",
+		binInfos,
+		func(bin BinInfo) string { return bin.Name },
+	)
+	maxModulePathWidth := getColumnMaxWidth(
+		"Module",
+		binInfos,
+		func(bin BinInfo) string { return bin.ModulePath },
+	)
+	maxModuleVersionWidth := getColumnMaxWidth(
+		"Version",
+		binInfos,
+		func(bin BinInfo) string { return bin.ModuleVersion },
+	)
+	maxModuleLatestVersionWidth := getColumnMaxWidth(
 		"Latest Version",
 		binInfos,
 		func(bin BinInfo) string { return bin.ModuleLatestVersion },
@@ -530,10 +602,10 @@ func printOutdatedBinInfos(binInfos []BinInfo) error {
 		return colors[color] + s + colors["reset"]
 	}
 
-	tmplParsed := template.Must(template.New("table").Funcs(template.FuncMap{
+	tmplParsed := template.Must(template.New("outdated").Funcs(template.FuncMap{
 		"repeat": strings.Repeat,
 		"color":  colorize,
-	}).Parse(binaryListTemplate))
+	}).Parse(outdatedTemplate))
 
 	err := tmplParsed.Execute(os.Stdout, data)
 	if err != nil {
@@ -586,4 +658,15 @@ func stripVersionSuffix(module string) string {
 	}
 
 	return module
+}
+
+func getColumnMaxWidth(header string, binaries []BinInfo, f func(BinInfo) string) int {
+	maxWidth := len(header)
+	for _, bin := range binaries {
+		width := len(f(bin))
+		if width > maxWidth {
+			maxWidth = width
+		}
+	}
+	return maxWidth
 }
