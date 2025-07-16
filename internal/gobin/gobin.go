@@ -63,33 +63,35 @@ const (
 {{- if gt .WithIssues 0 }}
 {{""}}
 {{- end -}}
-{{ .Total }} binaries checked, {{ .WithIssues }} with issues`
+{{ .Total }} binaries checked, {{ .WithIssues }} with issues
+`
 
-	infoTemplate = `Path:          {{.FullPath}}
-Package:       {{.PackagePath}}
-Module:        {{.ModulePath}}@{{.ModuleVersion}}
-Module Sum:    {{if .ModuleSum}}{{.ModuleSum}}{{else}}<none>{{end}}
+	infoTemplate = `Path          {{.FullPath}}
+Package       {{.PackagePath}}
+Module        {{.ModulePath}}@{{.ModuleVersion}}
+Module Sum    {{if .ModuleSum}}{{.ModuleSum}}{{else}}<none>{{end}}
 {{- if .CommitRevision}}
-Commit:        {{.CommitRevision}}{{if .CommitTime}} ({{.CommitTime}}){{end}}
+Commit        {{.CommitRevision}}{{if .CommitTime}} ({{.CommitTime}}){{end}}
 {{- end}}
-Go Version:    {{.GoVersion}}
-Platform:      {{.OS}}/{{.Arch}}/{{.Feature}}
-Env Vars:      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else}}
-              {{$env}}{{end}}{{end}}`
+Go Version    {{.GoVersion}}
+Platform      {{.OS}}/{{.Arch}}/{{.Feature}}
+Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else}}
+              {{$env}}{{end}}{{end}}
+`
 
 	listTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Version"}}
 {{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth 6)}}
 {{range .Binaries -}}
 {{printf "%-*s" $.NameWidth .Name}} → {{printf "%-*s" $.ModulePathWidth .ModulePath}} @ {{printf "%-*s" $.ModuleVersionWidth .ModuleVersion}}
-{{end}}`
+{{end}}
+`
 
-	outdatedTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+
-| {{printf "%-*s" .BinaryNameWidth "Name"}} | {{printf "%-*s" .ModulePathWidth "Module Path"}} | {{printf "%-*s" .ModuleVersionWidth "Version"}} | {{printf "%-*s" .LatestVersionWidth "Latest Version"}} |
-+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+
-{{- range .Binaries }}
-| {{printf "%-*s" $.BinaryNameWidth .Name}} | {{printf "%-*s" $.ModulePathWidth .ModulePath}} | {{if .IsUpgradeAvailable}}{{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "red"}}{{else}}{{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "green"}}{{end}} | {{if .IsUpgradeAvailable}}{{color (printf "%-*s" $.LatestVersionWidth (print "↑ " .LatestVersion)) "green"}}{{else}}{{printf "%-*s" $.LatestVersionWidth .LatestVersion}}{{end}} |
-{{- end }}
-+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+`
+	outdatedTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Current"}} ↑ {{printf "%-*s" $.LatestVersionWidth "Latest"}}
+{{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth $.LatestVersionWidth 9)}}
+{{range .Binaries -}}
+{{printf "%-*s" $.NameWidth .Name}} → {{printf "%-*s" $.ModulePathWidth .ModulePath}} @ {{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "red"}} ↑ {{color (printf "%-*s" $.LatestVersionWidth .LatestVersion) "green"}}
+{{end}}
+`
 )
 
 func DiagnoseBinaries() error {
@@ -305,6 +307,14 @@ func UpgradeBinary(binary string, majorUpgrade bool) error {
 	return nil
 }
 
+func add(args ...int) int {
+	sum := 0
+	for _, v := range args {
+		sum += v
+	}
+	return sum
+}
+
 func printBinaryDiagnostics(diags []binaries.BinaryDiagnostic) error {
 	var diagWithIssues []binaries.BinaryDiagnostic
 	for _, d := range diags {
@@ -354,7 +364,7 @@ func printInstalledBinaries(binInfos []binaries.BinaryInfo) error {
 		return maxWidth
 	}
 
-	maxBinaryNameWidth := getColumnMaxWidth(
+	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
 		func(bin binaries.BinaryInfo) string { return bin.Name },
@@ -377,20 +387,14 @@ func printInstalledBinaries(binInfos []binaries.BinaryInfo) error {
 		ModuleVersionWidth int
 	}{
 		Binaries:           binInfos,
-		NameWidth:          maxBinaryNameWidth,
+		NameWidth:          maxNameWidth,
 		ModulePathWidth:    maxModulePathWidth,
 		ModuleVersionWidth: maxModuleVersionWidth,
 	}
 
 	tmplParsed := template.Must(template.New("list").Funcs(template.FuncMap{
+		"add":    add,
 		"repeat": strings.Repeat,
-		"add": func(args ...int) int {
-			sum := 0
-			for _, v := range args {
-				sum += v
-			}
-			return sum
-		},
 	}).Parse(listTemplate))
 
 	if err := tmplParsed.Execute(os.Stdout, data); err != nil {
@@ -423,7 +427,7 @@ func printOutdatedBinaries(binInfos []binaries.BinaryUpgradeInfo) error {
 		return maxWidth
 	}
 
-	maxBinaryNameWidth := getColumnMaxWidth(
+	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
 		func(bin binaries.BinaryUpgradeInfo) string { return bin.Name },
@@ -434,36 +438,28 @@ func printOutdatedBinaries(binInfos []binaries.BinaryUpgradeInfo) error {
 		func(bin binaries.BinaryUpgradeInfo) string { return bin.ModulePath },
 	)
 	maxModuleVersionWidth := getColumnMaxWidth(
-		"Version",
+		"Current",
 		binInfos,
 		func(bin binaries.BinaryUpgradeInfo) string { return bin.ModuleVersion },
 	)
 	maxLatestVersionWidth := getColumnMaxWidth(
-		"Latest Version",
+		"Latest",
 		binInfos,
 		func(bin binaries.BinaryUpgradeInfo) string { return bin.LatestVersion },
 	)
 
 	data := struct {
-		Binaries                 []binaries.BinaryUpgradeInfo
-		BinaryNameWidth          int
-		BinaryNameHeaderWidth    int
-		ModulePathWidth          int
-		ModulePathHeaderWidth    int
-		ModuleVersionWidth       int
-		ModuleVersionHeaderWidth int
-		LatestVersionWidth       int
-		LatestVersionHeaderWidth int
+		Binaries           []binaries.BinaryUpgradeInfo
+		NameWidth          int
+		ModulePathWidth    int
+		ModuleVersionWidth int
+		LatestVersionWidth int
 	}{
-		Binaries:                 binInfos,
-		BinaryNameWidth:          maxBinaryNameWidth,
-		BinaryNameHeaderWidth:    maxBinaryNameWidth + 2,
-		ModulePathWidth:          maxModulePathWidth,
-		ModulePathHeaderWidth:    maxModulePathWidth + 2,
-		ModuleVersionWidth:       maxModuleVersionWidth,
-		ModuleVersionHeaderWidth: maxModuleVersionWidth + 2,
-		LatestVersionWidth:       maxLatestVersionWidth,
-		LatestVersionHeaderWidth: maxLatestVersionWidth + 2,
+		Binaries:           binInfos,
+		NameWidth:          maxNameWidth,
+		ModulePathWidth:    maxModulePathWidth,
+		ModuleVersionWidth: maxModuleVersionWidth,
+		LatestVersionWidth: maxLatestVersionWidth,
 	}
 
 	colorize := func(s, color string) string {
@@ -476,8 +472,9 @@ func printOutdatedBinaries(binInfos []binaries.BinaryUpgradeInfo) error {
 	}
 
 	tmplParsed := template.Must(template.New("outdated").Funcs(template.FuncMap{
-		"repeat": strings.Repeat,
+		"add":    add,
 		"color":  colorize,
+		"repeat": strings.Repeat,
 	}).Parse(outdatedTemplate))
 
 	if err := tmplParsed.Execute(os.Stdout, data); err != nil {
