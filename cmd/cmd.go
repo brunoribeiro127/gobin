@@ -12,6 +12,7 @@ func Execute() error {
 		Short: "gobin - CLI tool to manage Go binaries",
 	}
 
+	rootCmd.AddCommand(newDoctorCmd())
 	rootCmd.AddCommand(newInfoCmd())
 	rootCmd.AddCommand(newListCmd())
 	rootCmd.AddCommand(newOutdatedCmd())
@@ -20,6 +21,20 @@ func Execute() error {
 	rootCmd.AddCommand(newVersionCmd())
 
 	return rootCmd.Execute()
+}
+
+func newDoctorCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:           "doctor",
+		Short:         "Diagnose issues for installed binaries",
+		Args:          cobra.NoArgs,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SilenceUsage = true
+
+			return internal.DiagnoseBinaries()
+		},
+	}
 }
 
 func newInfoCmd() *cobra.Command {

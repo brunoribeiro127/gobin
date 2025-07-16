@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,7 +11,14 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"golang.org/x/vuln/scan"
 )
+
+type Vulnerability struct {
+	ID  string
+	URL string
+}
 
 var ErrModuleNotFound = errors.New("module not found")
 
@@ -84,4 +93,53 @@ func GoInstall(pkg string, version string) error {
 	}
 
 	return nil
+}
+
+func GoVulnCheck(path string) ([]Vulnerability, error) {
+	logger := slog.Default().With("path", path)
+
+	var output bytes.Buffer
+	cmd := scan.Command(context.Background(), "-mode", "binary", "-format", "openvex", path)
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	cmd.Env = os.Environ()
+
+	if err := cmd.Start(); err != nil {
+		err = errors.New(output.String())
+		logger.Error("error starting govulncheck command", "err", err)
+		return nil, err
+	}
+
+	if err := cmd.Wait(); err != nil {
+		err = errors.New(output.String())
+		logger.Error("error waiting for govulncheck command", "err", err)
+		return nil, err
+	}
+
+	var res struct {
+		Statements []struct {
+			Vulnerability struct {
+				ID   string `json:"@id"`
+				Name string `json:"name"`
+			} `json:"vulnerability"`
+			Status string `json:"status"`
+		} `json:"statements"`
+	}
+
+	if err := json.Unmarshal(output.Bytes(), &res); err != nil {
+		logger.Error("error parsing govulncheck response", "err", err)
+		return nil, err
+	}
+
+	var vulns []Vulnerability
+	for _, stmt := range res.Statements {
+		if stmt.Status == "affected" {
+			vulns = append(vulns, Vulnerability{
+				ID:  stmt.Vulnerability.Name,
+				URL: stmt.Vulnerability.ID,
+			})
+		}
+	}
+
+	return vulns, nil
 }

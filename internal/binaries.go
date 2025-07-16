@@ -4,16 +4,21 @@ import (
 	"debug/buildinfo"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"text/template"
 
+	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
 	"golang.org/x/sync/errgroup"
 )
@@ -25,7 +30,7 @@ const (
 {{- range .Binaries }}
 | {{printf "%-*s" $.BinaryNameWidth .Name}} | {{printf "%-*s" $.ModulePathWidth .ModulePath}} | {{printf "%-*s" $.ModuleVersionWidth .ModuleVersion}} |
 {{- end }}
-+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}
++{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+
 `
 
 	outdatedTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+
@@ -49,11 +54,64 @@ Platform:      {{.OS}}/{{.Arch}}/{{.Feature}}
 Env Vars:      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else}}
                {{$env}}{{end}}{{end}}
 `
+
+	doctorTemplate = `{{- range .DiagsWithIssues -}}
+🛠️  {{ .Name }}
+{{- if .HasIssues }}
+    {{- if .NotInPath }}
+    ❗ not in PATH
+    {{- end }}
+    {{- if .DuplicatesInPath }}
+    ❗ duplicated in PATH:
+        {{- range .DuplicatesInPath }}
+        • {{ . }}
+        {{- end }}
+    {{- end }}
+    {{- if ne .GoVersion.Actual .GoVersion.Expected }}
+    ❗ go version mismatch: expected {{ .GoVersion.Expected }}, actual {{ .GoVersion.Actual }}
+    {{- end }}
+    {{- if ne .Platform.Actual .Platform.Expected }}
+    ❗ platform mismatch: expected {{ .Platform.Expected }}, actual {{ .Platform.Actual }}
+    {{- end }}
+    {{- if .IsPseudoVersion }}
+    ❗ pseudo-version
+    {{- end }}
+    {{- if .NotBuiltWithGoModules }}
+    ❗ built without Go modules (GO111MODULE=off)
+    {{- end }}
+    {{- if .IsOrphaned }}
+    ❗ orphaned: unknown source, likely built locally
+    {{- end }}
+    {{- if .Retracted }}
+    ❗ retracted module version: {{ .Retracted }}
+    {{- end }}
+    {{- if .Deprecated }}
+    ❗ deprecated module: {{ .Deprecated }}
+    {{- end }}
+    {{- if .Vulnerabilities }}
+    ❗ found {{ len .Vulnerabilities }} {{if gt (len .Vulnerabilities) 1}}vulnerabilities{{else}}vulnerability{{end}}:
+        {{- range .Vulnerabilities }}
+        • {{ .ID }} ({{ .URL }})
+        {{- end }}
+    {{- end }}
+{{- else }}
+    ✅ no issues
+{{- end }}
+{{end -}}
+{{- if gt .WithIssues 0 }}
+{{""}}
+{{- end -}}
+{{ .Total }} binaries checked, {{ .WithIssues }} with issues
+`
+
+	GOOSEnvVar   = "GOOS"
+	GOARCHEnvVar = "GOARCH"
 )
 
 var (
 	ErrBinaryNotFound              = errors.New("binary not found")
 	ErrBinaryBuiltWithoutGoModules = errors.New("binary built without go modules")
+	ErrInvalidModuleVersion        = errors.New("invalid module version")
 )
 
 type BinInfo struct {
@@ -67,6 +125,80 @@ type BinInfo struct {
 	Settings           map[string]string
 	LatestVersion      string
 	IsUpgradeAvailable bool
+}
+
+type BinDiagnostic struct {
+	Name             string
+	NotInPath        bool
+	DuplicatesInPath []string
+	GoVersion        struct {
+		Actual   string
+		Expected string
+	}
+	Platform struct {
+		Actual   string
+		Expected string
+	}
+	IsPseudoVersion       bool
+	NotBuiltWithGoModules bool
+	IsOrphaned            bool
+	Retracted             string
+	Deprecated            string
+	Vulnerabilities       []Vulnerability
+}
+
+func (d BinDiagnostic) HasIssues() bool {
+	return d.NotInPath ||
+		len(d.DuplicatesInPath) > 0 ||
+		d.GoVersion.Actual != d.GoVersion.Expected ||
+		d.Platform.Actual != d.Platform.Expected ||
+		d.IsPseudoVersion ||
+		d.NotBuiltWithGoModules ||
+		d.IsOrphaned ||
+		d.Retracted != "" ||
+		d.Deprecated != "" ||
+		len(d.Vulnerabilities) > 0
+}
+
+func DiagnoseBinaries() error {
+	binFullPath, err := getBinFullPath()
+	if err != nil {
+		return err
+	}
+
+	bins, err := listBinaryFullPaths(binFullPath)
+	if err != nil {
+		return err
+	}
+
+	var (
+		mutex sync.Mutex
+		diags []BinDiagnostic
+		grp   = new(errgroup.Group)
+	)
+
+	for _, bin := range bins {
+		grp.Go(func() error {
+			diag, diagErr := diagnoseBinary(bin)
+			if diagErr != nil {
+				return diagErr
+			}
+
+			mutex.Lock()
+			diags = append(diags, diag)
+			mutex.Unlock()
+
+			return nil
+		})
+	}
+
+	waitErr := grp.Wait()
+
+	if err = printBinaryDiagnostics(diags); err != nil {
+		return err
+	}
+
+	return waitErr
 }
 
 func ListInstalledBinaries() error {
@@ -87,9 +219,8 @@ func ListOutdatedBinaries(checkMajor bool) error {
 	var (
 		mutex    sync.Mutex
 		outdated []BinInfo
+		grp      = new(errgroup.Group)
 	)
-
-	grp := new(errgroup.Group)
 
 	for _, info := range binInfos {
 		grp.Go(func() error {
@@ -120,7 +251,7 @@ func ListOutdatedBinaries(checkMajor bool) error {
 		return waitErr
 	}
 
-	if err := printOutdatedBinaries(outdated); err != nil {
+	if err = printOutdatedBinaries(outdated); err != nil {
 		return err
 	}
 
@@ -230,9 +361,9 @@ func PrintBinaryInfo(binary string) error {
 			data.CommitRevision = v
 		case "vcs.time":
 			data.CommitTime = v
-		case "GOOS":
+		case GOOSEnvVar:
 			data.OS = v
-		case "GOARCH":
+		case GOARCHEnvVar:
 			data.Arch = v
 		default:
 			if strings.HasPrefix(k, "GO") {
@@ -245,12 +376,12 @@ func PrintBinaryInfo(binary string) error {
 	}
 
 	tmplParsed := template.Must(template.New("info").Parse(infoTemplate))
-	err = tmplParsed.Execute(os.Stdout, data)
-	if err != nil {
+	if err = tmplParsed.Execute(os.Stdout, data); err != nil {
 		slog.Default().Error("error executing template", "err", err)
+		return err
 	}
 
-	return err
+	return nil
 }
 
 func PrintShortVersion() {
@@ -275,9 +406,9 @@ func PrintVersion() {
 	var goOS, goArch string
 	for _, s := range info.Settings {
 		switch s.Key {
-		case "GOOS":
+		case GOOSEnvVar:
 			goOS = s.Value
-		case "GOARCH":
+		case GOARCHEnvVar:
 			goArch = s.Value
 		}
 	}
@@ -314,27 +445,9 @@ func listBinaryFullPaths(dir string) ([]string, error) {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
 		fullPath := filepath.Join(dir, entry.Name())
-
-		if runtime.GOOS == "windows" {
-			if filepath.Ext(entry.Name()) == ".exe" {
-				binaries = append(binaries, fullPath)
-			}
-		} else {
-			info, infoErr := entry.Info()
-			if infoErr != nil {
-				logger.Error("error while reading file info", "file", entry.Name(), "err", infoErr)
-				continue
-			}
-
-			mode := info.Mode()
-			if mode.IsRegular() && mode&0111 != 0 {
-				binaries = append(binaries, fullPath)
-			}
+		if isBinary(fullPath) {
+			binaries = append(binaries, fullPath)
 		}
 	}
 
@@ -345,7 +458,7 @@ func nextMajorVersion(version string) (string, error) {
 	logger := slog.Default().With("version", version)
 
 	if !semver.IsValid(version) {
-		err := errors.New("invalid module version")
+		err := ErrInvalidModuleVersion
 		logger.Error(err.Error())
 		return "", err
 	}
@@ -366,10 +479,12 @@ func nextMajorVersion(version string) (string, error) {
 }
 
 func checkModuleMajorUpgrade(module, version string) (string, error) {
-	latestMajorVersion := version
+	var (
+		latestMajorVersion = version
+		pkg                = module
+		major              = semver.Major(version)
+	)
 
-	pkg := module
-	major := semver.Major(version)
 	if major != "v0" && major != "v1" {
 		pkg = stripVersionSuffix(module)
 	}
@@ -527,6 +642,10 @@ func printInstalledBinaries(binInfos []BinInfo) error {
 }
 
 func printOutdatedBinaries(binInfos []BinInfo) error {
+	sort.Slice(binInfos, func(i, j int) bool {
+		return binInfos[i].Name < binInfos[j].Name
+	})
+
 	maxBinaryNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
@@ -622,11 +741,179 @@ func stripVersionSuffix(module string) string {
 
 func getColumnMaxWidth(header string, binaries []BinInfo, f func(BinInfo) string) int {
 	maxWidth := len(header)
+
 	for _, bin := range binaries {
 		width := len(f(bin))
 		if width > maxWidth {
 			maxWidth = width
 		}
 	}
+
 	return maxWidth
+}
+
+func diagnoseBinary(fullPath string) (BinDiagnostic, error) {
+	binaryName := filepath.Base(fullPath)
+	logger := slog.Default().With("binary", binaryName)
+
+	buildInfo, err := buildinfo.ReadFile(fullPath)
+	if err != nil {
+		logger.Error("error reading binary build info", "err", err)
+		return BinDiagnostic{}, err
+	}
+
+	binPlatform := getBinaryPlatform(buildInfo)
+	runtimePlatform := runtime.GOOS + "/" + runtime.GOARCH
+
+	diagnostic := BinDiagnostic{
+		Name:                  binaryName,
+		DuplicatesInPath:      checkBinaryDuplicatesInPath(binaryName),
+		IsPseudoVersion:       module.IsPseudoVersion(buildInfo.Main.Version),
+		NotBuiltWithGoModules: buildInfo.Main.Path == "",
+		IsOrphaned:            buildInfo.Main.Sum == "",
+	}
+
+	diagnostic.GoVersion.Actual = buildInfo.GoVersion
+	diagnostic.GoVersion.Expected = runtime.Version()
+	diagnostic.Platform.Actual = binPlatform
+	diagnostic.Platform.Expected = runtimePlatform
+
+	_, err = exec.LookPath(binaryName)
+	diagnostic.NotInPath = err != nil
+
+	if buildInfo.Main.Sum != "" {
+		retracted, deprecated, modErr := diagnoseGoModFile(buildInfo.Main.Path, buildInfo.Main.Version)
+		if modErr != nil {
+			return diagnostic, modErr
+		}
+
+		diagnostic.Retracted = retracted
+		diagnostic.Deprecated = deprecated
+	}
+
+	diagnostic.Vulnerabilities, err = GoVulnCheck(fullPath)
+	if err != nil {
+		return diagnostic, err
+	}
+
+	return diagnostic, nil
+}
+
+func checkBinaryDuplicatesInPath(binaryName string) []string {
+	var (
+		seen       = make(map[string]struct{})
+		duplicates []string
+	)
+
+	for dir := range strings.SplitSeq(os.Getenv("PATH"), string(os.PathListSeparator)) {
+		fullPath := filepath.Join(dir, binaryName)
+		if isBinary(fullPath) {
+			if _, ok := seen[fullPath]; !ok {
+				seen[fullPath] = struct{}{}
+				duplicates = append(duplicates, fullPath)
+			}
+		}
+	}
+
+	if len(duplicates) > 1 {
+		return duplicates
+	}
+
+	return nil
+}
+
+func getBinaryPlatform(info *buildinfo.BuildInfo) string {
+	var goOS, goArch string
+	for _, s := range info.Settings {
+		switch s.Key {
+		case GOOSEnvVar:
+			goOS = s.Value
+		case GOARCHEnvVar:
+			goArch = s.Value
+		}
+	}
+
+	return goOS + "/" + goArch
+}
+
+func diagnoseGoModFile(module, version string) (string, string, error) {
+	logger := slog.Default().With("module", module)
+
+	file, err := GoModDownload(module, "latest")
+	if err != nil {
+		logger.Error("error downloading go.mod", "err", err)
+		return "", "", err
+	}
+	defer file.Close()
+
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		logger.Error("error reading go.mod", "err", err)
+		return "", "", err
+	}
+
+	modFile, err := modfile.Parse("go.mod", bytes, nil)
+	if err != nil {
+		logger.Error("error parsing go.mod", "err", err)
+		return "", "", err
+	}
+
+	var retracted string
+	for _, r := range modFile.Retract {
+		if semver.Compare(r.Low, version) <= 0 &&
+			semver.Compare(r.High, version) >= 0 {
+			retracted = r.Rationale
+		}
+	}
+
+	var deprecated string
+	if modFile.Module != nil && modFile.Module.Deprecated != "" {
+		deprecated = modFile.Module.Deprecated
+	}
+
+	return retracted, deprecated, err
+}
+
+func printBinaryDiagnostics(diags []BinDiagnostic) error {
+	var diagWithIssues []BinDiagnostic
+	for _, d := range diags {
+		if d.HasIssues() {
+			diagWithIssues = append(diagWithIssues, d)
+		}
+	}
+
+	sort.Slice(diagWithIssues, func(i, j int) bool {
+		return diagWithIssues[i].Name < diagWithIssues[j].Name
+	})
+
+	data := struct {
+		Total           int
+		WithIssues      int
+		DiagsWithIssues []BinDiagnostic
+	}{
+		Total:           len(diags),
+		WithIssues:      len(diagWithIssues),
+		DiagsWithIssues: diagWithIssues,
+	}
+
+	tmplParsed := template.Must(template.New("doctor").Parse(doctorTemplate))
+	if err := tmplParsed.Execute(os.Stdout, data); err != nil {
+		slog.Default().Error("error executing template", "err", err)
+		return err
+	}
+
+	return nil
+}
+
+func isBinary(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(filepath.Ext(info.Name()), ".exe")
+	}
+
+	return info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
 }
