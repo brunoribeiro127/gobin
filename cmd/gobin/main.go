@@ -1,26 +1,30 @@
-package cmd
+package main
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
 
 	"github.com/brunoribeiro127/gobin/internal"
 )
 
-func Execute() error {
-	rootCmd := &cobra.Command{
+func main() {
+	cmd := &cobra.Command{
 		Use:   "gobin",
 		Short: "gobin - CLI tool to manage Go binaries",
 	}
 
-	rootCmd.AddCommand(newDoctorCmd())
-	rootCmd.AddCommand(newInfoCmd())
-	rootCmd.AddCommand(newListCmd())
-	rootCmd.AddCommand(newOutdatedCmd())
-	rootCmd.AddCommand(newUninstallCmd())
-	rootCmd.AddCommand(newUpgradeCmd())
-	rootCmd.AddCommand(newVersionCmd())
+	cmd.AddCommand(newDoctorCmd())
+	cmd.AddCommand(newInfoCmd())
+	cmd.AddCommand(newListCmd())
+	cmd.AddCommand(newOutdatedCmd())
+	cmd.AddCommand(newUninstallCmd())
+	cmd.AddCommand(newUpgradeCmd())
+	cmd.AddCommand(newVersionCmd())
 
-	return rootCmd.Execute()
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }
 
 func newDoctorCmd() *cobra.Command {
