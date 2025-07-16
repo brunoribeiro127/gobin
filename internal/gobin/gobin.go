@@ -63,8 +63,7 @@ const (
 {{- if gt .WithIssues 0 }}
 {{""}}
 {{- end -}}
-{{ .Total }} binaries checked, {{ .WithIssues }} with issues
-`
+{{ .Total }} binaries checked, {{ .WithIssues }} with issues`
 
 	infoTemplate = `Path:          {{.FullPath}}
 Package:       {{.PackagePath}}
@@ -76,17 +75,13 @@ Commit:        {{.CommitRevision}}{{if .CommitTime}} ({{.CommitTime}}){{end}}
 Go Version:    {{.GoVersion}}
 Platform:      {{.OS}}/{{.Arch}}/{{.Feature}}
 Env Vars:      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else}}
-              {{$env}}{{end}}{{end}}
-`
+              {{$env}}{{end}}{{end}}`
 
-	listTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+
-| {{printf "%-*s" .BinaryNameWidth "Name"}} | {{printf "%-*s" .ModulePathWidth "Module Path"}} | {{printf "%-*s" .ModuleVersionWidth "Version"}} |
-+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+
-{{- range .Binaries }}
-| {{printf "%-*s" $.BinaryNameWidth .Name}} | {{printf "%-*s" $.ModulePathWidth .ModulePath}} | {{printf "%-*s" $.ModuleVersionWidth .ModuleVersion}} |
-{{- end }}
-+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+
-`
+	listTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Version"}}
+{{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth 6)}}
+{{range .Binaries -}}
+{{printf "%-*s" $.NameWidth .Name}} → {{printf "%-*s" $.ModulePathWidth .ModulePath}} @ {{printf "%-*s" $.ModuleVersionWidth .ModuleVersion}}
+{{end}}`
 
 	outdatedTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+
 | {{printf "%-*s" .BinaryNameWidth "Name"}} | {{printf "%-*s" .ModulePathWidth "Module Path"}} | {{printf "%-*s" .ModuleVersionWidth "Version"}} | {{printf "%-*s" .LatestVersionWidth "Latest Version"}} |
@@ -94,8 +89,7 @@ Env Vars:      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{els
 {{- range .Binaries }}
 | {{printf "%-*s" $.BinaryNameWidth .Name}} | {{printf "%-*s" $.ModulePathWidth .ModulePath}} | {{if .IsUpgradeAvailable}}{{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "red"}}{{else}}{{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "green"}}{{end}} | {{if .IsUpgradeAvailable}}{{color (printf "%-*s" $.LatestVersionWidth (print "↑ " .LatestVersion)) "green"}}{{else}}{{printf "%-*s" $.LatestVersionWidth .LatestVersion}}{{end}} |
 {{- end }}
-+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+
-`
++{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+`
 )
 
 func DiagnoseBinaries() error {
@@ -377,25 +371,26 @@ func printInstalledBinaries(binInfos []binaries.BinaryInfo) error {
 	)
 
 	data := struct {
-		Binaries                 []binaries.BinaryInfo
-		BinaryNameWidth          int
-		BinaryNameHeaderWidth    int
-		ModulePathWidth          int
-		ModulePathHeaderWidth    int
-		ModuleVersionWidth       int
-		ModuleVersionHeaderWidth int
+		Binaries           []binaries.BinaryInfo
+		NameWidth          int
+		ModulePathWidth    int
+		ModuleVersionWidth int
 	}{
-		Binaries:                 binInfos,
-		BinaryNameWidth:          maxBinaryNameWidth,
-		BinaryNameHeaderWidth:    maxBinaryNameWidth + 2,
-		ModulePathWidth:          maxModulePathWidth,
-		ModulePathHeaderWidth:    maxModulePathWidth + 2,
-		ModuleVersionWidth:       maxModuleVersionWidth,
-		ModuleVersionHeaderWidth: maxModuleVersionWidth + 2,
+		Binaries:           binInfos,
+		NameWidth:          maxBinaryNameWidth,
+		ModulePathWidth:    maxModulePathWidth,
+		ModuleVersionWidth: maxModuleVersionWidth,
 	}
 
 	tmplParsed := template.Must(template.New("list").Funcs(template.FuncMap{
 		"repeat": strings.Repeat,
+		"add": func(args ...int) int {
+			sum := 0
+			for _, v := range args {
+				sum += v
+			}
+			return sum
+		},
 	}).Parse(listTemplate))
 
 	if err := tmplParsed.Execute(os.Stdout, data); err != nil {
