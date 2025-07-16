@@ -1,4 +1,4 @@
-package internal
+package toolchain
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ type Vulnerability struct {
 
 var ErrModuleNotFound = errors.New("module not found")
 
-func GoGetLatestVersion(module string) (string, error) {
+func GetLatestVersion(module string) (string, error) {
 	logger := slog.Default().With("module", module)
 
 	modLatest := fmt.Sprintf("%s@latest", module)
@@ -44,7 +44,7 @@ func GoGetLatestVersion(module string) (string, error) {
 	return outputStr, nil
 }
 
-func GoModDownload(module string, version string) (io.ReadCloser, error) {
+func ModDownload(module string, version string) (io.ReadCloser, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
@@ -79,7 +79,7 @@ func GoModDownload(module string, version string) (io.ReadCloser, error) {
 	return os.Open(res.GoMod)
 }
 
-func GoInstall(pkg string, version string) error {
+func Install(pkg string, version string) error {
 	logger := slog.Default().With("package", pkg)
 
 	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)
@@ -95,7 +95,7 @@ func GoInstall(pkg string, version string) error {
 	return nil
 }
 
-func GoVulnCheck(path string) ([]Vulnerability, error) {
+func VulnCheck(path string) ([]Vulnerability, error) {
 	logger := slog.Default().With("path", path)
 
 	var output bytes.Buffer

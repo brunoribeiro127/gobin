@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/brunoribeiro127/gobin/internal"
+	"github.com/brunoribeiro127/gobin/internal/gobin"
 )
 
 func main() {
@@ -36,7 +36,7 @@ func newDoctorCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.DiagnoseBinaries()
+			return gobin.DiagnoseBinaries()
 		},
 	}
 }
@@ -50,7 +50,7 @@ func newInfoCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.PrintBinaryInfo(args[0])
+			return gobin.PrintBinaryInfo(args[0])
 		},
 	}
 }
@@ -64,7 +64,7 @@ func newListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.ListInstalledBinaries()
+			return gobin.ListInstalledBinaries()
 		},
 	}
 }
@@ -80,7 +80,7 @@ func newOutdatedCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.ListOutdatedBinaries(checkMajor)
+			return gobin.ListOutdatedBinaries(checkMajor)
 		},
 	}
 
@@ -104,7 +104,7 @@ func newUninstallCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.UninstallBinary(args[0])
+			return gobin.UninstallBinary(args[0])
 		},
 	}
 }
@@ -121,10 +121,10 @@ func newUpgradeCmd() *cobra.Command {
 			cmd.SilenceUsage = true
 
 			if args[0] == "all" {
-				return internal.UpgradeAllBinaries(majorUpgrade)
+				return gobin.UpgradeAllBinaries(majorUpgrade)
 			}
 
-			return internal.UpgradeBinary(args[0], majorUpgrade)
+			return gobin.UpgradeBinary(args[0], majorUpgrade)
 		},
 	}
 
@@ -150,11 +150,16 @@ func newVersionCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			if short {
-				return internal.PrintShortVersion()
+			path, err := os.Executable()
+			if err != nil {
+				return err
 			}
 
-			return internal.PrintVersion()
+			if short {
+				return gobin.PrintShortVersion(path)
+			}
+
+			return gobin.PrintVersion(path)
 		},
 	}
 
