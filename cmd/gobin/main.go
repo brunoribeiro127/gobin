@@ -147,14 +147,14 @@ func newVersionCmd() *cobra.Command {
 		Short:         "Shows the package version",
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
-		Run: func(cmd *cobra.Command, _ []string) {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
 			if short {
-				internal.PrintShortVersion()
-			} else {
-				internal.PrintVersion()
+				return internal.PrintShortVersion()
 			}
+
+			return internal.PrintVersion()
 		},
 	}
 

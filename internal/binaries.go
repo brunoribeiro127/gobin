@@ -111,6 +111,7 @@ Env Vars:      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{els
 var (
 	ErrBinaryNotFound              = errors.New("binary not found")
 	ErrBinaryBuiltWithoutGoModules = errors.New("binary built without go modules")
+	ErrBuildInfoNotAvailable       = errors.New("build info not available")
 	ErrInvalidModuleVersion        = errors.New("invalid module version")
 )
 
@@ -384,23 +385,22 @@ func PrintBinaryInfo(binary string) error {
 	return nil
 }
 
-func PrintShortVersion() {
+func PrintShortVersion() error {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		slog.Default().Error("no build info available")
-		return
+		slog.Default().Error(ErrBuildInfoNotAvailable.Error())
+		return ErrBuildInfoNotAvailable
 	}
 
 	fmt.Fprintln(os.Stdout, info.Main.Version)
+	return nil
 }
 
-func PrintVersion() {
-	logger := slog.Default()
-
+func PrintVersion() error {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		logger.Error("no build info available")
-		return
+		slog.Default().Error(ErrBuildInfoNotAvailable.Error())
+		return ErrBuildInfoNotAvailable
 	}
 
 	var goOS, goArch string
@@ -414,6 +414,7 @@ func PrintVersion() {
 	}
 
 	fmt.Fprintf(os.Stdout, "%s (%s %s/%s)\n", info.Main.Version, info.GoVersion, goOS, goArch)
+	return nil
 }
 
 func getBinFullPath() (string, error) {
