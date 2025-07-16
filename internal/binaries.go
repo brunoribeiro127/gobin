@@ -1,16 +1,11 @@
 package internal
 
 import (
-	"context"
 	"debug/buildinfo"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -21,7 +16,6 @@ import (
 
 	"golang.org/x/mod/semver"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -34,13 +28,13 @@ const (
 +{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}
 `
 
-	outdatedTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
-| {{printf "%-*s" .BinaryNameWidth "Name"}} | {{printf "%-*s" .ModulePathWidth "Module Path"}} | {{printf "%-*s" .ModuleVersionWidth "Version"}} | {{printf "%-*s" .ModuleLatestVersionWidth "Latest Version"}} |
-+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
+	outdatedTemplate = `+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+
+| {{printf "%-*s" .BinaryNameWidth "Name"}} | {{printf "%-*s" .ModulePathWidth "Module Path"}} | {{printf "%-*s" .ModuleVersionWidth "Version"}} | {{printf "%-*s" .LatestVersionWidth "Latest Version"}} |
++{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+
 {{- range .Binaries }}
-| {{printf "%-*s" $.BinaryNameWidth .Name}} | {{printf "%-*s" $.ModulePathWidth .ModulePath}} | {{if .NeedsUpgrade}}{{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "red"}}{{else}}{{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "green"}}{{end}} | {{if .NeedsUpgrade}}{{color (printf "%-*s" $.ModuleLatestVersionWidth (print "↑ " .ModuleLatestVersion)) "green"}}{{else}}{{printf "%-*s" $.ModuleLatestVersionWidth .ModuleLatestVersion}}{{end}} |
+| {{printf "%-*s" $.BinaryNameWidth .Name}} | {{printf "%-*s" $.ModulePathWidth .ModulePath}} | {{if .IsUpgradeAvailable}}{{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "red"}}{{else}}{{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "green"}}{{end}} | {{if .IsUpgradeAvailable}}{{color (printf "%-*s" $.LatestVersionWidth (print "↑ " .LatestVersion)) "green"}}{{else}}{{printf "%-*s" $.LatestVersionWidth .LatestVersion}}{{end}} |
 {{- end }}
-+{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .ModuleLatestVersionHeaderWidth}}+
++{{repeat "-" .BinaryNameHeaderWidth}}+{{repeat "-" .ModulePathHeaderWidth}}+{{repeat "-" .ModuleVersionHeaderWidth}}+{{repeat "-" .LatestVersionHeaderWidth}}+
 `
 
 	infoTemplate = `Path:          {{.FullPath}}
@@ -55,26 +49,24 @@ Platform:      {{.OS}}/{{.Arch}}/{{.Feature}}
 Env Vars:      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else}}
                {{$env}}{{end}}{{end}}
 `
-
-	maxParallelism = 5
 )
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrBinaryNotFound              = errors.New("binary not found")
+	ErrBinaryBuiltWithoutGoModules = errors.New("binary built without go modules")
 )
 
 type BinInfo struct {
-	Name          string
-	FullPath      string
-	PackagePath   string
-	ModulePath    string
-	ModuleVersion string
-	ModuleSum     string
-	GoVersion     string
-	Settings      map[string]string
-
-	ModuleLatestVersion string
-	NeedsUpgrade        bool
+	Name               string
+	FullPath           string
+	PackagePath        string
+	ModulePath         string
+	ModuleVersion      string
+	ModuleSum          string
+	GoVersion          string
+	Settings           map[string]string
+	LatestVersion      string
+	IsUpgradeAvailable bool
 }
 
 func ListInstalledBinaries() error {
@@ -98,16 +90,9 @@ func ListOutdatedBinaries(checkMajor bool) error {
 	)
 
 	grp := new(errgroup.Group)
-	sem := semaphore.NewWeighted(maxParallelism)
 
 	for _, info := range binInfos {
 		grp.Go(func() error {
-			if acqErr := sem.Acquire(context.Background(), 1); acqErr != nil {
-				slog.Default().Error("failed to acquire semaphore", "err", acqErr)
-				return acqErr
-			}
-			defer sem.Release(1)
-
 			if enrErr := enrichBinInfoMinorVersionUpgrade(&info); enrErr != nil {
 				return enrErr
 			}
@@ -118,7 +103,7 @@ func ListOutdatedBinaries(checkMajor bool) error {
 				}
 			}
 
-			if info.NeedsUpgrade {
+			if info.IsUpgradeAvailable {
 				mutex.Lock()
 				outdated = append(outdated, info)
 				mutex.Unlock()
@@ -128,16 +113,18 @@ func ListOutdatedBinaries(checkMajor bool) error {
 		})
 	}
 
-	if err = grp.Wait(); err != nil {
-		return err
-	}
+	waitErr := grp.Wait()
 
 	if len(outdated) == 0 {
 		fmt.Fprintln(os.Stdout, "✅ All binaries are up to date.")
-		return nil
+		return waitErr
 	}
 
-	return printOutdatedBinaries(outdated)
+	if err := printOutdatedBinaries(outdated); err != nil {
+		return err
+	}
+
+	return waitErr
 }
 
 func UpgradeAllBinaries(majorUpgrade bool) error {
@@ -152,16 +139,9 @@ func UpgradeAllBinaries(majorUpgrade bool) error {
 	}
 
 	grp := new(errgroup.Group)
-	sem := semaphore.NewWeighted(maxParallelism)
 
 	for _, bin := range bins {
 		grp.Go(func() error {
-			if acqErr := sem.Acquire(context.Background(), 1); acqErr != nil {
-				slog.Default().Error("failed to acquire semaphore", "err", acqErr)
-				return acqErr
-			}
-			defer sem.Release(1)
-
 			return UpgradeBinary(filepath.Base(bin), majorUpgrade)
 		})
 	}
@@ -190,7 +170,7 @@ func UpgradeBinary(binary string, majorUpgrade bool) error {
 		}
 	}
 
-	if info.NeedsUpgrade {
+	if info.IsUpgradeAvailable {
 		return installGoBin(info)
 	}
 
@@ -361,54 +341,6 @@ func listBinaryFullPaths(dir string) ([]string, error) {
 	return binaries, nil
 }
 
-func fetchModuleLatestVersion(module string) (string, error) {
-	logger := slog.Default().With("module", module)
-
-	req, err := http.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		fmt.Sprintf("https://proxy.golang.org/%s/@latest", module),
-		nil,
-	)
-	if err != nil {
-		logger.Error("error creating request for module", "err", err)
-		return "", err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		logger.Error("error fetching latest version for module", "err", err)
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bytes, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			logger.Error("error reading response body", "err", readErr)
-			return "", readErr
-		}
-
-		if resp.StatusCode == http.StatusNotFound {
-			return "", ErrNotFound
-		}
-
-		err = fmt.Errorf("unexpected response [code=%s, body=%s]", resp.Status, string(bytes))
-		logger.Error("error fetching latest version for module", "err", err)
-		return "", err
-	}
-
-	var response struct {
-		Version string `json:"Version"`
-	}
-	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		logger.Error("error decoding response body", "err", err)
-		return "", err
-	}
-
-	return response.Version, nil
-}
-
 func nextMajorVersion(version string) (string, error) {
 	logger := slog.Default().With("version", version)
 
@@ -448,9 +380,9 @@ func checkModuleMajorUpgrade(module, version string) (string, error) {
 			return "", err
 		}
 
-		majorVersion, err := fetchModuleLatestVersion(fmt.Sprintf("%s/%s", pkg, nextMajorVersion))
+		majorVersion, err := GoGetLatestVersion(fmt.Sprintf("%s/%s", pkg, nextMajorVersion))
 		if err != nil {
-			if errors.Is(err, ErrNotFound) {
+			if errors.Is(err, ErrModuleNotFound) {
 				break
 			}
 
@@ -464,17 +396,22 @@ func checkModuleMajorUpgrade(module, version string) (string, error) {
 }
 
 func getBinInfo(fullPath string) (BinInfo, error) {
-	logger := slog.Default().With("full_path", fullPath)
+	logger := slog.Default().With("path", fullPath)
 
 	info, err := buildinfo.ReadFile(fullPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			logger.Error("binary not found", "err", err)
-			return BinInfo{}, ErrNotFound
+			return BinInfo{}, ErrBinaryNotFound
 		}
 
 		logger.Error("error reading binary build info", "err", err)
 		return BinInfo{}, err
+	}
+
+	if info.Main.Path == "" {
+		logger.Error(ErrBinaryBuiltWithoutGoModules.Error())
+		return BinInfo{}, ErrBinaryBuiltWithoutGoModules
 	}
 
 	settings := make(map[string]string)
@@ -483,42 +420,39 @@ func getBinInfo(fullPath string) (BinInfo, error) {
 	}
 
 	return BinInfo{
-		Name:          filepath.Base(fullPath),
-		FullPath:      fullPath,
-		PackagePath:   info.Path,
-		ModulePath:    info.Main.Path,
-		ModuleVersion: info.Main.Version,
-		ModuleSum:     info.Main.Sum,
-		GoVersion:     info.GoVersion,
-		Settings:      settings,
+		Name:               filepath.Base(fullPath),
+		FullPath:           fullPath,
+		PackagePath:        info.Path,
+		ModulePath:         info.Main.Path,
+		ModuleVersion:      info.Main.Version,
+		ModuleSum:          info.Main.Sum,
+		GoVersion:          info.GoVersion,
+		Settings:           settings,
+		LatestVersion:      info.Main.Version,
+		IsUpgradeAvailable: false,
 	}, nil
 }
 
 func enrichBinInfoMinorVersionUpgrade(info *BinInfo) error {
-	version, err := fetchModuleLatestVersion(info.ModulePath)
+	version, err := GoGetLatestVersion(info.ModulePath)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			info.ModuleLatestVersion = info.ModuleVersion
-			return nil
-		}
-
 		return err
 	}
 
-	info.ModuleLatestVersion = version
-	info.NeedsUpgrade = semver.Compare(info.ModuleVersion, version) < 0
+	info.LatestVersion = version
+	info.IsUpgradeAvailable = semver.Compare(info.ModuleVersion, version) < 0
 
 	return nil
 }
 
 func enrichBinInfoMajorVersionUpgrade(info *BinInfo) error {
-	version, err := checkModuleMajorUpgrade(info.ModulePath, info.ModuleLatestVersion)
+	version, err := checkModuleMajorUpgrade(info.ModulePath, info.LatestVersion)
 	if err != nil {
 		return err
 	}
 
-	info.ModuleLatestVersion = version
-	info.NeedsUpgrade = semver.Compare(info.ModuleVersion, version) < 0
+	info.LatestVersion = version
+	info.IsUpgradeAvailable = semver.Compare(info.ModuleVersion, version) < 0
 
 	return nil
 }
@@ -584,12 +518,12 @@ func printInstalledBinaries(binInfos []BinInfo) error {
 		"repeat": strings.Repeat,
 	}).Parse(listTemplate))
 
-	err := tmplParsed.Execute(os.Stdout, data)
-	if err != nil {
+	if err := tmplParsed.Execute(os.Stdout, data); err != nil {
 		slog.Default().Error("error executing template", "err", err)
+		return err
 	}
 
-	return err
+	return nil
 }
 
 func printOutdatedBinaries(binInfos []BinInfo) error {
@@ -608,32 +542,32 @@ func printOutdatedBinaries(binInfos []BinInfo) error {
 		binInfos,
 		func(bin BinInfo) string { return bin.ModuleVersion },
 	)
-	maxModuleLatestVersionWidth := getColumnMaxWidth(
+	maxLatestVersionWidth := getColumnMaxWidth(
 		"Latest Version",
 		binInfos,
-		func(bin BinInfo) string { return bin.ModuleLatestVersion },
+		func(bin BinInfo) string { return bin.LatestVersion },
 	)
 
 	data := struct {
-		Binaries                       []BinInfo
-		BinaryNameWidth                int
-		BinaryNameHeaderWidth          int
-		ModulePathWidth                int
-		ModulePathHeaderWidth          int
-		ModuleVersionWidth             int
-		ModuleVersionHeaderWidth       int
-		ModuleLatestVersionWidth       int
-		ModuleLatestVersionHeaderWidth int
+		Binaries                 []BinInfo
+		BinaryNameWidth          int
+		BinaryNameHeaderWidth    int
+		ModulePathWidth          int
+		ModulePathHeaderWidth    int
+		ModuleVersionWidth       int
+		ModuleVersionHeaderWidth int
+		LatestVersionWidth       int
+		LatestVersionHeaderWidth int
 	}{
-		Binaries:                       binInfos,
-		BinaryNameWidth:                maxBinaryNameWidth,
-		BinaryNameHeaderWidth:          maxBinaryNameWidth + 2,
-		ModulePathWidth:                maxModulePathWidth,
-		ModulePathHeaderWidth:          maxModulePathWidth + 2,
-		ModuleVersionWidth:             maxModuleVersionWidth,
-		ModuleVersionHeaderWidth:       maxModuleVersionWidth + 2,
-		ModuleLatestVersionWidth:       maxModuleLatestVersionWidth,
-		ModuleLatestVersionHeaderWidth: maxModuleLatestVersionWidth + 2,
+		Binaries:                 binInfos,
+		BinaryNameWidth:          maxBinaryNameWidth,
+		BinaryNameHeaderWidth:    maxBinaryNameWidth + 2,
+		ModulePathWidth:          maxModulePathWidth,
+		ModulePathHeaderWidth:    maxModulePathWidth + 2,
+		ModuleVersionWidth:       maxModuleVersionWidth,
+		ModuleVersionHeaderWidth: maxModuleVersionWidth + 2,
+		LatestVersionWidth:       maxLatestVersionWidth,
+		LatestVersionHeaderWidth: maxLatestVersionWidth + 2,
 	}
 
 	colorize := func(s, color string) string {
@@ -650,44 +584,27 @@ func printOutdatedBinaries(binInfos []BinInfo) error {
 		"color":  colorize,
 	}).Parse(outdatedTemplate))
 
-	err := tmplParsed.Execute(os.Stdout, data)
-	if err != nil {
+	if err := tmplParsed.Execute(os.Stdout, data); err != nil {
 		slog.Default().Error("error executing template", "err", err)
+		return err
 	}
 
-	return err
+	return nil
 }
 
 func installGoBin(info BinInfo) error {
-	logger := slog.Default().With(
-		"package", info.PackagePath,
-		"module", info.ModulePath,
-		"latest_version", info.ModuleLatestVersion,
-	)
-
-	pkg := fmt.Sprintf("%s@%s", info.PackagePath, info.ModuleLatestVersion)
-	major := semver.Major(info.ModuleLatestVersion)
+	pkg := info.PackagePath
+	major := semver.Major(info.LatestVersion)
 	if major != "v0" && major != "v1" {
 		pkg = fmt.Sprintf(
-			"%s/%s%s@%s",
+			"%s/%s%s",
 			stripVersionSuffix(info.ModulePath),
 			major,
 			strings.TrimPrefix(info.PackagePath, info.ModulePath),
-			info.ModuleLatestVersion,
 		)
 	}
 
-	cmd := exec.Command("go", "install", pkg)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
-
-	err := cmd.Run()
-	if err != nil {
-		logger.Error("error installing binaries", "err", err)
-	}
-
-	return err
+	return GoInstall(pkg, info.LatestVersion)
 }
 
 func stripVersionSuffix(module string) string {
