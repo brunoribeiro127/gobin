@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: 3
+
+silent: true
+
+vars:
+  PACKAGES:
+    sh: go list github.com/brunoribeiro127/gobin/...
+  INTERNAL_PACKAGES:
+    sh: go list github.com/brunoribeiro127/gobin/internal...
+
+tasks:
+  build:
+    cmds:
+      - |
+        go build -v -o ./bin/gobin github.com/brunoribeiro127/gobin/cmd/gobin
+
+  check:
+    deps:
+      - fmt
+      - vet
+      - lint
+      - build
+      - test
+
+  clean:
+    cmds:
+      - |
+        rm -rf ./bin ./coverage
+
+  coverage:
+    cmds:
+      - |
+        open coverage/coverage.html
+
+  fmt:
+    cmds:
+      - |
+        go fmt ./...
+
+  install:
+    cmds:
+      - |
+        go install github.com/brunoribeiro127/gobin/cmd/gobin
+
+  lint:
+    cmds:
+      - |
+        golangci-lint run
+
+  test:
+    cmds:
+      - |
+        mkdir -p coverage
+        go clean -testcache
+        go test -failfast -coverprofile=coverage/coverage.txt -covermode count {{ catLines .INTERNAL_PACKAGES }}
+        go tool cover -func coverage/coverage.txt
+        go tool cover -html coverage/coverage.txt -o coverage/coverage.html
+        gocover-cobertura < coverage/coverage.txt > coverage/coverage.xml
+
+  tidy:
+    cmds:
+      - |
+        go mod tidy
+
+  vet:
+    cmds:
+      - |
+        go vet {{catLines .PACKAGES }}
