@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - cmd/**
+      - internal/**
+      - .golangci.yml
+      - go.mod
+      - go.sum
+  pull_request:
+    paths:
+      - cmd/**
+      - internal/**
+      - .golangci.yml
+      - go.mod
+      - go.sum
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      GOLANGCI_LINT_VERSION: v2.2.2
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+      - name: Check Go Mod
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
