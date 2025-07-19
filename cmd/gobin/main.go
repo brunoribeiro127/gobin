@@ -1,14 +1,18 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/brunoribeiro127/gobin/internal"
 	"github.com/brunoribeiro127/gobin/internal/gobin"
 )
 
 func main() {
+	slog.SetDefault(internal.NewLogger())
+
 	cmd := &cobra.Command{
 		Use:   "gobin",
 		Short: "gobin - CLI tool to manage Go binaries",
