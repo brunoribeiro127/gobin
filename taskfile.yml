@@ -22,6 +22,7 @@ tasks:
       - lint
       - build
       - test
+      - vulncheck
 
   clean:
     cmds:
@@ -67,3 +68,8 @@ tasks:
     cmds:
       - |
         go vet {{catLines .PACKAGES }}
+
+  vulncheck:
+    cmds:
+      - |
+        govulncheck ./...
