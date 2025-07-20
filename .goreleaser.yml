@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+
+version: 2
+
+project_name: gobin
+
+gomod:
+  proxy: true
+
+builds:
+  - main: ./cmd/gobin
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s
+      - -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+sboms:
+  - artifacts: archive
+
+report_sizes: true
+
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
+
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - --output-signature
+      - "${artifact}.sig"
+      - --output-certificate
+      - "${artifact}.pem"
+      - "--yes"
+      - "${artifact}"
+    artifacts: all
+    output: true
+
+changelog:
+  use: github
+
+checksum:
+  name_template: checksums.txt

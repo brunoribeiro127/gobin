@@ -13,7 +13,7 @@ tasks:
   build:
     cmds:
       - |
-        go build -v -o ./bin/gobin github.com/brunoribeiro127/gobin/cmd/gobin
+        CGO_ENABLED=0 go build -v -trimpath -ldflags="-s -w" -o ./bin/gobin github.com/brunoribeiro127/gobin/cmd/gobin
 
   check:
     deps:
@@ -27,7 +27,7 @@ tasks:
   clean:
     cmds:
       - |
-        rm -rf ./bin ./coverage
+        rm -rf ./bin ./coverage ./dist
 
   coverage:
     cmds:
