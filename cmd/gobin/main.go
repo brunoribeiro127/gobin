@@ -15,7 +15,7 @@ func main() {
 
 	cmd := &cobra.Command{
 		Use:   "gobin",
-		Short: "gobin - CLI tool to manage Go binaries",
+		Short: "gobin - CLI to manage Go binaries",
 	}
 
 	cmd.AddCommand(newDoctorCmd())
@@ -93,7 +93,7 @@ func newOutdatedCmd() *cobra.Command {
 		"major",
 		"m",
 		false,
-		"Checks for major versions",
+		"checks for major versions",
 	)
 
 	return cmd
@@ -118,7 +118,7 @@ func newUpgradeCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "upgrade [binary|all]",
-		Short:         "Upgrade one or all binaries",
+		Short:         "Upgrade one or all outdated binaries",
 		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -137,7 +137,7 @@ func newUpgradeCmd() *cobra.Command {
 		"major",
 		"m",
 		false,
-		"Upgrades major version",
+		"upgrades major version",
 	)
 
 	return cmd
@@ -172,7 +172,7 @@ func newVersionCmd() *cobra.Command {
 		"short",
 		"s",
 		false,
-		"Print short version info",
+		"prints short version info",
 	)
 
 	return cmd

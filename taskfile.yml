@@ -42,7 +42,7 @@ tasks:
   install:
     cmds:
       - |
-        go install github.com/brunoribeiro127/gobin/cmd/gobin
+        CGO_ENABLED=0 go install -trimpath -ldflags="-s -w" -v -x github.com/brunoribeiro127/gobin/cmd/gobin
 
   lint:
     cmds:
