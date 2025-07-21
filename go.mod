@@ -16,3 +16,5 @@ require (
 	golang.org/x/telemetry v0.0.0-20240522233618-39ace7a40ae7 // indirect
 	golang.org/x/tools v0.34.0 // indirect
 )
+
+retract v0.1.0 // tag pointed to a broken commit
