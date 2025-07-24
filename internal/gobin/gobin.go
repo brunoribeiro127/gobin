@@ -280,16 +280,28 @@ func UpgradeAllBinaries(majorUpgrade bool) error {
 	return grp.Wait()
 }
 
-func UpgradeBinary(binary string, majorUpgrade bool) error {
-	binPath, err := binaries.GetBinFullPath()
+func UpgradeBinaries(majorUpgrade bool, bins ...string) error {
+	binFullPath, err := binaries.GetBinFullPath()
 	if err != nil {
 		return err
 	}
 
-	info, err := binaries.GetBinaryInfo(filepath.Join(binPath, binary))
+	grp := new(errgroup.Group)
+
+	for _, bin := range bins {
+		grp.Go(func() error {
+			return UpgradeBinary(filepath.Join(binFullPath, bin), majorUpgrade)
+		})
+	}
+
+	return grp.Wait()
+}
+
+func UpgradeBinary(binFullPath string, majorUpgrade bool) error {
+	info, err := binaries.GetBinaryInfo(binFullPath)
 	if err != nil {
 		if errors.Is(err, binaries.ErrBinaryNotFound) {
-			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", binary)
+			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", filepath.Base(binFullPath))
 		}
 
 		return err

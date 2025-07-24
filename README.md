@@ -52,16 +52,16 @@ task install
 
 ## Usage
 
-| Command                   | Description                          | Flags                                           |
-|---------------------------|--------------------------------------|-------------------------------------------------|
-| `completion <shell>`      | Generate shell completion scripts    |                                                 |
-| `doctor`                  | Diagnose issues for binaries         |                                                 |
-| `info <binary>`           | Show info about a binary             |                                                 |
-| `list`                    | List installed binaries              |                                                 |
-| `outdated`                | List outdated binaries               | `-m`, `--major` – include major version updates |
-| `uninstall <binary>`      | Uninstall a binary                   |                                                 |
-| `upgrade [<binary>\|all]` | Upgrade one or all outdated binaries | `-m`, `--major` – allow major version upgrade   |
-| `version`                 | Show version info                    | `-s`, `--short` – print short version           |
+| Command              | Description                                 | Flags                                                                                             |
+|----------------------|---------------------------------------------|---------------------------------------------------------------------------------------------------|
+| `completion [shell]` | Generate shell completion scripts           |                                                                                                   |
+| `doctor`             | Diagnose issues for binaries                |                                                                                                   |
+| `info [binary]`      | Show info about a binary                    |                                                                                                   |
+| `list`               | List installed binaries                     |                                                                                                   |
+| `outdated`           | List outdated binaries                      | `-m`, `--major` – include major version updates                                                   |
+| `uninstall [binary]` | Uninstall a binary                          |                                                                                                   |
+| `upgrade [binaries]` | Upgrade specific binaries or all with --all | `-m`, `--major` – allow major version upgrade<br>`-a`, `--all`   - upgrades all outdated binaries |
+| `version`            | Show version info                           | `-s`, `--short` – print short version                                                             |                                                       |
 
 ## Installation Path
 
