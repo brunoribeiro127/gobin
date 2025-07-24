@@ -32,7 +32,7 @@ func GetLatestVersion(module string) (string, error) {
 	output, err := cmd.CombinedOutput()
 	outputStr := strings.TrimSpace(string(output))
 	if err != nil {
-		if strings.Contains(outputStr, "no matching versions for query") {
+		if isModuleNotFound(outputStr) {
 			return "", ErrModuleNotFound
 		}
 
@@ -142,4 +142,10 @@ func VulnCheck(path string) ([]Vulnerability, error) {
 	}
 
 	return vulns, nil
+}
+
+func isModuleNotFound(output string) bool {
+	output = strings.ToLower(output)
+	return strings.Contains(output, "no matching versions for query") ||
+		strings.Contains(output, "not found")
 }
