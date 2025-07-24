@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -114,23 +116,44 @@ func newUninstallCmd() *cobra.Command {
 }
 
 func newUpgradeCmd() *cobra.Command {
+	var upgradeAll bool
 	var majorUpgrade bool
 
 	cmd := &cobra.Command{
-		Use:           "upgrade [binary|all]",
-		Short:         "Upgrade one or all outdated binaries",
-		Args:          cobra.ExactArgs(1),
+		Use:           "upgrade [binaries]",
+		Short:         "Upgrade specific binaries or all with --all",
+		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			if args[0] == "all" {
-				return gobin.UpgradeAllBinaries(majorUpgrade)
-			}
+			switch {
+			case upgradeAll && len(args) > 0:
+				err := errors.New("cannot use --all with specific binaries")
+				fmt.Fprintln(os.Stderr, err.Error())
+				return err
 
-			return gobin.UpgradeBinary(args[0], majorUpgrade)
+			case upgradeAll:
+				return gobin.UpgradeAllBinaries(majorUpgrade)
+
+			case len(args) == 0:
+				err := errors.New("no binaries specified (use --all to upgrade all)")
+				fmt.Fprintln(os.Stderr, err.Error())
+				return err
+
+			default:
+				return gobin.UpgradeBinaries(majorUpgrade, args...)
+			}
 		},
 	}
+
+	cmd.Flags().BoolVarP(
+		&upgradeAll,
+		"all",
+		"a",
+		false,
+		"upgrades all binaries",
+	)
 
 	cmd.Flags().BoolVarP(
 		&majorUpgrade,
