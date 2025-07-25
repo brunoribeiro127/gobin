@@ -4,7 +4,6 @@ import (
 	"debug/buildinfo"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -13,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
 
@@ -50,6 +48,7 @@ type BinaryInfo struct {
 type BinaryUpgradeInfo struct {
 	BinaryInfo
 
+	LatestModulePath   string
 	LatestVersion      string
 	IsUpgradeAvailable bool
 }
@@ -214,20 +213,24 @@ func GetBinaryUpgradeInfo(info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, 
 		IsUpgradeAvailable: false,
 	}
 
-	version, err := toolchain.GetLatestVersion(binUpInfo.ModulePath)
+	modulePath, version, err := toolchain.GetLatestModuleVersion(binUpInfo.ModulePath)
 	if err != nil {
 		return BinaryUpgradeInfo{}, err
 	}
 
+	binUpInfo.LatestModulePath = modulePath
 	binUpInfo.LatestVersion = version
 	binUpInfo.IsUpgradeAvailable = semver.Compare(binUpInfo.ModuleVersion, version) < 0
 
 	if checkMajor {
-		version, err = checkModuleMajorUpgrade(binUpInfo.ModulePath, binUpInfo.LatestVersion)
+		modulePath, version, err = checkModuleMajorUpgrade(
+			binUpInfo.ModulePath, binUpInfo.LatestVersion,
+		)
 		if err != nil {
 			return BinaryUpgradeInfo{}, err
 		}
 
+		binUpInfo.LatestModulePath = modulePath
 		binUpInfo.LatestVersion = version
 		binUpInfo.IsUpgradeAvailable = semver.Compare(binUpInfo.ModuleVersion, version) < 0
 	}
@@ -254,15 +257,15 @@ func GetBinFullPath() (string, error) {
 }
 
 func InstallBinary(info BinaryUpgradeInfo) error {
-	pkg := info.PackagePath
+	baseModule := stripVersionSuffix(info.LatestModulePath)
+	packageSuffix := strings.TrimPrefix(info.PackagePath, info.ModulePath)
 	major := semver.Major(info.LatestVersion)
-	if major != "v0" && major != "v1" {
-		pkg = fmt.Sprintf(
-			"%s/%s%s",
-			stripVersionSuffix(info.ModulePath),
-			major,
-			strings.TrimPrefix(info.PackagePath, info.ModulePath),
-		)
+
+	var pkg string
+	if major == "v0" || major == "v1" {
+		pkg = baseModule + packageSuffix
+	} else {
+		pkg = baseModule + "/" + major + packageSuffix
 	}
 
 	return toolchain.Install(pkg, info.LatestVersion)
@@ -311,58 +314,43 @@ func checkBinaryDuplicatesInPath(name string) []string {
 	return nil
 }
 
-func checkModuleMajorUpgrade(module, version string) (string, error) {
-	var (
-		latestMajorVersion = version
-		pkg                = module
-		major              = semver.Major(version)
-	)
+func checkModuleMajorUpgrade(module, version string) (string, string, error) {
+	latestModulePath := module
+	latestMajorVersion := version
 
-	if major != "v0" && major != "v1" {
+	pkg := module
+	if major := semver.Major(version); major != "v0" && major != "v1" {
 		pkg = stripVersionSuffix(module)
 	}
 
 	for {
-		nextMajorVersion, err := nextMajorVersion(latestMajorVersion)
+		nextVersion, err := nextMajorVersion(latestMajorVersion)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 
-		pkgMajor := fmt.Sprintf("%s/%s", pkg, nextMajorVersion)
-		majorVersion, err := toolchain.GetLatestVersion(pkgMajor)
+		pkgMajor := pkg + "/" + nextVersion
+		modulePath, majorVersion, err := toolchain.GetLatestModuleVersion(pkgMajor)
 		if err != nil {
 			if errors.Is(err, toolchain.ErrModuleNotFound) {
 				break
 			}
-
-			return "", err
+			return "", "", err
 		}
 
+		latestModulePath = modulePath
 		latestMajorVersion = majorVersion
 	}
 
-	return latestMajorVersion, nil
+	return latestModulePath, latestMajorVersion, nil
 }
 
 func diagnoseGoModFile(module, version string) (string, string, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
-	file, err := toolchain.ModDownload(module, "latest")
+	modFile, err := toolchain.ModDownload(module, "latest")
 	if err != nil {
 		logger.Error("error downloading go.mod", "err", err)
-		return "", "", err
-	}
-	defer file.Close()
-
-	bytes, err := io.ReadAll(file)
-	if err != nil {
-		logger.Error("error reading go.mod", "err", err)
-		return "", "", err
-	}
-
-	modFile, err := modfile.Parse("go.mod", bytes, nil)
-	if err != nil {
-		logger.Error("error parsing go.mod", "err", err)
 		return "", "", err
 	}
 
