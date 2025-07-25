@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"golang.org/x/mod/modfile"
 	"golang.org/x/vuln/scan"
 )
 
@@ -20,31 +21,71 @@ type Vulnerability struct {
 	URL string
 }
 
-var ErrModuleNotFound = errors.New("module not found")
+var (
+	ErrModuleNotFound         = errors.New("module not found")
+	ErrModuleInfoNotAvailable = errors.New("module info not available")
+)
 
-func GetLatestVersion(module string) (string, error) {
+func GetLatestModuleVersion(module string) (string, string, error) {
 	logger := slog.Default().With("module", module)
 
 	modLatest := fmt.Sprintf("%s@latest", module)
-	cmd := exec.Command("go", "list", "-m", "-f", "{{.Version}}", modLatest)
+	cmd := exec.Command("go", "list", "-m", "-json", modLatest)
 	cmd.Env = os.Environ()
 
 	output, err := cmd.CombinedOutput()
 	outputStr := strings.TrimSpace(string(output))
 	if err != nil {
 		if isModuleNotFound(outputStr) {
-			return "", ErrModuleNotFound
+			return "", "", ErrModuleNotFound
 		}
 
 		err = errors.New(outputStr)
 		logger.Error("error getting latest version for module", "err", err)
-		return "", err
+		return "", "", err
 	}
 
-	return outputStr, nil
+	var res struct {
+		GoMod   string `json:"GoMod"`
+		Version string `json:"Version"`
+	}
+
+	if err = json.Unmarshal(output, &res); err != nil {
+		logger.Error("error parsing module latest version response", "err", err)
+		return "", "", err
+	}
+
+	logger = logger.With("go_mod_file", res.GoMod, "go_mod_version", res.Version)
+
+	file, err := os.Open(res.GoMod)
+	if err != nil {
+		logger.Error("error downloading go mod file", "err", err)
+		return "", "", err
+	}
+	defer file.Close()
+
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		logger.Error("error reading go mod file", "err", err)
+		return "", "", err
+	}
+
+	modFile, err := modfile.Parse("go.mod", bytes, nil)
+	if err != nil {
+		logger.Error("error parsing go mod file", "err", err)
+		return "", "", err
+	}
+
+	if modFile.Module == nil {
+		err = ErrModuleInfoNotAvailable
+		logger.Error("module info not available in go mod file", "err", err)
+		return "", "", err
+	}
+
+	return modFile.Module.Mod.Path, res.Version, nil
 }
 
-func ModDownload(module string, version string) (io.ReadCloser, error) {
+func ModDownload(module string, version string) (*modfile.File, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
@@ -76,7 +117,28 @@ func ModDownload(module string, version string) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	return os.Open(res.GoMod)
+	logger = logger.With("go_mod_file", res.GoMod)
+
+	file, err := os.Open(res.GoMod)
+	if err != nil {
+		logger.Error("error downloading go mod file", "err", err)
+		return nil, err
+	}
+	defer file.Close()
+
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		logger.Error("error reading go mod file", "err", err)
+		return nil, err
+	}
+
+	modFile, err := modfile.Parse("go.mod", bytes, nil)
+	if err != nil {
+		logger.Error("error parsing go mod file", "err", err)
+		return nil, err
+	}
+
+	return modFile, nil
 }
 
 func Install(pkg string, version string) error {
