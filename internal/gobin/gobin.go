@@ -94,7 +94,7 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 `
 )
 
-func DiagnoseBinaries() error {
+func DiagnoseBinaries(parallelism int) error {
 	binFullPath, err := binaries.GetBinFullPath()
 	if err != nil {
 		return err
@@ -110,6 +110,8 @@ func DiagnoseBinaries() error {
 		diags []binaries.BinaryDiagnostic
 		grp   = new(errgroup.Group)
 	)
+
+	grp.SetLimit(parallelism)
 
 	for _, bin := range bins {
 		grp.Go(func() error {
@@ -144,7 +146,7 @@ func ListInstalledBinaries() error {
 	return printInstalledBinaries(binInfos)
 }
 
-func ListOutdatedBinaries(checkMajor bool) error {
+func ListOutdatedBinaries(checkMajor bool, parallelism int) error {
 	binInfos, err := binaries.GetAllBinaryInfos()
 	if err != nil {
 		return err
@@ -155,6 +157,8 @@ func ListOutdatedBinaries(checkMajor bool) error {
 		outdated []binaries.BinaryUpgradeInfo
 		grp      = new(errgroup.Group)
 	)
+
+	grp.SetLimit(parallelism)
 
 	for _, info := range binInfos {
 		grp.Go(func() error {
@@ -258,7 +262,7 @@ func UninstallBinary(binary string) error {
 	return nil
 }
 
-func UpgradeAllBinaries(majorUpgrade bool) error {
+func UpgradeAllBinaries(majorUpgrade bool, parallelism int) error {
 	binFullPath, err := binaries.GetBinFullPath()
 	if err != nil {
 		return err
@@ -270,6 +274,7 @@ func UpgradeAllBinaries(majorUpgrade bool) error {
 	}
 
 	grp := new(errgroup.Group)
+	grp.SetLimit(parallelism)
 
 	for _, bin := range bins {
 		grp.Go(func() error {
@@ -280,13 +285,14 @@ func UpgradeAllBinaries(majorUpgrade bool) error {
 	return grp.Wait()
 }
 
-func UpgradeBinaries(majorUpgrade bool, bins ...string) error {
+func UpgradeBinaries(majorUpgrade bool, parallelism int, bins ...string) error {
 	binFullPath, err := binaries.GetBinFullPath()
 	if err != nil {
 		return err
 	}
 
 	grp := new(errgroup.Group)
+	grp.SetLimit(parallelism)
 
 	for _, bin := range bins {
 		grp.Go(func() error {
