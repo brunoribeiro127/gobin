@@ -13,12 +13,28 @@ import (
 )
 
 func main() {
-	slog.SetDefault(internal.NewLogger())
+	var verbose bool
 
 	cmd := &cobra.Command{
 		Use:   "gobin",
 		Short: "gobin - CLI to manage Go binaries",
+		PersistentPreRun: func(_ *cobra.Command, _ []string) {
+			level := slog.LevelWarn
+			if verbose {
+				level = slog.LevelDebug
+			}
+
+			slog.SetDefault(internal.NewLoggerWithLevel(level))
+		},
 	}
+
+	cmd.PersistentFlags().BoolVarP(
+		&verbose,
+		"verbose",
+		"v",
+		false,
+		"enable verbose output",
+	)
 
 	cmd.AddCommand(newDoctorCmd())
 	cmd.AddCommand(newInfoCmd())
