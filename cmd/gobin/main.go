@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 
@@ -14,6 +15,7 @@ import (
 
 func main() {
 	var verbose bool
+	var parallelism int
 
 	cmd := &cobra.Command{
 		Use:   "gobin",
@@ -34,6 +36,14 @@ func main() {
 		"v",
 		false,
 		"enable verbose output",
+	)
+
+	cmd.PersistentFlags().IntVarP(
+		&parallelism,
+		"parallelism",
+		"p",
+		runtime.NumCPU(),
+		"number of concurrent operations (default: number of CPU cores)",
 	)
 
 	cmd.AddCommand(newDoctorCmd())
@@ -58,7 +68,9 @@ func newDoctorCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.DiagnoseBinaries()
+			parallelism, _ := cmd.Flags().GetInt("parallelism")
+
+			return gobin.DiagnoseBinaries(parallelism)
 		},
 	}
 }
@@ -102,7 +114,9 @@ func newOutdatedCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.ListOutdatedBinaries(checkMajor)
+			parallelism, _ := cmd.Flags().GetInt("parallelism")
+
+			return gobin.ListOutdatedBinaries(checkMajor, parallelism)
 		},
 	}
 
@@ -143,6 +157,8 @@ func newUpgradeCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
+			parallelism, _ := cmd.Flags().GetInt("parallelism")
+
 			switch {
 			case upgradeAll && len(args) > 0:
 				err := errors.New("cannot use --all with specific binaries")
@@ -150,7 +166,7 @@ func newUpgradeCmd() *cobra.Command {
 				return err
 
 			case upgradeAll:
-				return gobin.UpgradeAllBinaries(majorUpgrade)
+				return gobin.UpgradeAllBinaries(majorUpgrade, parallelism)
 
 			case len(args) == 0:
 				err := errors.New("no binaries specified (use --all to upgrade all)")
@@ -158,7 +174,7 @@ func newUpgradeCmd() *cobra.Command {
 				return err
 
 			default:
-				return gobin.UpgradeBinaries(majorUpgrade, args...)
+				return gobin.UpgradeBinaries(majorUpgrade, parallelism, args...)
 			}
 		},
 	}
