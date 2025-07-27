@@ -62,8 +62,21 @@ func main() {
 
 func newDoctorCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:           "doctor",
-		Short:         "Diagnose issues for installed binaries",
+		Use:   "doctor",
+		Short: "Diagnose issues for installed binaries",
+		Long: `Diagnose common issues with installed Go binaries.
+
+Checks for:
+  • Binaries not in PATH
+  • Duplicate binaries in PATH  
+  • Go version mismatches
+  • Platform mismatches (OS/architecture)
+  • Pseudo-versions and orphaned binaries
+  • Binaries built without Go modules
+  • Retracted or deprecated modules
+  • Known security vulnerabilities
+
+Run this command regularly to make sure everything is ok with your installed binaries.`,
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -108,8 +121,16 @@ func newOutdatedCmd() *cobra.Command {
 	var checkMajor bool
 
 	cmd := &cobra.Command{
-		Use:           "outdated",
-		Short:         "List outdated binaries",
+		Use:   "outdated",
+		Short: "List outdated binaries",
+		Long: `List binaries that have newer versions available.
+
+Examples:
+  gobin outdated                       # Show outdated binaries (minor/patch only)
+  gobin outdated --major               # Include major version upgrades
+
+By default, only minor and patch updates are shown. Use --major to include
+potentially breaking major version upgrades.`,
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -136,8 +157,16 @@ func newRepoCmd() *cobra.Command {
 	var open bool
 
 	cmd := &cobra.Command{
-		Use:           "repo [binary]",
-		Short:         "Show binary repository",
+		Use:   "repo [binary]",
+		Short: "Show binary repository",
+		Long: `Show the repository URL for a Go binary.
+
+Examples:
+  gobin repo dlv                       # Print repository URL
+  gobin repo dlv --open                # Open repository in browser
+
+The repository URL is determined from the module's origin information,
+falling back to constructing the URL from the module path.`,
 		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -178,8 +207,19 @@ func newUpgradeCmd() *cobra.Command {
 	var rebuild bool
 
 	cmd := &cobra.Command{
-		Use:           "upgrade [binaries]",
-		Short:         "Upgrade specific binaries or all with --all",
+		Use:   "upgrade [binaries]",
+		Short: "Upgrade specific binaries or all with --all",
+		Long: `Upgrade binaries to their latest versions. You can upgrade specific binaries or all outdated ones.
+
+Examples:
+  gobin upgrade dlv                    # Upgrade specific binary
+  gobin upgrade dlv air gotests        # Upgrade multiple binaries  
+  gobin upgrade --all                  # Upgrade all outdated binaries
+  gobin upgrade --all --major          # Include major version upgrades
+  gobin upgrade dlv --rebuild          # Force rebuild even if up-to-date
+  gobin upgrade --all --rebuild        # Rebuild all binaries with current Go version
+
+The --rebuild flag is useful when binaries are up-to-date but compiled with older Go versions.`,
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
