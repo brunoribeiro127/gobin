@@ -16,14 +16,22 @@ import (
 	"golang.org/x/vuln/scan"
 )
 
+type ModuleOrigin struct {
+	VCS  string  `json:"VCS"`
+	URL  string  `json:"URL"`
+	Hash string  `json:"Hash"`
+	Ref  *string `json:"Ref"`
+}
+
 type Vulnerability struct {
 	ID  string
 	URL string
 }
 
 var (
-	ErrModuleNotFound         = errors.New("module not found")
-	ErrModuleInfoNotAvailable = errors.New("module info not available")
+	ErrModuleNotFound           = errors.New("module not found")
+	ErrModuleInfoNotAvailable   = errors.New("module info not available")
+	ErrModuleOriginNotAvailable = errors.New("module origin not available")
 )
 
 func GetLatestModuleVersion(module string) (string, string, error) {
@@ -85,7 +93,7 @@ func GetLatestModuleVersion(module string) (string, string, error) {
 	return modFile.Module.Mod.Path, res.Version, nil
 }
 
-func ModDownload(module string, version string) (*modfile.File, error) {
+func GetModuleFile(module string, version string) (*modfile.File, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
@@ -119,14 +127,7 @@ func ModDownload(module string, version string) (*modfile.File, error) {
 
 	logger = logger.With("go_mod_file", res.GoMod)
 
-	file, err := os.Open(res.GoMod)
-	if err != nil {
-		logger.Error("error downloading go mod file", "err", err)
-		return nil, err
-	}
-	defer file.Close()
-
-	bytes, err := io.ReadAll(file)
+	bytes, err := os.ReadFile(res.GoMod)
 	if err != nil {
 		logger.Error("error reading go mod file", "err", err)
 		return nil, err
@@ -139,6 +140,51 @@ func ModDownload(module string, version string) (*modfile.File, error) {
 	}
 
 	return modFile, nil
+}
+
+func GetModuleOrigin(module, version string) (*ModuleOrigin, error) {
+	logger := slog.Default().With("module", module, "version", version)
+
+	modVersion := fmt.Sprintf("%s@%s", module, version)
+	cmd := exec.Command("go", "mod", "download", "-json", modVersion)
+	cmd.Env = os.Environ()
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		var res struct {
+			Error string `json:"Error"`
+		}
+
+		if err = json.Unmarshal(output, &res); err != nil {
+			logger.Error("error parsing module download response", "err", err)
+			return nil, err
+		}
+
+		if isModuleNotFound(res.Error) {
+			return nil, ErrModuleNotFound
+		}
+
+		err = errors.New(res.Error)
+		logger.Error("error downloading module", "err", err)
+		return nil, err
+	}
+
+	var res struct {
+		Origin *ModuleOrigin `json:"Origin"`
+	}
+
+	if err = json.Unmarshal(output, &res); err != nil {
+		logger.Error("error parsing module download response", "err", err)
+		return nil, err
+	}
+
+	if res.Origin == nil {
+		err = ErrModuleOriginNotAvailable
+		logger.Error("module origin not available", "err", err)
+		return nil, err
+	}
+
+	return res.Origin, nil
 }
 
 func Install(pkg string, version string) error {
@@ -209,5 +255,6 @@ func VulnCheck(path string) ([]Vulnerability, error) {
 func isModuleNotFound(output string) bool {
 	output = strings.ToLower(output)
 	return strings.Contains(output, "no matching versions for query") ||
-		strings.Contains(output, "not found")
+		strings.Contains(output, "not found") ||
+		strings.Contains(output, "unknown revision")
 }
