@@ -188,16 +188,17 @@ func GetModuleOrigin(module, version string) (*ModuleOrigin, error) {
 }
 
 func Install(pkg string, version string) error {
-	logger := slog.Default().With("package", pkg)
+	logger := slog.Default().With("package", pkg, "version", version)
 
 	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)
-	cmd := exec.Command("go", "install", pkgVersion)
+	cmd := exec.Command("go", "install", "-a", pkgVersion)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 
 	if err := cmd.Run(); err != nil {
 		logger.Error("error installing binary", "err", err)
+		return err
 	}
 
 	return nil

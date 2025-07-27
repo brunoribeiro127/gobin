@@ -280,21 +280,6 @@ func GetBinFullPath() (string, error) {
 	return filepath.Join(home, "go", "bin"), nil
 }
 
-func InstallBinary(info BinaryUpgradeInfo) error {
-	baseModule := stripVersionSuffix(info.LatestModulePath)
-	packageSuffix := strings.TrimPrefix(info.PackagePath, info.ModulePath)
-	major := semver.Major(info.LatestVersion)
-
-	var pkg string
-	if major == "v0" || major == "v1" {
-		pkg = baseModule + packageSuffix
-	} else {
-		pkg = baseModule + "/" + major + packageSuffix
-	}
-
-	return toolchain.Install(pkg, info.LatestVersion)
-}
-
 func ListBinariesFullPaths(dir string) ([]string, error) {
 	logger := slog.Default().With("dir", dir)
 	var binaries []string
@@ -313,6 +298,24 @@ func ListBinariesFullPaths(dir string) ([]string, error) {
 	}
 
 	return binaries, nil
+}
+
+func UpgradeBinary(binFullPath string, majorUpgrade bool, rebuild bool) error {
+	info, err := GetBinaryInfo(binFullPath)
+	if err != nil {
+		return err
+	}
+
+	binUpInfo, err := GetBinaryUpgradeInfo(info, majorUpgrade)
+	if err != nil {
+		return err
+	}
+
+	if binUpInfo.IsUpgradeAvailable || rebuild {
+		return installBinary(binUpInfo)
+	}
+
+	return nil
 }
 
 func checkBinaryDuplicatesInPath(name string) []string {
@@ -406,6 +409,21 @@ func getBinaryPlatform(info *buildinfo.BuildInfo) string {
 	}
 
 	return goOS + "/" + goArch
+}
+
+func installBinary(info BinaryUpgradeInfo) error {
+	baseModule := stripVersionSuffix(info.LatestModulePath)
+	packageSuffix := strings.TrimPrefix(info.PackagePath, info.ModulePath)
+	major := semver.Major(info.LatestVersion)
+
+	var pkg string
+	if major == "v0" || major == "v1" {
+		pkg = baseModule + packageSuffix
+	} else {
+		pkg = baseModule + "/" + major + packageSuffix
+	}
+
+	return toolchain.Install(pkg, info.LatestVersion)
 }
 
 func isBinary(path string) bool {

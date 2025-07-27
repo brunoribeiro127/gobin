@@ -282,67 +282,38 @@ func UninstallBinary(binary string) error {
 	return nil
 }
 
-func UpgradeAllBinaries(majorUpgrade bool, parallelism int) error {
+func UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int, bins ...string) error {
 	binFullPath, err := binaries.GetBinFullPath()
 	if err != nil {
 		return err
 	}
 
-	bins, err := binaries.ListBinariesFullPaths(binFullPath)
-	if err != nil {
-		return err
-	}
-
-	grp := new(errgroup.Group)
-	grp.SetLimit(parallelism)
-
-	for _, bin := range bins {
-		grp.Go(func() error {
-			return UpgradeBinary(filepath.Base(bin), majorUpgrade)
-		})
-	}
-
-	return grp.Wait()
-}
-
-func UpgradeBinaries(majorUpgrade bool, parallelism int, bins ...string) error {
-	binFullPath, err := binaries.GetBinFullPath()
-	if err != nil {
-		return err
-	}
-
-	grp := new(errgroup.Group)
-	grp.SetLimit(parallelism)
-
-	for _, bin := range bins {
-		grp.Go(func() error {
-			return UpgradeBinary(filepath.Join(binFullPath, bin), majorUpgrade)
-		})
-	}
-
-	return grp.Wait()
-}
-
-func UpgradeBinary(binFullPath string, majorUpgrade bool) error {
-	info, err := binaries.GetBinaryInfo(binFullPath)
-	if err != nil {
-		if errors.Is(err, binaries.ErrBinaryNotFound) {
-			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", filepath.Base(binFullPath))
+	var binPaths []string
+	if len(bins) == 0 {
+		binPaths, err = binaries.ListBinariesFullPaths(binFullPath)
+		if err != nil {
+			return err
 		}
-
-		return err
+	} else {
+		for _, bin := range bins {
+			binPaths = append(binPaths, filepath.Join(binFullPath, bin))
+		}
 	}
 
-	binUpInfo, err := binaries.GetBinaryUpgradeInfo(info, majorUpgrade)
-	if err != nil {
-		return err
+	grp := new(errgroup.Group)
+	grp.SetLimit(parallelism)
+
+	for _, bin := range binPaths {
+		grp.Go(func() error {
+			upErr := binaries.UpgradeBinary(bin, majorUpgrade, rebuild)
+			if errors.Is(upErr, binaries.ErrBinaryNotFound) {
+				fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", filepath.Base(bin))
+			}
+			return upErr
+		})
 	}
 
-	if binUpInfo.IsUpgradeAvailable {
-		return binaries.InstallBinary(binUpInfo)
-	}
-
-	return nil
+	return grp.Wait()
 }
 
 func add(args ...int) int {

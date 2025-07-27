@@ -175,6 +175,7 @@ func newUninstallCmd() *cobra.Command {
 func newUpgradeCmd() *cobra.Command {
 	var upgradeAll bool
 	var majorUpgrade bool
+	var rebuild bool
 
 	cmd := &cobra.Command{
 		Use:           "upgrade [binaries]",
@@ -193,7 +194,7 @@ func newUpgradeCmd() *cobra.Command {
 				return err
 
 			case upgradeAll:
-				return gobin.UpgradeAllBinaries(majorUpgrade, parallelism)
+				return gobin.UpgradeBinaries(majorUpgrade, rebuild, parallelism)
 
 			case len(args) == 0:
 				err := errors.New("no binaries specified (use --all to upgrade all)")
@@ -201,7 +202,7 @@ func newUpgradeCmd() *cobra.Command {
 				return err
 
 			default:
-				return gobin.UpgradeBinaries(majorUpgrade, parallelism, args...)
+				return gobin.UpgradeBinaries(majorUpgrade, rebuild, parallelism, args...)
 			}
 		},
 	}
@@ -220,6 +221,14 @@ func newUpgradeCmd() *cobra.Command {
 		"m",
 		false,
 		"upgrades major version",
+	)
+
+	cmd.Flags().BoolVarP(
+		&rebuild,
+		"rebuild",
+		"r",
+		false,
+		"forces binary rebuild",
 	)
 
 	return cmd
