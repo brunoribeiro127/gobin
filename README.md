@@ -64,6 +64,15 @@ task install
 | `upgrade [binaries]` | Upgrade specific binaries or all with --all | `-m`, `--major` – allow major version upgrade<br>`-a`, `--all` – upgrade all outdated binaries<br>`-r`, `--rebuild` – force binary rebuild |
 | `version`            | Show version info                           | `-s`, `--short` – print short version                                                             |
 
+### Global Flags
+
+These flags can be used with any command:
+
+| Flag | Description |
+|------|-------------|
+| `-v`, `--verbose` | Enable verbose output (debug logging) |
+| `-p`, `--parallelism` | Number of concurrent operations (default: number of CPU cores) |
+
 ## Installation Path
 
 The installation path for binaries is determined by the following flow:
