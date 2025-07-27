@@ -32,11 +32,21 @@ go install github.com/brunoribeiro127/gobin@latest
 
 ### Via Prebuilt Binaries
 
+**Linux/MacOS:**
 ```sh
 curl -L -o gobin_<version>_<os>_<arch>.tar.gz https://github.com/brunoribeiro127/gobin/releases/download/v<version>/gobin_<version>_<os>_<arch>.tar.gz
 tar -xzf gobin_<version>_<os>_<arch>.tar.gz
-mv gobin_<version>_<os>_<arch>/gobin <go binaries path>
+mv gobin $HOME/go/bin  # adjust to your Go binaries path
 ```
+
+**Windows (PowerShell):**
+```powershell
+Invoke-WebRequest https://github.com/brunoribeiro127/gobin/releases/download/v<version>/gobin_<version>_windows_<arch>.tar.gz -OutFile gobin.tar.gz
+tar -xzf gobin.tar.gz
+Move-Item .\gobin.exe "$env:USERPROFILE\go\bin"  # adjust to your Go binaries path
+```
+
+> **Note:** All releases include checksums and cryptographic signatures for verification. Use [cosign](https://docs.sigstore.dev/cosign/installation/) to verify signatures if desired.
 
 ### Via Source
 
