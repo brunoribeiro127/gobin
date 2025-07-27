@@ -61,8 +61,8 @@ task install
 | `outdated`           | List outdated binaries                      | `-m`, `--major` – include major version updates                                                   |
 | `repo [binary]`      | Show binary repository                      | `-o`, `--open` – open repository URL in the default browser                                       |
 | `uninstall [binary]` | Uninstall a binary                          |                                                                                                   |
-| `upgrade [binaries]` | Upgrade specific binaries or all with --all | `-m`, `--major` – allow major version upgrade<br>`-a`, `--all`   - upgrades all outdated binaries |
-| `version`            | Show version info                           | `-s`, `--short` – print short version                                                             |                                                       |
+| `upgrade [binaries]` | Upgrade specific binaries or all with --all | `-m`, `--major` – allow major version upgrade<br>`-a`, `--all` – upgrade all outdated binaries<br>`-r`, `--rebuild` – force binary rebuild |
+| `version`            | Show version info                           | `-s`, `--short` – print short version                                                             |
 
 ## Installation Path
 
