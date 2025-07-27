@@ -50,6 +50,7 @@ func main() {
 	cmd.AddCommand(newInfoCmd())
 	cmd.AddCommand(newListCmd())
 	cmd.AddCommand(newOutdatedCmd())
+	cmd.AddCommand(newRepoCmd())
 	cmd.AddCommand(newUninstallCmd())
 	cmd.AddCommand(newUpgradeCmd())
 	cmd.AddCommand(newVersionCmd())
@@ -126,6 +127,32 @@ func newOutdatedCmd() *cobra.Command {
 		"m",
 		false,
 		"checks for major versions",
+	)
+
+	return cmd
+}
+
+func newRepoCmd() *cobra.Command {
+	var open bool
+
+	cmd := &cobra.Command{
+		Use:           "repo [binary]",
+		Short:         "Show binary repository",
+		Args:          cobra.ExactArgs(1),
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
+			return gobin.ShowBinaryRepository(args[0], open)
+		},
+	}
+
+	cmd.Flags().BoolVarP(
+		&open,
+		"open",
+		"o",
+		false,
+		"opens the repository in the default browser",
 	)
 
 	return cmd

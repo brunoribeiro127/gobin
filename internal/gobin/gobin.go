@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -244,6 +246,24 @@ func PrintVersion(path string) error {
 	return nil
 }
 
+func ShowBinaryRepository(binary string, open bool) error {
+	repoURL, err := binaries.GetBinaryRepository(binary)
+	if err != nil {
+		if errors.Is(err, binaries.ErrBinaryNotFound) {
+			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", binary)
+		}
+
+		return err
+	}
+
+	if open {
+		return openURL(repoURL)
+	}
+
+	fmt.Fprintln(os.Stdout, repoURL)
+	return nil
+}
+
 func UninstallBinary(binary string) error {
 	binPath, err := binaries.GetBinFullPath()
 	if err != nil {
@@ -331,6 +351,35 @@ func add(args ...int) int {
 		sum += v
 	}
 	return sum
+}
+
+func openURL(url string) error {
+	logger := slog.Default().With("url", url)
+
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		err := fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+		logger.Error("error opening url", "err", err)
+		return err
+	}
+
+	output, err := cmd.CombinedOutput()
+	outputStr := strings.TrimSpace(string(output))
+	if err != nil {
+		err = errors.New(outputStr)
+		logger.Error("error opening url", "err", err)
+		return err
+	}
+
+	return nil
 }
 
 func printBinaryDiagnostics(diags []binaries.BinaryDiagnostic) error {

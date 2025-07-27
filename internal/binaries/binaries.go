@@ -206,6 +206,30 @@ func GetBinaryInfo(path string) (BinaryInfo, error) {
 	return binInfo, nil
 }
 
+func GetBinaryRepository(binary string) (string, error) {
+	binPath, err := GetBinFullPath()
+	if err != nil {
+		return "", err
+	}
+
+	binInfo, err := GetBinaryInfo(filepath.Join(binPath, binary))
+	if err != nil {
+		return "", err
+	}
+
+	modOrigin, err := toolchain.GetModuleOrigin(binInfo.ModulePath, binInfo.ModuleVersion)
+	if err != nil && !errors.Is(err, toolchain.ErrModuleNotFound) {
+		return "", err
+	}
+
+	repoURL := "https://" + binInfo.ModulePath
+	if modOrigin != nil {
+		repoURL = modOrigin.URL
+	}
+
+	return repoURL, nil
+}
+
 func GetBinaryUpgradeInfo(info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, error) {
 	binUpInfo := BinaryUpgradeInfo{
 		BinaryInfo:         info,
@@ -348,7 +372,7 @@ func checkModuleMajorUpgrade(module, version string) (string, string, error) {
 func diagnoseGoModFile(module, version string) (string, string, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
-	modFile, err := toolchain.ModDownload(module, "latest")
+	modFile, err := toolchain.GetModuleFile(module, "latest")
 	if err != nil {
 		logger.Error("error downloading go.mod", "err", err)
 		return "", "", err
