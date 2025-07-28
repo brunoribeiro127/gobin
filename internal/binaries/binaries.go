@@ -15,6 +15,7 @@ import (
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
 
+	"github.com/brunoribeiro127/gobin/internal"
 	"github.com/brunoribeiro127/gobin/internal/toolchain"
 )
 
@@ -125,7 +126,7 @@ func DiagnoseBinary(path string) (BinaryDiagnostic, error) {
 		diagnostic.Deprecated = deprecated
 	}
 
-	diagnostic.Vulnerabilities, err = toolchain.VulnCheck(path)
+	diagnostic.Vulnerabilities, err = toolchain.VulnCheck(path, toolchain.NewScanExecRun)
 	if err != nil {
 		return diagnostic, err
 	}
@@ -217,7 +218,9 @@ func GetBinaryRepository(binary string) (string, error) {
 		return "", err
 	}
 
-	modOrigin, err := toolchain.GetModuleOrigin(binInfo.ModulePath, binInfo.ModuleVersion)
+	modOrigin, err := toolchain.GetModuleOrigin(
+		binInfo.ModulePath, binInfo.ModuleVersion, internal.NewExecCombinedOutput,
+	)
 	if err != nil && !errors.Is(err, toolchain.ErrModuleNotFound) {
 		return "", err
 	}
@@ -237,7 +240,9 @@ func GetBinaryUpgradeInfo(info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, 
 		IsUpgradeAvailable: false,
 	}
 
-	modulePath, version, err := toolchain.GetLatestModuleVersion(binUpInfo.ModulePath)
+	modulePath, version, err := toolchain.GetLatestModuleVersion(
+		binUpInfo.ModulePath, internal.NewExecCombinedOutput,
+	)
 	if err != nil {
 		return BinaryUpgradeInfo{}, err
 	}
@@ -357,7 +362,9 @@ func checkModuleMajorUpgrade(module, version string) (string, string, error) {
 		}
 
 		pkgMajor := pkg + "/" + nextVersion
-		modulePath, majorVersion, err := toolchain.GetLatestModuleVersion(pkgMajor)
+		modulePath, majorVersion, err := toolchain.GetLatestModuleVersion(
+			pkgMajor, internal.NewExecCombinedOutput,
+		)
 		if err != nil {
 			if errors.Is(err, toolchain.ErrModuleNotFound) {
 				break
@@ -375,7 +382,7 @@ func checkModuleMajorUpgrade(module, version string) (string, string, error) {
 func diagnoseGoModFile(module, version string) (string, string, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
-	modFile, err := toolchain.GetModuleFile(module, "latest")
+	modFile, err := toolchain.GetModuleFile(module, "latest", internal.NewExecCombinedOutput)
 	if err != nil {
 		logger.Error("error downloading go.mod", "err", err)
 		return "", "", err
@@ -423,7 +430,7 @@ func installBinary(info BinaryUpgradeInfo) error {
 		pkg = baseModule + "/" + major + packageSuffix
 	}
 
-	return toolchain.Install(pkg, info.LatestVersion)
+	return toolchain.Install(pkg, info.LatestVersion, internal.NewExecRun)
 }
 
 func isBinary(path string) bool {

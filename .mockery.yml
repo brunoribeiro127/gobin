@@ -1,0 +1,10 @@
+structname: "{{.InterfaceName}}"
+filename: "{{.InterfaceName | snakecase}}.go"
+pkgname: mocks
+template: testify
+dir: "{{.InterfaceDir}}/mocks"
+packages:
+  github.com/brunoribeiro127/gobin/internal:
+    interfaces:
+      ExecRun:
+      ExecCombinedOutput:

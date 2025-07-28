@@ -1,19 +1,16 @@
 package toolchain
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"strings"
 
 	"golang.org/x/mod/modfile"
-	"golang.org/x/vuln/scan"
+
+	"github.com/brunoribeiro127/gobin/internal"
 )
 
 type ModuleOrigin struct {
@@ -34,16 +31,19 @@ var (
 	ErrModuleOriginNotAvailable = errors.New("module origin not available")
 )
 
-func GetLatestModuleVersion(module string) (string, string, error) {
+func GetLatestModuleVersion(
+	module string,
+	execCmd internal.ExecCombinedOutputFunc,
+) (string, string, error) {
 	logger := slog.Default().With("module", module)
 
 	modLatest := fmt.Sprintf("%s@latest", module)
-	cmd := exec.Command("go", "list", "-m", "-json", modLatest)
-	cmd.Env = os.Environ()
+	cmd := execCmd("go", "list", "-m", "-json", modLatest)
 
 	output, err := cmd.CombinedOutput()
-	outputStr := strings.TrimSpace(string(output))
 	if err != nil {
+		outputStr := strings.TrimSpace(string(output))
+
 		if isModuleNotFound(outputStr) {
 			return "", "", ErrModuleNotFound
 		}
@@ -65,14 +65,7 @@ func GetLatestModuleVersion(module string) (string, string, error) {
 
 	logger = logger.With("go_mod_file", res.GoMod, "go_mod_version", res.Version)
 
-	file, err := os.Open(res.GoMod)
-	if err != nil {
-		logger.Error("error downloading go mod file", "err", err)
-		return "", "", err
-	}
-	defer file.Close()
-
-	bytes, err := io.ReadAll(file)
+	bytes, err := os.ReadFile(res.GoMod)
 	if err != nil {
 		logger.Error("error reading go mod file", "err", err)
 		return "", "", err
@@ -93,12 +86,14 @@ func GetLatestModuleVersion(module string) (string, string, error) {
 	return modFile.Module.Mod.Path, res.Version, nil
 }
 
-func GetModuleFile(module string, version string) (*modfile.File, error) {
+func GetModuleFile(
+	module, version string,
+	execCmd internal.ExecCombinedOutputFunc,
+) (*modfile.File, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
-	cmd := exec.Command("go", "mod", "download", "-json", modVersion)
-	cmd.Env = os.Environ()
+	cmd := execCmd("go", "mod", "download", "-json", modVersion)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -142,12 +137,14 @@ func GetModuleFile(module string, version string) (*modfile.File, error) {
 	return modFile, nil
 }
 
-func GetModuleOrigin(module, version string) (*ModuleOrigin, error) {
+func GetModuleOrigin(
+	module, version string,
+	execCmd internal.ExecCombinedOutputFunc,
+) (*ModuleOrigin, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
-	cmd := exec.Command("go", "mod", "download", "-json", modVersion)
-	cmd.Env = os.Environ()
+	cmd := execCmd("go", "mod", "download", "-json", modVersion)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -187,14 +184,11 @@ func GetModuleOrigin(module, version string) (*ModuleOrigin, error) {
 	return res.Origin, nil
 }
 
-func Install(pkg string, version string) error {
+func Install(pkg, version string, execCmd internal.ExecRunFunc) error {
 	logger := slog.Default().With("package", pkg, "version", version)
 
 	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)
-	cmd := exec.Command("go", "install", "-a", pkgVersion)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
+	cmd := execCmd("go", "install", "-a", pkgVersion)
 
 	if err := cmd.Run(); err != nil {
 		logger.Error("error installing binary", "err", err)
@@ -204,24 +198,16 @@ func Install(pkg string, version string) error {
 	return nil
 }
 
-func VulnCheck(path string) ([]Vulnerability, error) {
+func VulnCheck(path string, scanExecCmd ScanExecCombinedOutputFunc) ([]Vulnerability, error) {
 	logger := slog.Default().With("path", path)
 
-	var output bytes.Buffer
-	cmd := scan.Command(context.Background(), "-mode", "binary", "-format", "openvex", path)
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-	cmd.Env = os.Environ()
+	cmd := scanExecCmd("-mode", "binary", "-format", "openvex", path)
 
-	if err := cmd.Start(); err != nil {
-		err = errors.New(output.String())
-		logger.Error("error starting govulncheck command", "err", err)
-		return nil, err
-	}
-
-	if err := cmd.Wait(); err != nil {
-		err = errors.New(output.String())
-		logger.Error("error waiting for govulncheck command", "err", err)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		outputStr := strings.TrimSpace(string(output))
+		err = errors.New(outputStr)
+		logger.Error("error running govulncheck command", "err", err)
 		return nil, err
 	}
 
@@ -235,7 +221,7 @@ func VulnCheck(path string) ([]Vulnerability, error) {
 		} `json:"statements"`
 	}
 
-	if err := json.Unmarshal(output.Bytes(), &res); err != nil {
+	if err = json.Unmarshal(output, &res); err != nil {
 		logger.Error("error parsing govulncheck response", "err", err)
 		return nil, err
 	}

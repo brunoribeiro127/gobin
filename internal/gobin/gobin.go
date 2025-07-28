@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -15,6 +14,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/brunoribeiro127/gobin/internal"
 	"github.com/brunoribeiro127/gobin/internal/binaries"
 )
 
@@ -257,7 +257,7 @@ func ShowBinaryRepository(binary string, open bool) error {
 	}
 
 	if open {
-		return openURL(repoURL)
+		return openURL(repoURL, internal.NewExecCombinedOutput)
 	}
 
 	fmt.Fprintln(os.Stdout, repoURL)
@@ -324,18 +324,18 @@ func add(args ...int) int {
 	return sum
 }
 
-func openURL(url string) error {
+func openURL(url string, execCmd internal.ExecCombinedOutputFunc) error {
 	logger := slog.Default().With("url", url)
 
-	var cmd *exec.Cmd
+	var cmd internal.ExecCombinedOutput
 
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = execCmd("open", url)
 	case "linux":
-		cmd = exec.Command("xdg-open", url)
+		cmd = execCmd("xdg-open", url)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
+		cmd = execCmd("cmd", "/c", "start", url)
 	default:
 		err := fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 		logger.Error("error opening url", "err", err)
