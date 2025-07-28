@@ -5,9 +5,9 @@ silent: true
 
 vars:
   PACKAGES:
-    sh: go list github.com/brunoribeiro127/gobin/...
+    sh: go list github.com/brunoribeiro127/gobin/... | grep -v mocks
   INTERNAL_PACKAGES:
-    sh: go list github.com/brunoribeiro127/gobin/internal...
+    sh: go list github.com/brunoribeiro127/gobin/internal... | grep -v mocks
 
 tasks:
   build:
@@ -32,7 +32,11 @@ tasks:
   coverage:
     cmds:
       - |
-        open coverage/coverage.html
+        if command -v open >/dev/null; then
+          open coverage/coverage.html
+        else
+          xdg-open coverage/coverage.html
+        fi
 
   fmt:
     cmds:
