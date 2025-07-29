@@ -1,4 +1,4 @@
-package toolchain_test
+package internal_test
 
 import (
 	"errors"
@@ -14,7 +14,6 @@ import (
 
 	"github.com/brunoribeiro127/gobin/internal"
 	"github.com/brunoribeiro127/gobin/internal/mocks"
-	"github.com/brunoribeiro127/gobin/internal/toolchain"
 )
 
 func TestGetLatestModuleVersion(t *testing.T) {
@@ -45,7 +44,7 @@ func TestGetLatestModuleVersion(t *testing.T) {
 				return []byte(`no matching versions for query`)
 			}(),
 			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  toolchain.ErrModuleNotFound,
+			expectedError:  internal.ErrModuleNotFound,
 		},
 		"error-getting-latest-version": {
 			module: "example.com/mockorg/mockproj",
@@ -77,7 +76,7 @@ func TestGetLatestModuleVersion(t *testing.T) {
 		"error-module-info-not-available": {
 			module:            "example.com/mockorg/mockproj",
 			mockExecCmdOutput: makeExecCmdOutput(t, "empty.go.mod"),
-			expectedError:     toolchain.ErrModuleInfoNotAvailable,
+			expectedError:     internal.ErrModuleInfoNotAvailable,
 		},
 	}
 
@@ -92,7 +91,7 @@ func TestGetLatestModuleVersion(t *testing.T) {
 				return mockExecCmd
 			}
 
-			modulePath, version, err := toolchain.GetLatestModuleVersion(tc.module, mockExecCmdFunc)
+			modulePath, version, err := internal.GetLatestModuleVersion(tc.module, mockExecCmdFunc)
 			assert.Equal(t, tc.expectedModulePath, modulePath)
 			assert.Equal(t, tc.expectedVersion, version)
 			if tc.expectedError != nil {
@@ -214,7 +213,7 @@ func TestGetModuleFile(t *testing.T) {
 				return mockExecCmd
 			}
 
-			modFile, err := toolchain.GetModuleFile(tc.module, tc.version, mockExecCmdFunc)
+			modFile, err := internal.GetModuleFile(tc.module, tc.version, mockExecCmdFunc)
 			assert.Equal(t, tc.expectedModFile, modFile)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -231,7 +230,7 @@ func TestGetModuleOrigin(t *testing.T) {
 		version           string
 		mockExecCmdOutput []byte
 		mockExecCmdErr    error
-		expectedModOrigin *toolchain.ModuleOrigin
+		expectedModOrigin *internal.ModuleOrigin
 		expectedError     error
 	}{
 		"success": {
@@ -244,7 +243,7 @@ func TestGetModuleOrigin(t *testing.T) {
 					"Ref":"refs/heads/v0.1.0"
 				}
 			}`),
-			expectedModOrigin: &toolchain.ModuleOrigin{
+			expectedModOrigin: &internal.ModuleOrigin{
 				VCS:  "git",
 				URL:  "https://github.com/mockorg/mockproj",
 				Hash: "1234567890",
@@ -265,7 +264,7 @@ func TestGetModuleOrigin(t *testing.T) {
 				return []byte(`{"Error":"not found"}`)
 			}(),
 			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  toolchain.ErrModuleNotFound,
+			expectedError:  internal.ErrModuleNotFound,
 		},
 		"error-downloading-module": {
 			module: "example.com/mockorg/mockproj",
@@ -285,7 +284,7 @@ func TestGetModuleOrigin(t *testing.T) {
 		"error-module-origin-not-available": {
 			module:            "example.com/mockorg/mockproj",
 			mockExecCmdOutput: []byte(`{"Origin":null}`),
-			expectedError:     toolchain.ErrModuleOriginNotAvailable,
+			expectedError:     internal.ErrModuleOriginNotAvailable,
 		},
 	}
 
@@ -300,7 +299,7 @@ func TestGetModuleOrigin(t *testing.T) {
 				return mockExecCmd
 			}
 
-			modOrigin, err := toolchain.GetModuleOrigin(tc.module, tc.version, mockExecCmdFunc)
+			modOrigin, err := internal.GetModuleOrigin(tc.module, tc.version, mockExecCmdFunc)
 			assert.Equal(t, tc.expectedModOrigin, modOrigin)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -341,7 +340,7 @@ func TestInstall(t *testing.T) {
 				return mockExecCmd
 			}
 
-			err := toolchain.Install(tc.pkg, tc.version, mockExecCmdFunc)
+			err := internal.Install(tc.pkg, tc.version, mockExecCmdFunc)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 			} else {
@@ -356,7 +355,7 @@ func TestVulnCheck(t *testing.T) {
 		path              string
 		mockExecCmdOutput []byte
 		mockExecCmdErr    error
-		expectedVulns     []toolchain.Vulnerability
+		expectedVulns     []internal.Vulnerability
 		expectedError     error
 	}{
 		"success-filter-vulns-by-affected-status": {
@@ -381,7 +380,7 @@ func TestVulnCheck(t *testing.T) {
 					]
 				}`)
 			}(),
-			expectedVulns: []toolchain.Vulnerability{
+			expectedVulns: []internal.Vulnerability{
 				{
 					ID:  "GO-2025-3754",
 					URL: "https://pkg.go.dev/vuln/GO-2025-3754",
@@ -406,12 +405,12 @@ func TestVulnCheck(t *testing.T) {
 			mockExecCmd := mocks.NewExecCombinedOutput(t)
 			mockExecCmd.On("CombinedOutput").Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).Once()
 
-			mockExecCmdFunc := func(args ...string) toolchain.ScanExecCombinedOutput {
+			mockExecCmdFunc := func(args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, []string{"-mode", "binary", "-format", "openvex", tc.path}, args)
 				return mockExecCmd
 			}
 
-			vulns, err := toolchain.VulnCheck(tc.path, mockExecCmdFunc)
+			vulns, err := internal.VulnCheck(tc.path, mockExecCmdFunc)
 			assert.Equal(t, tc.expectedVulns, vulns)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())

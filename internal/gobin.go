@@ -1,4 +1,4 @@
-package gobin
+package internal
 
 import (
 	"errors"
@@ -13,9 +13,6 @@ import (
 	"text/template"
 
 	"golang.org/x/sync/errgroup"
-
-	"github.com/brunoribeiro127/gobin/internal"
-	"github.com/brunoribeiro127/gobin/internal/binaries"
 )
 
 const (
@@ -97,19 +94,19 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 )
 
 func DiagnoseBinaries(parallelism int) error {
-	binFullPath, err := binaries.GetBinFullPath()
+	binFullPath, err := GetBinFullPath()
 	if err != nil {
 		return err
 	}
 
-	bins, err := binaries.ListBinariesFullPaths(binFullPath)
+	bins, err := ListBinariesFullPaths(binFullPath)
 	if err != nil {
 		return err
 	}
 
 	var (
 		mutex sync.Mutex
-		diags []binaries.BinaryDiagnostic
+		diags []BinaryDiagnostic
 		grp   = new(errgroup.Group)
 	)
 
@@ -117,7 +114,7 @@ func DiagnoseBinaries(parallelism int) error {
 
 	for _, bin := range bins {
 		grp.Go(func() error {
-			diag, diagErr := binaries.DiagnoseBinary(bin)
+			diag, diagErr := DiagnoseBinary(bin)
 			if diagErr != nil {
 				return diagErr
 			}
@@ -140,7 +137,7 @@ func DiagnoseBinaries(parallelism int) error {
 }
 
 func ListInstalledBinaries() error {
-	binInfos, err := binaries.GetAllBinaryInfos()
+	binInfos, err := GetAllBinaryInfos()
 	if err != nil {
 		return err
 	}
@@ -149,14 +146,14 @@ func ListInstalledBinaries() error {
 }
 
 func ListOutdatedBinaries(checkMajor bool, parallelism int) error {
-	binInfos, err := binaries.GetAllBinaryInfos()
+	binInfos, err := GetAllBinaryInfos()
 	if err != nil {
 		return err
 	}
 
 	var (
 		mutex    sync.Mutex
-		outdated []binaries.BinaryUpgradeInfo
+		outdated []BinaryUpgradeInfo
 		grp      = new(errgroup.Group)
 	)
 
@@ -164,7 +161,7 @@ func ListOutdatedBinaries(checkMajor bool, parallelism int) error {
 
 	for _, info := range binInfos {
 		grp.Go(func() error {
-			binUpInfo, infoErr := binaries.GetBinaryUpgradeInfo(info, checkMajor)
+			binUpInfo, infoErr := GetBinaryUpgradeInfo(info, checkMajor)
 			if infoErr != nil {
 				return infoErr
 			}
@@ -194,14 +191,14 @@ func ListOutdatedBinaries(checkMajor bool, parallelism int) error {
 }
 
 func PrintBinaryInfo(binary string) error {
-	binPath, err := binaries.GetBinFullPath()
+	binPath, err := GetBinFullPath()
 	if err != nil {
 		return err
 	}
 
-	binInfo, err := binaries.GetBinaryInfo(filepath.Join(binPath, binary))
+	binInfo, err := GetBinaryInfo(filepath.Join(binPath, binary))
 	if err != nil {
-		if errors.Is(err, binaries.ErrBinaryNotFound) {
+		if errors.Is(err, ErrBinaryNotFound) {
 			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", binary)
 		}
 
@@ -218,7 +215,7 @@ func PrintBinaryInfo(binary string) error {
 }
 
 func PrintShortVersion(path string) error {
-	binInfo, err := binaries.GetBinaryInfo(path)
+	binInfo, err := GetBinaryInfo(path)
 	if err != nil {
 		return err
 	}
@@ -229,7 +226,7 @@ func PrintShortVersion(path string) error {
 }
 
 func PrintVersion(path string) error {
-	binInfo, err := binaries.GetBinaryInfo(path)
+	binInfo, err := GetBinaryInfo(path)
 	if err != nil {
 		return err
 	}
@@ -247,9 +244,9 @@ func PrintVersion(path string) error {
 }
 
 func ShowBinaryRepository(binary string, open bool) error {
-	repoURL, err := binaries.GetBinaryRepository(binary)
+	repoURL, err := GetBinaryRepository(binary)
 	if err != nil {
-		if errors.Is(err, binaries.ErrBinaryNotFound) {
+		if errors.Is(err, ErrBinaryNotFound) {
 			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", binary)
 		}
 
@@ -257,7 +254,7 @@ func ShowBinaryRepository(binary string, open bool) error {
 	}
 
 	if open {
-		return openURL(repoURL, internal.NewExecCombinedOutput)
+		return openURL(repoURL, NewExecCombinedOutput)
 	}
 
 	fmt.Fprintln(os.Stdout, repoURL)
@@ -265,7 +262,7 @@ func ShowBinaryRepository(binary string, open bool) error {
 }
 
 func UninstallBinary(binary string) error {
-	binPath, err := binaries.GetBinFullPath()
+	binPath, err := GetBinFullPath()
 	if err != nil {
 		return err
 	}
@@ -283,14 +280,14 @@ func UninstallBinary(binary string) error {
 }
 
 func UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int, bins ...string) error {
-	binFullPath, err := binaries.GetBinFullPath()
+	binFullPath, err := GetBinFullPath()
 	if err != nil {
 		return err
 	}
 
 	var binPaths []string
 	if len(bins) == 0 {
-		binPaths, err = binaries.ListBinariesFullPaths(binFullPath)
+		binPaths, err = ListBinariesFullPaths(binFullPath)
 		if err != nil {
 			return err
 		}
@@ -305,8 +302,8 @@ func UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int, bins ...s
 
 	for _, bin := range binPaths {
 		grp.Go(func() error {
-			upErr := binaries.UpgradeBinary(bin, majorUpgrade, rebuild)
-			if errors.Is(upErr, binaries.ErrBinaryNotFound) {
+			upErr := UpgradeBinary(bin, majorUpgrade, rebuild)
+			if errors.Is(upErr, ErrBinaryNotFound) {
 				fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", filepath.Base(bin))
 			}
 			return upErr
@@ -324,10 +321,10 @@ func add(args ...int) int {
 	return sum
 }
 
-func openURL(url string, execCmd internal.ExecCombinedOutputFunc) error {
+func openURL(url string, execCmd ExecCombinedOutputFunc) error {
 	logger := slog.Default().With("url", url)
 
-	var cmd internal.ExecCombinedOutput
+	var cmd ExecCombinedOutput
 
 	switch runtime.GOOS {
 	case "darwin":
@@ -353,8 +350,8 @@ func openURL(url string, execCmd internal.ExecCombinedOutputFunc) error {
 	return nil
 }
 
-func printBinaryDiagnostics(diags []binaries.BinaryDiagnostic) error {
-	var diagWithIssues []binaries.BinaryDiagnostic
+func printBinaryDiagnostics(diags []BinaryDiagnostic) error {
+	var diagWithIssues []BinaryDiagnostic
 	for _, d := range diags {
 		if d.HasIssues() {
 			diagWithIssues = append(diagWithIssues, d)
@@ -368,7 +365,7 @@ func printBinaryDiagnostics(diags []binaries.BinaryDiagnostic) error {
 	data := struct {
 		Total           int
 		WithIssues      int
-		DiagsWithIssues []binaries.BinaryDiagnostic
+		DiagsWithIssues []BinaryDiagnostic
 	}{
 		Total:           len(diags),
 		WithIssues:      len(diagWithIssues),
@@ -384,11 +381,11 @@ func printBinaryDiagnostics(diags []binaries.BinaryDiagnostic) error {
 	return nil
 }
 
-func printInstalledBinaries(binInfos []binaries.BinaryInfo) error {
+func printInstalledBinaries(binInfos []BinaryInfo) error {
 	getColumnMaxWidth := func(
 		header string,
-		binaries []binaries.BinaryInfo,
-		f func(binaries.BinaryInfo) string,
+		binaries []BinaryInfo,
+		f func(BinaryInfo) string,
 	) int {
 		maxWidth := len(header)
 
@@ -405,21 +402,21 @@ func printInstalledBinaries(binInfos []binaries.BinaryInfo) error {
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
-		func(bin binaries.BinaryInfo) string { return bin.Name },
+		func(bin BinaryInfo) string { return bin.Name },
 	)
 	maxModulePathWidth := getColumnMaxWidth(
 		"Module",
 		binInfos,
-		func(bin binaries.BinaryInfo) string { return bin.ModulePath },
+		func(bin BinaryInfo) string { return bin.ModulePath },
 	)
 	maxModuleVersionWidth := getColumnMaxWidth(
 		"Version",
 		binInfos,
-		func(bin binaries.BinaryInfo) string { return bin.ModuleVersion },
+		func(bin BinaryInfo) string { return bin.ModuleVersion },
 	)
 
 	data := struct {
-		Binaries           []binaries.BinaryInfo
+		Binaries           []BinaryInfo
 		NameWidth          int
 		ModulePathWidth    int
 		ModuleVersionWidth int
@@ -443,15 +440,15 @@ func printInstalledBinaries(binInfos []binaries.BinaryInfo) error {
 	return nil
 }
 
-func printOutdatedBinaries(binInfos []binaries.BinaryUpgradeInfo) error {
+func printOutdatedBinaries(binInfos []BinaryUpgradeInfo) error {
 	sort.Slice(binInfos, func(i, j int) bool {
 		return binInfos[i].Name < binInfos[j].Name
 	})
 
 	getColumnMaxWidth := func(
 		header string,
-		binaries []binaries.BinaryUpgradeInfo,
-		f func(binaries.BinaryUpgradeInfo) string,
+		binaries []BinaryUpgradeInfo,
+		f func(BinaryUpgradeInfo) string,
 	) int {
 		maxWidth := len(header)
 
@@ -468,26 +465,26 @@ func printOutdatedBinaries(binInfos []binaries.BinaryUpgradeInfo) error {
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
-		func(bin binaries.BinaryUpgradeInfo) string { return bin.Name },
+		func(bin BinaryUpgradeInfo) string { return bin.Name },
 	)
 	maxModulePathWidth := getColumnMaxWidth(
 		"Module",
 		binInfos,
-		func(bin binaries.BinaryUpgradeInfo) string { return bin.ModulePath },
+		func(bin BinaryUpgradeInfo) string { return bin.ModulePath },
 	)
 	maxModuleVersionWidth := getColumnMaxWidth(
 		"Current",
 		binInfos,
-		func(bin binaries.BinaryUpgradeInfo) string { return bin.ModuleVersion },
+		func(bin BinaryUpgradeInfo) string { return bin.ModuleVersion },
 	)
 	maxLatestVersionWidth := getColumnMaxWidth(
 		"Latest",
 		binInfos,
-		func(bin binaries.BinaryUpgradeInfo) string { return bin.LatestVersion },
+		func(bin BinaryUpgradeInfo) string { return bin.LatestVersion },
 	)
 
 	data := struct {
-		Binaries           []binaries.BinaryUpgradeInfo
+		Binaries           []BinaryUpgradeInfo
 		NameWidth          int
 		ModulePathWidth    int
 		ModuleVersionWidth int

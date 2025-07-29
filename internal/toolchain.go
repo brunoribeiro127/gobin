@@ -1,4 +1,4 @@
-package toolchain
+package internal
 
 import (
 	"encoding/json"
@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"golang.org/x/mod/modfile"
-
-	"github.com/brunoribeiro127/gobin/internal"
 )
 
 type ModuleOrigin struct {
@@ -33,7 +31,7 @@ var (
 
 func GetLatestModuleVersion(
 	module string,
-	execCmd internal.ExecCombinedOutputFunc,
+	execCmd ExecCombinedOutputFunc,
 ) (string, string, error) {
 	logger := slog.Default().With("module", module)
 
@@ -88,7 +86,7 @@ func GetLatestModuleVersion(
 
 func GetModuleFile(
 	module, version string,
-	execCmd internal.ExecCombinedOutputFunc,
+	execCmd ExecCombinedOutputFunc,
 ) (*modfile.File, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
@@ -139,7 +137,7 @@ func GetModuleFile(
 
 func GetModuleOrigin(
 	module, version string,
-	execCmd internal.ExecCombinedOutputFunc,
+	execCmd ExecCombinedOutputFunc,
 ) (*ModuleOrigin, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
@@ -184,7 +182,7 @@ func GetModuleOrigin(
 	return res.Origin, nil
 }
 
-func Install(pkg, version string, execCmd internal.ExecRunFunc) error {
+func Install(pkg, version string, execCmd ExecRunFunc) error {
 	logger := slog.Default().With("package", pkg, "version", version)
 
 	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)

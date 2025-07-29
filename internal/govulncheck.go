@@ -1,26 +1,21 @@
-package toolchain
+package internal
 
 import (
 	"bytes"
 	"context"
 	"os"
 
-	"github.com/brunoribeiro127/gobin/internal"
 	"golang.org/x/vuln/scan"
 )
 
-type ScanExecCombinedOutput interface {
-	internal.ExecCombinedOutput
-}
-
-type ScanExecCombinedOutputFunc func(args ...string) ScanExecCombinedOutput
+type ScanExecCombinedOutputFunc func(args ...string) ExecCombinedOutput
 
 type scanExecCombinedOutput struct {
 	cmd    *scan.Cmd
 	output *bytes.Buffer
 }
 
-func NewScanExecRun(args ...string) ScanExecCombinedOutput {
+func NewScanExecRun(args ...string) ExecCombinedOutput {
 	var output bytes.Buffer
 	cmd := scan.Command(context.Background(), args...)
 	cmd.Stdout = &output

@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/brunoribeiro127/gobin/internal"
-	"github.com/brunoribeiro127/gobin/internal/gobin"
 )
 
 func main() {
@@ -84,7 +83,7 @@ Run this command regularly to make sure everything is ok with your installed bin
 
 			parallelism, _ := cmd.Flags().GetInt("parallelism")
 
-			return gobin.DiagnoseBinaries(parallelism)
+			return internal.DiagnoseBinaries(parallelism)
 		},
 	}
 }
@@ -98,7 +97,7 @@ func newInfoCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.PrintBinaryInfo(args[0])
+			return internal.PrintBinaryInfo(args[0])
 		},
 	}
 }
@@ -112,7 +111,7 @@ func newListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.ListInstalledBinaries()
+			return internal.ListInstalledBinaries()
 		},
 	}
 }
@@ -138,7 +137,7 @@ potentially breaking major version upgrades.`,
 
 			parallelism, _ := cmd.Flags().GetInt("parallelism")
 
-			return gobin.ListOutdatedBinaries(checkMajor, parallelism)
+			return internal.ListOutdatedBinaries(checkMajor, parallelism)
 		},
 	}
 
@@ -172,7 +171,7 @@ falling back to constructing the URL from the module path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.ShowBinaryRepository(args[0], open)
+			return internal.ShowBinaryRepository(args[0], open)
 		},
 	}
 
@@ -196,7 +195,7 @@ func newUninstallCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.UninstallBinary(args[0])
+			return internal.UninstallBinary(args[0])
 		},
 	}
 }
@@ -234,7 +233,7 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 				return err
 
 			case upgradeAll:
-				return gobin.UpgradeBinaries(majorUpgrade, rebuild, parallelism)
+				return internal.UpgradeBinaries(majorUpgrade, rebuild, parallelism)
 
 			case len(args) == 0:
 				err := errors.New("no binaries specified (use --all to upgrade all)")
@@ -242,7 +241,7 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 				return err
 
 			default:
-				return gobin.UpgradeBinaries(majorUpgrade, rebuild, parallelism, args...)
+				return internal.UpgradeBinaries(majorUpgrade, rebuild, parallelism, args...)
 			}
 		},
 	}
@@ -291,10 +290,10 @@ func newVersionCmd() *cobra.Command {
 			}
 
 			if short {
-				return gobin.PrintShortVersion(path)
+				return internal.PrintShortVersion(path)
 			}
 
-			return gobin.PrintVersion(path)
+			return internal.PrintVersion(path)
 		},
 	}
 
