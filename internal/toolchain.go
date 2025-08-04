@@ -11,6 +11,12 @@ import (
 	"golang.org/x/mod/modfile"
 )
 
+var (
+	ErrModuleNotFound           = errors.New("module not found")
+	ErrModuleInfoNotAvailable   = errors.New("module info not available")
+	ErrModuleOriginNotAvailable = errors.New("module origin not available")
+)
+
 type ModuleOrigin struct {
 	VCS  string  `json:"VCS"`
 	URL  string  `json:"URL"`
@@ -23,20 +29,29 @@ type Vulnerability struct {
 	URL string
 }
 
-var (
-	ErrModuleNotFound           = errors.New("module not found")
-	ErrModuleInfoNotAvailable   = errors.New("module info not available")
-	ErrModuleOriginNotAvailable = errors.New("module origin not available")
-)
+type GoToolchain struct {
+	execCombinedOutput ExecCombinedOutputFunc
+	execRun            ExecRunFunc
+	scanCombinedOutput ScanExecCombinedOutputFunc
+}
 
-func GetLatestModuleVersion(
-	module string,
-	execCmd ExecCombinedOutputFunc,
-) (string, string, error) {
+func NewGoToolchain(
+	execCombinedOutput ExecCombinedOutputFunc,
+	execRun ExecRunFunc,
+	scanCombinedOutput ScanExecCombinedOutputFunc,
+) Toolchain {
+	return &GoToolchain{
+		execCombinedOutput: execCombinedOutput,
+		execRun:            execRun,
+		scanCombinedOutput: scanCombinedOutput,
+	}
+}
+
+func (t *GoToolchain) GetLatestModuleVersion(module string) (string, string, error) {
 	logger := slog.Default().With("module", module)
 
 	modLatest := fmt.Sprintf("%s@latest", module)
-	cmd := execCmd("go", "list", "-m", "-json", modLatest)
+	cmd := t.execCombinedOutput("go", "list", "-m", "-json", modLatest)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -84,14 +99,11 @@ func GetLatestModuleVersion(
 	return modFile.Module.Mod.Path, res.Version, nil
 }
 
-func GetModuleFile(
-	module, version string,
-	execCmd ExecCombinedOutputFunc,
-) (*modfile.File, error) {
+func (t *GoToolchain) GetModuleFile(module, version string) (*modfile.File, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
-	cmd := execCmd("go", "mod", "download", "-json", modVersion)
+	cmd := t.execCombinedOutput("go", "mod", "download", "-json", modVersion)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -135,14 +147,11 @@ func GetModuleFile(
 	return modFile, nil
 }
 
-func GetModuleOrigin(
-	module, version string,
-	execCmd ExecCombinedOutputFunc,
-) (*ModuleOrigin, error) {
+func (t *GoToolchain) GetModuleOrigin(module, version string) (*ModuleOrigin, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
-	cmd := execCmd("go", "mod", "download", "-json", modVersion)
+	cmd := t.execCombinedOutput("go", "mod", "download", "-json", modVersion)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -182,11 +191,11 @@ func GetModuleOrigin(
 	return res.Origin, nil
 }
 
-func Install(pkg, version string, execCmd ExecRunFunc) error {
+func (t *GoToolchain) Install(pkg, version string) error {
 	logger := slog.Default().With("package", pkg, "version", version)
 
 	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)
-	cmd := execCmd("go", "install", "-a", pkgVersion)
+	cmd := t.execRun("go", "install", "-a", pkgVersion)
 
 	if err := cmd.Run(); err != nil {
 		logger.Error("error installing binary", "err", err)
@@ -196,10 +205,10 @@ func Install(pkg, version string, execCmd ExecRunFunc) error {
 	return nil
 }
 
-func VulnCheck(path string, scanExecCmd ScanExecCombinedOutputFunc) ([]Vulnerability, error) {
+func (t *GoToolchain) VulnCheck(path string) ([]Vulnerability, error) {
 	logger := slog.Default().With("path", path)
 
-	cmd := scanExecCmd("-mode", "binary", "-format", "openvex", path)
+	cmd := t.scanCombinedOutput("-mode", "binary", "-format", "openvex", path)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

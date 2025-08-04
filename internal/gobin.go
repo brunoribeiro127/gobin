@@ -93,13 +93,39 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 `
 )
 
-func DiagnoseBinaries(parallelism int) error {
-	binFullPath, err := GetBinFullPath()
+type BinaryManager interface {
+	DiagnoseBinary(path string) (BinaryDiagnostic, error)
+	GetAllBinaryInfos() ([]BinaryInfo, error)
+	GetBinaryInfo(path string) (BinaryInfo, error)
+	GetBinaryRepository(binary string) (string, error)
+	GetBinaryUpgradeInfo(info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, error)
+	GetBinFullPath() (string, error)
+	ListBinariesFullPaths(dir string) ([]string, error)
+	UpgradeBinary(binFullPath string, majorUpgrade bool, rebuild bool) error
+}
+
+type Gobin struct {
+	binaryManager BinaryManager
+	execCmd       ExecCombinedOutputFunc
+}
+
+func NewGobin(
+	binaryManager BinaryManager,
+	execCmd ExecCombinedOutputFunc,
+) *Gobin {
+	return &Gobin{
+		binaryManager: binaryManager,
+		execCmd:       execCmd,
+	}
+}
+
+func (g *Gobin) DiagnoseBinaries(parallelism int) error {
+	binFullPath, err := g.binaryManager.GetBinFullPath()
 	if err != nil {
 		return err
 	}
 
-	bins, err := ListBinariesFullPaths(binFullPath)
+	bins, err := g.binaryManager.ListBinariesFullPaths(binFullPath)
 	if err != nil {
 		return err
 	}
@@ -114,7 +140,7 @@ func DiagnoseBinaries(parallelism int) error {
 
 	for _, bin := range bins {
 		grp.Go(func() error {
-			diag, diagErr := DiagnoseBinary(bin)
+			diag, diagErr := g.binaryManager.DiagnoseBinary(bin)
 			if diagErr != nil {
 				return diagErr
 			}
@@ -136,8 +162,8 @@ func DiagnoseBinaries(parallelism int) error {
 	return waitErr
 }
 
-func ListInstalledBinaries() error {
-	binInfos, err := GetAllBinaryInfos()
+func (g *Gobin) ListInstalledBinaries() error {
+	binInfos, err := g.binaryManager.GetAllBinaryInfos()
 	if err != nil {
 		return err
 	}
@@ -145,8 +171,8 @@ func ListInstalledBinaries() error {
 	return printInstalledBinaries(binInfos)
 }
 
-func ListOutdatedBinaries(checkMajor bool, parallelism int) error {
-	binInfos, err := GetAllBinaryInfos()
+func (g *Gobin) ListOutdatedBinaries(checkMajor bool, parallelism int) error {
+	binInfos, err := g.binaryManager.GetAllBinaryInfos()
 	if err != nil {
 		return err
 	}
@@ -161,7 +187,7 @@ func ListOutdatedBinaries(checkMajor bool, parallelism int) error {
 
 	for _, info := range binInfos {
 		grp.Go(func() error {
-			binUpInfo, infoErr := GetBinaryUpgradeInfo(info, checkMajor)
+			binUpInfo, infoErr := g.binaryManager.GetBinaryUpgradeInfo(info, checkMajor)
 			if infoErr != nil {
 				return infoErr
 			}
@@ -190,13 +216,13 @@ func ListOutdatedBinaries(checkMajor bool, parallelism int) error {
 	return waitErr
 }
 
-func PrintBinaryInfo(binary string) error {
-	binPath, err := GetBinFullPath()
+func (g *Gobin) PrintBinaryInfo(binary string) error {
+	binPath, err := g.binaryManager.GetBinFullPath()
 	if err != nil {
 		return err
 	}
 
-	binInfo, err := GetBinaryInfo(filepath.Join(binPath, binary))
+	binInfo, err := g.binaryManager.GetBinaryInfo(filepath.Join(binPath, binary))
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
 			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", binary)
@@ -214,8 +240,8 @@ func PrintBinaryInfo(binary string) error {
 	return nil
 }
 
-func PrintShortVersion(path string) error {
-	binInfo, err := GetBinaryInfo(path)
+func (g *Gobin) PrintShortVersion(path string) error {
+	binInfo, err := g.binaryManager.GetBinaryInfo(path)
 	if err != nil {
 		return err
 	}
@@ -225,8 +251,8 @@ func PrintShortVersion(path string) error {
 	return nil
 }
 
-func PrintVersion(path string) error {
-	binInfo, err := GetBinaryInfo(path)
+func (g *Gobin) PrintVersion(path string) error {
+	binInfo, err := g.binaryManager.GetBinaryInfo(path)
 	if err != nil {
 		return err
 	}
@@ -243,8 +269,8 @@ func PrintVersion(path string) error {
 	return nil
 }
 
-func ShowBinaryRepository(binary string, open bool) error {
-	repoURL, err := GetBinaryRepository(binary)
+func (g *Gobin) ShowBinaryRepository(binary string, open bool) error {
+	repoURL, err := g.binaryManager.GetBinaryRepository(binary)
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
 			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", binary)
@@ -254,15 +280,15 @@ func ShowBinaryRepository(binary string, open bool) error {
 	}
 
 	if open {
-		return openURL(repoURL, NewExecCombinedOutput)
+		return g.openURL(repoURL, NewExecCombinedOutput)
 	}
 
 	fmt.Fprintln(os.Stdout, repoURL)
 	return nil
 }
 
-func UninstallBinary(binary string) error {
-	binPath, err := GetBinFullPath()
+func (g *Gobin) UninstallBinary(binary string) error {
+	binPath, err := g.binaryManager.GetBinFullPath()
 	if err != nil {
 		return err
 	}
@@ -279,15 +305,15 @@ func UninstallBinary(binary string) error {
 	return nil
 }
 
-func UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int, bins ...string) error {
-	binFullPath, err := GetBinFullPath()
+func (g *Gobin) UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int, bins ...string) error {
+	binFullPath, err := g.binaryManager.GetBinFullPath()
 	if err != nil {
 		return err
 	}
 
 	var binPaths []string
 	if len(bins) == 0 {
-		binPaths, err = ListBinariesFullPaths(binFullPath)
+		binPaths, err = g.binaryManager.ListBinariesFullPaths(binFullPath)
 		if err != nil {
 			return err
 		}
@@ -302,7 +328,7 @@ func UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int, bins ...s
 
 	for _, bin := range binPaths {
 		grp.Go(func() error {
-			upErr := UpgradeBinary(bin, majorUpgrade, rebuild)
+			upErr := g.binaryManager.UpgradeBinary(bin, majorUpgrade, rebuild)
 			if errors.Is(upErr, ErrBinaryNotFound) {
 				fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", filepath.Base(bin))
 			}
@@ -321,7 +347,7 @@ func add(args ...int) int {
 	return sum
 }
 
-func openURL(url string, execCmd ExecCombinedOutputFunc) error {
+func (g *Gobin) openURL(url string, execCmd ExecCombinedOutputFunc) error {
 	logger := slog.Default().With("url", url)
 
 	var cmd ExecCombinedOutput

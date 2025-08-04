@@ -15,7 +15,7 @@ type scanExecCombinedOutput struct {
 	output *bytes.Buffer
 }
 
-func NewScanExecRun(args ...string) ExecCombinedOutput {
+func NewScanExecCombinedOutput(args ...string) ExecCombinedOutput {
 	var output bytes.Buffer
 	cmd := scan.Command(context.Background(), args...)
 	cmd.Stdout = &output

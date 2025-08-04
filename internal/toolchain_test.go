@@ -91,7 +91,8 @@ func TestGetLatestModuleVersion(t *testing.T) {
 				return mockExecCmd
 			}
 
-			modulePath, version, err := internal.GetLatestModuleVersion(tc.module, mockExecCmdFunc)
+			toolchain := internal.NewGoToolchain(mockExecCmdFunc, nil, nil)
+			modulePath, version, err := toolchain.GetLatestModuleVersion(tc.module)
 			assert.Equal(t, tc.expectedModulePath, modulePath)
 			assert.Equal(t, tc.expectedVersion, version)
 			if tc.expectedError != nil {
@@ -213,7 +214,8 @@ func TestGetModuleFile(t *testing.T) {
 				return mockExecCmd
 			}
 
-			modFile, err := internal.GetModuleFile(tc.module, tc.version, mockExecCmdFunc)
+			toolchain := internal.NewGoToolchain(mockExecCmdFunc, nil, nil)
+			modFile, err := toolchain.GetModuleFile(tc.module, tc.version)
 			assert.Equal(t, tc.expectedModFile, modFile)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -299,7 +301,8 @@ func TestGetModuleOrigin(t *testing.T) {
 				return mockExecCmd
 			}
 
-			modOrigin, err := internal.GetModuleOrigin(tc.module, tc.version, mockExecCmdFunc)
+			toolchain := internal.NewGoToolchain(mockExecCmdFunc, nil, nil)
+			modOrigin, err := toolchain.GetModuleOrigin(tc.module, tc.version)
 			assert.Equal(t, tc.expectedModOrigin, modOrigin)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -340,7 +343,8 @@ func TestInstall(t *testing.T) {
 				return mockExecCmd
 			}
 
-			err := internal.Install(tc.pkg, tc.version, mockExecCmdFunc)
+			toolchain := internal.NewGoToolchain(nil, mockExecCmdFunc, nil)
+			err := toolchain.Install(tc.pkg, tc.version)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 			} else {
@@ -410,7 +414,8 @@ func TestVulnCheck(t *testing.T) {
 				return mockExecCmd
 			}
 
-			vulns, err := internal.VulnCheck(tc.path, mockExecCmdFunc)
+			toolchain := internal.NewGoToolchain(nil, nil, mockExecCmdFunc)
+			vulns, err := toolchain.VulnCheck(tc.path)
 			assert.Equal(t, tc.expectedVulns, vulns)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
