@@ -13,6 +13,17 @@ import (
 )
 
 func main() {
+	gobin := internal.NewGobin(
+		internal.NewGoBinaryManager(
+			internal.NewGoToolchain(
+				internal.NewExecCombinedOutput,
+				internal.NewExecRun,
+				internal.NewScanExecCombinedOutput,
+			),
+		),
+		internal.NewExecCombinedOutput,
+	)
+
 	var verbose bool
 	var parallelism int
 
@@ -45,21 +56,21 @@ func main() {
 		"number of concurrent operations (default: number of CPU cores)",
 	)
 
-	cmd.AddCommand(newDoctorCmd())
-	cmd.AddCommand(newInfoCmd())
-	cmd.AddCommand(newListCmd())
-	cmd.AddCommand(newOutdatedCmd())
-	cmd.AddCommand(newRepoCmd())
-	cmd.AddCommand(newUninstallCmd())
-	cmd.AddCommand(newUpgradeCmd())
-	cmd.AddCommand(newVersionCmd())
+	cmd.AddCommand(newDoctorCmd(gobin))
+	cmd.AddCommand(newInfoCmd(gobin))
+	cmd.AddCommand(newListCmd(gobin))
+	cmd.AddCommand(newOutdatedCmd(gobin))
+	cmd.AddCommand(newRepoCmd(gobin))
+	cmd.AddCommand(newUninstallCmd(gobin))
+	cmd.AddCommand(newUpgradeCmd(gobin))
+	cmd.AddCommand(newVersionCmd(gobin))
 
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
-func newDoctorCmd() *cobra.Command {
+func newDoctorCmd(gobin *internal.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
 		Short: "Diagnose issues for installed binaries",
@@ -83,12 +94,12 @@ Run this command regularly to make sure everything is ok with your installed bin
 
 			parallelism, _ := cmd.Flags().GetInt("parallelism")
 
-			return internal.DiagnoseBinaries(parallelism)
+			return gobin.DiagnoseBinaries(parallelism)
 		},
 	}
 }
 
-func newInfoCmd() *cobra.Command {
+func newInfoCmd(gobin *internal.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:           "info [binary]",
 		Short:         "Print information about a binary",
@@ -97,12 +108,12 @@ func newInfoCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.PrintBinaryInfo(args[0])
+			return gobin.PrintBinaryInfo(args[0])
 		},
 	}
 }
 
-func newListCmd() *cobra.Command {
+func newListCmd(gobin *internal.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:           "list",
 		Short:         "List installed binaries",
@@ -111,12 +122,12 @@ func newListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.ListInstalledBinaries()
+			return gobin.ListInstalledBinaries()
 		},
 	}
 }
 
-func newOutdatedCmd() *cobra.Command {
+func newOutdatedCmd(gobin *internal.Gobin) *cobra.Command {
 	var checkMajor bool
 
 	cmd := &cobra.Command{
@@ -137,7 +148,7 @@ potentially breaking major version upgrades.`,
 
 			parallelism, _ := cmd.Flags().GetInt("parallelism")
 
-			return internal.ListOutdatedBinaries(checkMajor, parallelism)
+			return gobin.ListOutdatedBinaries(checkMajor, parallelism)
 		},
 	}
 
@@ -152,7 +163,7 @@ potentially breaking major version upgrades.`,
 	return cmd
 }
 
-func newRepoCmd() *cobra.Command {
+func newRepoCmd(gobin *internal.Gobin) *cobra.Command {
 	var open bool
 
 	cmd := &cobra.Command{
@@ -171,7 +182,7 @@ falling back to constructing the URL from the module path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.ShowBinaryRepository(args[0], open)
+			return gobin.ShowBinaryRepository(args[0], open)
 		},
 	}
 
@@ -186,7 +197,7 @@ falling back to constructing the URL from the module path.`,
 	return cmd
 }
 
-func newUninstallCmd() *cobra.Command {
+func newUninstallCmd(gobin *internal.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:           "uninstall [binary]",
 		Short:         "Uninstall a binary",
@@ -195,12 +206,12 @@ func newUninstallCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return internal.UninstallBinary(args[0])
+			return gobin.UninstallBinary(args[0])
 		},
 	}
 }
 
-func newUpgradeCmd() *cobra.Command {
+func newUpgradeCmd(gobin *internal.Gobin) *cobra.Command {
 	var upgradeAll bool
 	var majorUpgrade bool
 	var rebuild bool
@@ -233,7 +244,7 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 				return err
 
 			case upgradeAll:
-				return internal.UpgradeBinaries(majorUpgrade, rebuild, parallelism)
+				return gobin.UpgradeBinaries(majorUpgrade, rebuild, parallelism)
 
 			case len(args) == 0:
 				err := errors.New("no binaries specified (use --all to upgrade all)")
@@ -241,7 +252,7 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 				return err
 
 			default:
-				return internal.UpgradeBinaries(majorUpgrade, rebuild, parallelism, args...)
+				return gobin.UpgradeBinaries(majorUpgrade, rebuild, parallelism, args...)
 			}
 		},
 	}
@@ -273,7 +284,7 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 	return cmd
 }
 
-func newVersionCmd() *cobra.Command {
+func newVersionCmd(gobin *internal.Gobin) *cobra.Command {
 	var short bool
 
 	var cmd = &cobra.Command{
@@ -290,10 +301,10 @@ func newVersionCmd() *cobra.Command {
 			}
 
 			if short {
-				return internal.PrintShortVersion(path)
+				return gobin.PrintShortVersion(path)
 			}
 
-			return internal.PrintVersion(path)
+			return gobin.PrintVersion(path)
 		},
 	}
 
