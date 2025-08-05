@@ -1,10 +1,12 @@
 package internal_test
 
 import (
+	"debug/buildinfo"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,6 +17,60 @@ import (
 	"github.com/brunoribeiro127/gobin/internal"
 	"github.com/brunoribeiro127/gobin/internal/mocks"
 )
+
+func TestGetBuildInfo(t *testing.T) {
+	cases := map[string]struct {
+		path              string
+		mockReadFile      *buildinfo.BuildInfo
+		mockReadFileErr   error
+		expectedBuildInfo *buildinfo.BuildInfo
+		expectedError     error
+	}{
+		"success": {
+			path: "/home/user/go/bin/mockproj",
+			mockReadFile: &buildinfo.BuildInfo{
+				Main: debug.Module{
+					Path: "example.com/mockorg/mockproj",
+				},
+			},
+			expectedBuildInfo: &buildinfo.BuildInfo{
+				Main: debug.Module{
+					Path: "example.com/mockorg/mockproj",
+				},
+			},
+		},
+		"error-binary-not-found": {
+			path:            "/home/user/go/bin/mockproj",
+			mockReadFileErr: os.ErrNotExist,
+			expectedError:   internal.ErrBinaryNotFound,
+		},
+		"error-reading-build-info": {
+			path:            "/home/user/go/bin/mockproj",
+			mockReadFileErr: errors.New("unexpected error"),
+			expectedError:   errors.New("unexpected error"),
+		},
+		"error-binary-built-without-go-modules": {
+			path:          "/home/user/go/bin/mockproj",
+			mockReadFile:  &buildinfo.BuildInfo{},
+			expectedError: internal.ErrBinaryBuiltWithoutGoModules,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			system := mocks.NewSystem(t)
+
+			system.EXPECT().ReadBuildInfo(tc.path).
+				Return(tc.mockReadFile, tc.mockReadFileErr).
+				Once()
+
+			toolchain := internal.NewGoToolchain(nil, nil, nil, system)
+			buildInfo, err := toolchain.GetBuildInfo(tc.path)
+			assert.Equal(t, tc.expectedBuildInfo, buildInfo)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
 
 func TestGetLatestModuleVersion(t *testing.T) {
 	makeExecCmdOutput := func(t *testing.T, modFile string) []byte {
@@ -36,6 +92,12 @@ func TestGetLatestModuleVersion(t *testing.T) {
 			module:             "example.com/mockorg/mockproj",
 			mockExecCmdOutput:  makeExecCmdOutput(t, "go.mod"),
 			expectedModulePath: "example.com/mockorg/mockproj",
+			expectedVersion:    "v0.1.0",
+		},
+		"sucess-module-path-update": {
+			module:             "example.com/mockorg/mockproj",
+			mockExecCmdOutput:  makeExecCmdOutput(t, "new.go.mod"),
+			expectedModulePath: "example.com/newmockorg/newmockproj",
 			expectedVersion:    "v0.1.0",
 		},
 		"error-module-not-found": {
@@ -82,16 +144,18 @@ func TestGetLatestModuleVersion(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			mockExecCmd := mocks.NewExecCombinedOutput(t)
-			mockExecCmd.On("CombinedOutput").Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).Once()
+			execCmd := mocks.NewExecCombinedOutput(t)
+			execCmd.EXPECT().CombinedOutput().
+				Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).
+				Once()
 
-			mockExecCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
+			execCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, "go", name)
 				assert.Equal(t, []string{"list", "-m", "-json", fmt.Sprintf("%s@latest", tc.module)}, args)
-				return mockExecCmd
+				return execCmd
 			}
 
-			toolchain := internal.NewGoToolchain(mockExecCmdFunc, nil, nil)
+			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
 			modulePath, version, err := toolchain.GetLatestModuleVersion(tc.module)
 			assert.Equal(t, tc.expectedModulePath, modulePath)
 			assert.Equal(t, tc.expectedVersion, version)
@@ -205,16 +269,18 @@ func TestGetModuleFile(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			mockExecCmd := mocks.NewExecCombinedOutput(t)
-			mockExecCmd.On("CombinedOutput").Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).Once()
+			execCmd := mocks.NewExecCombinedOutput(t)
+			execCmd.EXPECT().CombinedOutput().
+				Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).
+				Once()
 
-			mockExecCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
+			execCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, "go", name)
 				assert.Equal(t, []string{"mod", "download", "-json", fmt.Sprintf("%s@%s", tc.module, tc.version)}, args)
-				return mockExecCmd
+				return execCmd
 			}
 
-			toolchain := internal.NewGoToolchain(mockExecCmdFunc, nil, nil)
+			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
 			modFile, err := toolchain.GetModuleFile(tc.module, tc.version)
 			assert.Equal(t, tc.expectedModFile, modFile)
 			if tc.expectedError != nil {
@@ -292,16 +358,18 @@ func TestGetModuleOrigin(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			mockExecCmd := mocks.NewExecCombinedOutput(t)
-			mockExecCmd.On("CombinedOutput").Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).Once()
+			execCmd := mocks.NewExecCombinedOutput(t)
+			execCmd.EXPECT().CombinedOutput().
+				Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).
+				Once()
 
-			mockExecCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
+			execCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, "go", name)
 				assert.Equal(t, []string{"mod", "download", "-json", fmt.Sprintf("%s@%s", tc.module, tc.version)}, args)
-				return mockExecCmd
+				return execCmd
 			}
 
-			toolchain := internal.NewGoToolchain(mockExecCmdFunc, nil, nil)
+			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
 			modOrigin, err := toolchain.GetModuleOrigin(tc.module, tc.version)
 			assert.Equal(t, tc.expectedModOrigin, modOrigin)
 			if tc.expectedError != nil {
@@ -321,11 +389,11 @@ func TestInstall(t *testing.T) {
 		expectedError  error
 	}{
 		"success": {
-			pkg:     "example.com/mockorg/mockproj",
+			pkg:     "example.com/mockorg/mockproj/cmd/mockproj",
 			version: "v0.1.0",
 		},
 		"error-installing-binary": {
-			pkg:            "example.com/mockorg/mockproj",
+			pkg:            "example.com/mockorg/mockproj/cmd/mockproj",
 			version:        "v0.1.0",
 			mockExecCmdErr: errors.New("unexpected error"),
 			expectedError:  errors.New("unexpected error"),
@@ -334,16 +402,16 @@ func TestInstall(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			mockExecCmd := mocks.NewExecRun(t)
-			mockExecCmd.On("Run").Return(tc.mockExecCmdErr).Once()
+			execRun := mocks.NewExecRun(t)
+			execRun.EXPECT().Run().Return(tc.mockExecCmdErr).Once()
 
-			mockExecCmdFunc := func(name string, args ...string) internal.ExecRun {
+			execRunFunc := func(name string, args ...string) internal.ExecRun {
 				assert.Equal(t, "go", name)
 				assert.Equal(t, []string{"install", "-a", fmt.Sprintf("%s@%s", tc.pkg, tc.version)}, args)
-				return mockExecCmd
+				return execRun
 			}
 
-			toolchain := internal.NewGoToolchain(nil, mockExecCmdFunc, nil)
+			toolchain := internal.NewGoToolchain(nil, execRunFunc, nil, nil)
 			err := toolchain.Install(tc.pkg, tc.version)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -363,7 +431,7 @@ func TestVulnCheck(t *testing.T) {
 		expectedError     error
 	}{
 		"success-filter-vulns-by-affected-status": {
-			path: "$HOME/go/bin/mockproj",
+			path: "/home/user/go/bin/mockproj",
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{
 					"statements":[
@@ -392,13 +460,13 @@ func TestVulnCheck(t *testing.T) {
 			},
 		},
 		"error-running-govulncheck-command": {
-			path:              "$HOME/go/bin/mockproj",
+			path:              "/home/user/go/bin/mockproj",
 			mockExecCmdOutput: []byte(`unexpected error`),
 			mockExecCmdErr:    errors.New("unexpected error"),
 			expectedError:     errors.New("unexpected error"),
 		},
 		"error-parsing-govulncheck-response": {
-			path:              "$HOME/go/bin/mockproj",
+			path:              "/home/user/go/bin/mockproj",
 			mockExecCmdOutput: []byte(``),
 			expectedError:     errors.New("unexpected end of JSON input"),
 		},
@@ -406,15 +474,17 @@ func TestVulnCheck(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			mockExecCmd := mocks.NewExecCombinedOutput(t)
-			mockExecCmd.On("CombinedOutput").Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).Once()
+			execCmd := mocks.NewExecCombinedOutput(t)
+			execCmd.EXPECT().CombinedOutput().
+				Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).
+				Once()
 
-			mockExecCmdFunc := func(args ...string) internal.ExecCombinedOutput {
+			execCmdFunc := func(args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, []string{"-mode", "binary", "-format", "openvex", tc.path}, args)
-				return mockExecCmd
+				return execCmd
 			}
 
-			toolchain := internal.NewGoToolchain(nil, nil, mockExecCmdFunc)
+			toolchain := internal.NewGoToolchain(nil, nil, execCmdFunc, nil)
 			vulns, err := toolchain.VulnCheck(tc.path)
 			assert.Equal(t, tc.expectedVulns, vulns)
 			if tc.expectedError != nil {

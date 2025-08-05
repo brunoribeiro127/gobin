@@ -13,12 +13,15 @@ import (
 )
 
 func main() {
+	system := internal.NewSystem()
 	gobin := internal.NewGobin(
 		internal.NewGoBinaryManager(
+			system,
 			internal.NewGoToolchain(
 				internal.NewExecCombinedOutput,
 				internal.NewExecRun,
 				internal.NewScanExecCombinedOutput,
+				system,
 			),
 		),
 		internal.NewExecCombinedOutput,

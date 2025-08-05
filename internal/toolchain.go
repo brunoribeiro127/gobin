@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"debug/buildinfo"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,9 +13,11 @@ import (
 )
 
 var (
-	ErrModuleNotFound           = errors.New("module not found")
-	ErrModuleInfoNotAvailable   = errors.New("module info not available")
-	ErrModuleOriginNotAvailable = errors.New("module origin not available")
+	ErrBinaryBuiltWithoutGoModules = errors.New("binary built without go modules")
+	ErrBinaryNotFound              = errors.New("binary not found")
+	ErrModuleNotFound              = errors.New("module not found")
+	ErrModuleInfoNotAvailable      = errors.New("module info not available")
+	ErrModuleOriginNotAvailable    = errors.New("module origin not available")
 )
 
 type ModuleOrigin struct {
@@ -33,18 +36,42 @@ type GoToolchain struct {
 	execCombinedOutput ExecCombinedOutputFunc
 	execRun            ExecRunFunc
 	scanCombinedOutput ScanExecCombinedOutputFunc
+	system             System
 }
 
 func NewGoToolchain(
 	execCombinedOutput ExecCombinedOutputFunc,
 	execRun ExecRunFunc,
 	scanCombinedOutput ScanExecCombinedOutputFunc,
+	system System,
 ) Toolchain {
 	return &GoToolchain{
 		execCombinedOutput: execCombinedOutput,
 		execRun:            execRun,
 		scanCombinedOutput: scanCombinedOutput,
+		system:             system,
 	}
+}
+
+func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
+	logger := slog.Default().With("path", path)
+
+	info, err := t.system.ReadBuildInfo(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, ErrBinaryNotFound
+		}
+
+		logger.Error("error reading binary build info", "err", err)
+		return nil, err
+	}
+
+	if info.Main.Path == "" {
+		logger.Error(ErrBinaryBuiltWithoutGoModules.Error())
+		return nil, ErrBinaryBuiltWithoutGoModules
+	}
+
+	return info, nil
 }
 
 func (t *GoToolchain) GetLatestModuleVersion(module string) (string, string, error) {

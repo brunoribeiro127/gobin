@@ -3,12 +3,8 @@ package internal
 import (
 	"debug/buildinfo"
 	"errors"
-	"fmt"
 	"log/slog"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -22,13 +18,8 @@ const (
 	GOOSEnvVar   = "GOOS"
 )
 
-var (
-	ErrBinaryBuiltWithoutGoModules = errors.New("binary built without go modules")
-	ErrBinaryNotFound              = errors.New("binary not found")
-	ErrInvalidModuleVersion        = errors.New("invalid module version")
-)
-
 type Toolchain interface {
+	GetBuildInfo(path string) (*buildinfo.BuildInfo, error)
 	GetLatestModuleVersion(module string) (string, string, error)
 	GetModuleFile(module, version string) (*modfile.File, error)
 	GetModuleOrigin(module, version string) (*ModuleOrigin, error)
@@ -94,40 +85,41 @@ func (d BinaryDiagnostic) HasIssues() bool {
 }
 
 type GoBinaryManager struct {
+	system    System
 	toolchain Toolchain
 }
 
-func NewGoBinaryManager(toolchain Toolchain) *GoBinaryManager {
-	return &GoBinaryManager{toolchain: toolchain}
+func NewGoBinaryManager(system System, toolchain Toolchain) *GoBinaryManager {
+	return &GoBinaryManager{system: system, toolchain: toolchain}
 }
 
 func (m *GoBinaryManager) DiagnoseBinary(path string) (BinaryDiagnostic, error) {
 	binaryName := filepath.Base(path)
 	logger := slog.Default().With("binary", binaryName, "path", path)
 
-	buildInfo, err := buildinfo.ReadFile(path)
-	if err != nil {
+	buildInfo, err := m.toolchain.GetBuildInfo(path)
+	if err != nil && !errors.Is(err, ErrBinaryBuiltWithoutGoModules) {
 		logger.Error("error reading binary build info", "err", err)
 		return BinaryDiagnostic{}, err
 	}
 
 	binPlatform := getBinaryPlatform(buildInfo)
-	runtimePlatform := runtime.GOOS + "/" + runtime.GOARCH
+	runtimePlatform := m.system.RuntimeOS() + "/" + m.system.RuntimeARCH()
 
 	diagnostic := BinaryDiagnostic{
 		Name:                  binaryName,
-		DuplicatesInPath:      checkBinaryDuplicatesInPath(binaryName),
+		DuplicatesInPath:      m.checkBinaryDuplicatesInPath(binaryName),
 		IsPseudoVersion:       module.IsPseudoVersion(buildInfo.Main.Version),
 		NotBuiltWithGoModules: buildInfo.Main.Path == "",
 		IsOrphaned:            buildInfo.Main.Sum == "",
 	}
 
 	diagnostic.GoVersion.Actual = buildInfo.GoVersion
-	diagnostic.GoVersion.Expected = runtime.Version()
+	diagnostic.GoVersion.Expected = m.system.RuntimeVersion()
 	diagnostic.Platform.Actual = binPlatform
 	diagnostic.Platform.Expected = runtimePlatform
 
-	_, err = exec.LookPath(binaryName)
+	_, err = m.system.LookPath(binaryName)
 	diagnostic.NotInPath = err != nil
 
 	if buildInfo.Main.Sum != "" {
@@ -135,7 +127,7 @@ func (m *GoBinaryManager) DiagnoseBinary(path string) (BinaryDiagnostic, error) 
 			buildInfo.Main.Path, buildInfo.Main.Version,
 		)
 		if modErr != nil {
-			return diagnostic, modErr
+			return BinaryDiagnostic{}, modErr
 		}
 
 		diagnostic.Retracted = retracted
@@ -144,7 +136,7 @@ func (m *GoBinaryManager) DiagnoseBinary(path string) (BinaryDiagnostic, error) 
 
 	diagnostic.Vulnerabilities, err = m.toolchain.VulnCheck(path)
 	if err != nil {
-		return diagnostic, err
+		return BinaryDiagnostic{}, err
 	}
 
 	return diagnostic, nil
@@ -173,21 +165,9 @@ func (m *GoBinaryManager) GetAllBinaryInfos() ([]BinaryInfo, error) {
 }
 
 func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
-	logger := slog.Default().With("path", path)
-
-	info, err := buildinfo.ReadFile(path)
+	info, err := m.toolchain.GetBuildInfo(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return BinaryInfo{}, ErrBinaryNotFound
-		}
-
-		logger.Error("error reading binary build info", "err", err)
 		return BinaryInfo{}, err
-	}
-
-	if info.Main.Path == "" {
-		logger.Error(ErrBinaryBuiltWithoutGoModules.Error())
-		return BinaryInfo{}, ErrBinaryBuiltWithoutGoModules
 	}
 
 	binInfo := BinaryInfo{
@@ -237,7 +217,7 @@ func (m *GoBinaryManager) GetBinaryRepository(binary string) (string, error) {
 	modOrigin, err := m.toolchain.GetModuleOrigin(
 		binInfo.ModulePath, binInfo.ModuleVersion,
 	)
-	if err != nil && !errors.Is(err, ErrModuleNotFound) {
+	if err != nil && !errors.Is(err, ErrModuleOriginNotAvailable) {
 		return "", err
 	}
 
@@ -285,15 +265,15 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 }
 
 func (m *GoBinaryManager) GetBinFullPath() (string, error) {
-	if gobin := os.Getenv("GOBIN"); gobin != "" {
+	if gobin, ok := m.system.GetEnvVar("GOBIN"); ok {
 		return gobin, nil
 	}
 
-	if gopath := os.Getenv("GOPATH"); gopath != "" {
+	if gopath, ok := m.system.GetEnvVar("GOPATH"); ok {
 		return filepath.Join(gopath, "bin"), nil
 	}
 
-	home, err := os.UserHomeDir()
+	home, err := m.system.UserHomeDir()
 	if err != nil {
 		slog.Default().Error("error getting user home directory", "err", err)
 		return "", err
@@ -306,7 +286,7 @@ func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
 	logger := slog.Default().With("dir", dir)
 	var binaries []string
 
-	entries, err := os.ReadDir(dir)
+	entries, err := m.system.ReadDir(dir)
 	if err != nil {
 		logger.Error("error while reading binaries directory", "err", err)
 		return nil, err
@@ -314,7 +294,7 @@ func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
 
 	for _, entry := range entries {
 		fullPath := filepath.Join(dir, entry.Name())
-		if isBinary(fullPath) {
+		if m.isBinary(fullPath) {
 			binaries = append(binaries, fullPath)
 		}
 	}
@@ -322,7 +302,11 @@ func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
 	return binaries, nil
 }
 
-func (m *GoBinaryManager) UpgradeBinary(binFullPath string, majorUpgrade bool, rebuild bool) error {
+func (m *GoBinaryManager) UpgradeBinary(
+	binFullPath string,
+	majorUpgrade bool,
+	rebuild bool,
+) error {
 	info, err := m.GetBinaryInfo(binFullPath)
 	if err != nil {
 		return err
@@ -340,6 +324,30 @@ func (m *GoBinaryManager) UpgradeBinary(binFullPath string, majorUpgrade bool, r
 	return nil
 }
 
+func (m *GoBinaryManager) checkBinaryDuplicatesInPath(name string) []string {
+	var (
+		seen       = make(map[string]struct{})
+		duplicates []string
+	)
+
+	path, _ := m.system.GetEnvVar("PATH")
+	for dir := range strings.SplitSeq(path, string(m.system.PathListSeparator())) {
+		fullPath := filepath.Join(dir, name)
+		if m.isBinary(fullPath) {
+			if _, ok := seen[fullPath]; !ok {
+				seen[fullPath] = struct{}{}
+				duplicates = append(duplicates, fullPath)
+			}
+		}
+	}
+
+	if len(duplicates) > 1 {
+		return duplicates
+	}
+
+	return nil
+}
+
 func (m *GoBinaryManager) checkModuleMajorUpgrade(
 	module, version string,
 ) (string, string, error) {
@@ -352,12 +360,7 @@ func (m *GoBinaryManager) checkModuleMajorUpgrade(
 	}
 
 	for {
-		nextVersion, err := nextMajorVersion(latestMajorVersion)
-		if err != nil {
-			return "", "", err
-		}
-
-		pkgMajor := pkg + "/" + nextVersion
+		pkgMajor := pkg + "/" + nextMajorVersion(latestMajorVersion)
 		modulePath, majorVersion, err := m.toolchain.GetLatestModuleVersion(pkgMajor)
 		if err != nil {
 			if errors.Is(err, ErrModuleNotFound) {
@@ -403,39 +406,26 @@ func (m *GoBinaryManager) diagnoseGoModFile(
 func (m *GoBinaryManager) installBinary(info BinaryUpgradeInfo) error {
 	baseModule := stripVersionSuffix(info.LatestModulePath)
 	packageSuffix := strings.TrimPrefix(info.PackagePath, info.ModulePath)
-	major := semver.Major(info.LatestVersion)
 
-	var pkg string
-	if major == "v0" || major == "v1" {
-		pkg = baseModule + packageSuffix
-	} else {
+	pkg := baseModule + packageSuffix
+	if major := semver.Major(info.LatestVersion); major != "v0" && major != "v1" {
 		pkg = baseModule + "/" + major + packageSuffix
 	}
 
 	return m.toolchain.Install(pkg, info.LatestVersion)
 }
 
-func checkBinaryDuplicatesInPath(name string) []string {
-	var (
-		seen       = make(map[string]struct{})
-		duplicates []string
-	)
-
-	for dir := range strings.SplitSeq(os.Getenv("PATH"), string(os.PathListSeparator)) {
-		fullPath := filepath.Join(dir, name)
-		if isBinary(fullPath) {
-			if _, ok := seen[fullPath]; !ok {
-				seen[fullPath] = struct{}{}
-				duplicates = append(duplicates, fullPath)
-			}
-		}
+func (m *GoBinaryManager) isBinary(path string) bool {
+	info, err := m.system.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
 	}
 
-	if len(duplicates) > 1 {
-		return duplicates
+	if m.system.RuntimeOS() == "windows" {
+		return strings.EqualFold(filepath.Ext(info.Name()), ".exe")
 	}
 
-	return nil
+	return info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
 }
 
 func getBinaryPlatform(info *buildinfo.BuildInfo) string {
@@ -449,44 +439,22 @@ func getBinaryPlatform(info *buildinfo.BuildInfo) string {
 		}
 	}
 
+	if goOS == "" || goArch == "" {
+		return ""
+	}
+
 	return goOS + "/" + goArch
 }
 
-func isBinary(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return false
-	}
-
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(filepath.Ext(info.Name()), ".exe")
-	}
-
-	return info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
-}
-
-func nextMajorVersion(version string) (string, error) {
-	logger := slog.Default().With("version", version)
-
-	if !semver.IsValid(version) {
-		err := ErrInvalidModuleVersion
-		logger.Error(err.Error())
-		return "", err
-	}
-
+func nextMajorVersion(version string) string {
 	major := semver.Major(version)
 	if major == "v0" || major == "v1" {
-		return "v2", nil
+		return "v2"
 	}
 
 	majorNumStr := strings.TrimPrefix(major, "v")
-	majorNum, err := strconv.Atoi(majorNumStr)
-	if err != nil {
-		logger.Error("error parsing major version number", "err", err)
-		return "", err
-	}
-
-	return fmt.Sprintf("v%d", majorNum+1), nil
+	majorNum, _ := strconv.Atoi(majorNumStr)
+	return "v" + strconv.Itoa(majorNum+1)
 }
 
 func stripVersionSuffix(module string) string {
