@@ -6,5 +6,7 @@ dir: "{{.InterfaceDir}}/mocks"
 packages:
   github.com/brunoribeiro127/gobin/internal:
     interfaces:
-      ExecRun:
       ExecCombinedOutput:
+      ExecRun:
+      System:
+      Toolchain:
