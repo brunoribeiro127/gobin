@@ -3,10 +3,10 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -107,15 +107,24 @@ type BinaryManager interface {
 type Gobin struct {
 	binaryManager BinaryManager
 	execCmd       ExecCombinedOutputFunc
+	stdErr        io.Writer
+	stdOut        io.Writer
+	system        System
 }
 
 func NewGobin(
 	binaryManager BinaryManager,
 	execCmd ExecCombinedOutputFunc,
+	stdErr io.Writer,
+	stdOut io.Writer,
+	system System,
 ) *Gobin {
 	return &Gobin{
 		binaryManager: binaryManager,
 		execCmd:       execCmd,
+		stdErr:        stdErr,
+		stdOut:        stdOut,
+		system:        system,
 	}
 }
 
@@ -132,7 +141,7 @@ func (g *Gobin) DiagnoseBinaries(parallelism int) error {
 
 	var (
 		mutex sync.Mutex
-		diags []BinaryDiagnostic
+		diags = make([]BinaryDiagnostic, 0, len(bins))
 		grp   = new(errgroup.Group)
 	)
 
@@ -155,7 +164,7 @@ func (g *Gobin) DiagnoseBinaries(parallelism int) error {
 
 	waitErr := grp.Wait()
 
-	if err = printBinaryDiagnostics(diags); err != nil {
+	if err = g.printBinaryDiagnostics(diags); err != nil {
 		return err
 	}
 
@@ -168,7 +177,7 @@ func (g *Gobin) ListInstalledBinaries() error {
 		return err
 	}
 
-	return printInstalledBinaries(binInfos)
+	return g.printInstalledBinaries(binInfos)
 }
 
 func (g *Gobin) ListOutdatedBinaries(checkMajor bool, parallelism int) error {
@@ -179,7 +188,7 @@ func (g *Gobin) ListOutdatedBinaries(checkMajor bool, parallelism int) error {
 
 	var (
 		mutex    sync.Mutex
-		outdated []BinaryUpgradeInfo
+		outdated = make([]BinaryUpgradeInfo, 0, len(binInfos))
 		grp      = new(errgroup.Group)
 	)
 
@@ -205,11 +214,11 @@ func (g *Gobin) ListOutdatedBinaries(checkMajor bool, parallelism int) error {
 	waitErr := grp.Wait()
 
 	if len(outdated) == 0 {
-		fmt.Fprintln(os.Stdout, "✅ All binaries are up to date")
+		fmt.Fprintln(g.stdOut, "✅ All binaries are up to date")
 		return waitErr
 	}
 
-	if err = printOutdatedBinaries(outdated); err != nil {
+	if err = g.printOutdatedBinaries(outdated); err != nil {
 		return err
 	}
 
@@ -225,14 +234,14 @@ func (g *Gobin) PrintBinaryInfo(binary string) error {
 	binInfo, err := g.binaryManager.GetBinaryInfo(filepath.Join(binPath, binary))
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
-			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", binary)
+			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
 		}
 
 		return err
 	}
 
 	tmplParsed := template.Must(template.New("info").Parse(infoTemplate))
-	if err = tmplParsed.Execute(os.Stdout, binInfo); err != nil {
+	if err = tmplParsed.Execute(g.stdOut, binInfo); err != nil {
 		slog.Default().Error("error executing template", "err", err)
 		return err
 	}
@@ -246,7 +255,7 @@ func (g *Gobin) PrintShortVersion(path string) error {
 		return err
 	}
 
-	fmt.Fprintln(os.Stdout, binInfo.ModuleVersion)
+	fmt.Fprintln(g.stdOut, binInfo.ModuleVersion)
 
 	return nil
 }
@@ -258,7 +267,7 @@ func (g *Gobin) PrintVersion(path string) error {
 	}
 
 	fmt.Fprintf(
-		os.Stdout,
+		g.stdOut,
 		"%s (%s %s/%s)\n",
 		binInfo.ModuleVersion,
 		binInfo.GoVersion,
@@ -273,17 +282,17 @@ func (g *Gobin) ShowBinaryRepository(binary string, open bool) error {
 	repoURL, err := g.binaryManager.GetBinaryRepository(binary)
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
-			fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", binary)
+			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
 		}
 
 		return err
 	}
 
 	if open {
-		return g.openURL(repoURL, NewExecCombinedOutput)
+		return g.openURL(repoURL, g.execCmd)
 	}
 
-	fmt.Fprintln(os.Stdout, repoURL)
+	fmt.Fprintln(g.stdOut, repoURL)
 	return nil
 }
 
@@ -293,9 +302,9 @@ func (g *Gobin) UninstallBinary(binary string) error {
 		return err
 	}
 
-	err = os.Remove(filepath.Join(binPath, binary))
+	err = g.system.Remove(filepath.Join(binPath, binary))
 	if errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", binary)
+		fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
 		return err
 	} else if err != nil {
 		slog.Default().Error("failed to remove binary", "binary", binary, "err", err)
@@ -330,7 +339,7 @@ func (g *Gobin) UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int
 		grp.Go(func() error {
 			upErr := g.binaryManager.UpgradeBinary(bin, majorUpgrade, rebuild)
 			if errors.Is(upErr, ErrBinaryNotFound) {
-				fmt.Fprintf(os.Stderr, "❌ binary %q not found\n", filepath.Base(bin))
+				fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", filepath.Base(bin))
 			}
 			return upErr
 		})
@@ -339,20 +348,12 @@ func (g *Gobin) UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int
 	return grp.Wait()
 }
 
-func add(args ...int) int {
-	sum := 0
-	for _, v := range args {
-		sum += v
-	}
-	return sum
-}
-
 func (g *Gobin) openURL(url string, execCmd ExecCombinedOutputFunc) error {
 	logger := slog.Default().With("url", url)
 
 	var cmd ExecCombinedOutput
-
-	switch runtime.GOOS {
+	runtimeOS := g.system.RuntimeOS()
+	switch runtimeOS {
 	case "darwin":
 		cmd = execCmd("open", url)
 	case "linux":
@@ -360,7 +361,7 @@ func (g *Gobin) openURL(url string, execCmd ExecCombinedOutputFunc) error {
 	case "windows":
 		cmd = execCmd("cmd", "/c", "start", url)
 	default:
-		err := fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+		err := fmt.Errorf("unsupported platform: %s", runtimeOS)
 		logger.Error("error opening url", "err", err)
 		return err
 	}
@@ -376,8 +377,8 @@ func (g *Gobin) openURL(url string, execCmd ExecCombinedOutputFunc) error {
 	return nil
 }
 
-func printBinaryDiagnostics(diags []BinaryDiagnostic) error {
-	var diagWithIssues []BinaryDiagnostic
+func (g *Gobin) printBinaryDiagnostics(diags []BinaryDiagnostic) error {
+	var diagWithIssues = make([]BinaryDiagnostic, 0, len(diags))
 	for _, d := range diags {
 		if d.HasIssues() {
 			diagWithIssues = append(diagWithIssues, d)
@@ -399,7 +400,7 @@ func printBinaryDiagnostics(diags []BinaryDiagnostic) error {
 	}
 
 	tmplParsed := template.Must(template.New("doctor").Parse(doctorTemplate))
-	if err := tmplParsed.Execute(os.Stdout, data); err != nil {
+	if err := tmplParsed.Execute(g.stdOut, data); err != nil {
 		slog.Default().Error("error executing template", "err", err)
 		return err
 	}
@@ -407,24 +408,7 @@ func printBinaryDiagnostics(diags []BinaryDiagnostic) error {
 	return nil
 }
 
-func printInstalledBinaries(binInfos []BinaryInfo) error {
-	getColumnMaxWidth := func(
-		header string,
-		binaries []BinaryInfo,
-		f func(BinaryInfo) string,
-	) int {
-		maxWidth := len(header)
-
-		for _, bin := range binaries {
-			width := len(f(bin))
-			if width > maxWidth {
-				maxWidth = width
-			}
-		}
-
-		return maxWidth
-	}
-
+func (g *Gobin) printInstalledBinaries(binInfos []BinaryInfo) error {
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
@@ -458,7 +442,7 @@ func printInstalledBinaries(binInfos []BinaryInfo) error {
 		"repeat": strings.Repeat,
 	}).Parse(listTemplate))
 
-	if err := tmplParsed.Execute(os.Stdout, data); err != nil {
+	if err := tmplParsed.Execute(g.stdOut, data); err != nil {
 		slog.Default().Error("error executing template", "err", err)
 		return err
 	}
@@ -466,27 +450,10 @@ func printInstalledBinaries(binInfos []BinaryInfo) error {
 	return nil
 }
 
-func printOutdatedBinaries(binInfos []BinaryUpgradeInfo) error {
+func (g *Gobin) printOutdatedBinaries(binInfos []BinaryUpgradeInfo) error {
 	sort.Slice(binInfos, func(i, j int) bool {
 		return binInfos[i].Name < binInfos[j].Name
 	})
-
-	getColumnMaxWidth := func(
-		header string,
-		binaries []BinaryUpgradeInfo,
-		f func(BinaryUpgradeInfo) string,
-	) int {
-		maxWidth := len(header)
-
-		for _, bin := range binaries {
-			width := len(f(bin))
-			if width > maxWidth {
-				maxWidth = width
-			}
-		}
-
-		return maxWidth
-	}
 
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
@@ -523,25 +490,43 @@ func printOutdatedBinaries(binInfos []BinaryUpgradeInfo) error {
 		LatestVersionWidth: maxLatestVersionWidth,
 	}
 
-	colorize := func(s, color string) string {
-		colors := map[string]string{
-			"red":   "\033[31m",
-			"green": "\033[32m",
-			"reset": "\033[0m",
-		}
-		return colors[color] + s + colors["reset"]
-	}
-
 	tmplParsed := template.Must(template.New("outdated").Funcs(template.FuncMap{
 		"add":    add,
 		"color":  colorize,
 		"repeat": strings.Repeat,
 	}).Parse(outdatedTemplate))
 
-	if err := tmplParsed.Execute(os.Stdout, data); err != nil {
+	if err := tmplParsed.Execute(g.stdOut, data); err != nil {
 		slog.Default().Error("error executing template", "err", err)
 		return err
 	}
 
 	return nil
+}
+
+func add(args ...int) int {
+	sum := 0
+	for _, v := range args {
+		sum += v
+	}
+	return sum
+}
+
+func colorize(s, color string) string {
+	colors := map[string]string{
+		"red":   "\033[31m",
+		"green": "\033[32m",
+		"reset": "\033[0m",
+	}
+	return colors[color] + s + colors["reset"]
+}
+
+func getColumnMaxWidth[T any](header string, items []T, accessor func(T) string) int {
+	maxWidth := len(header)
+	for _, item := range items {
+		if width := len(accessor(item)); width > maxWidth {
+			maxWidth = width
+		}
+	}
+	return maxWidth
 }

@@ -13,6 +13,7 @@ type System interface {
 	PathListSeparator() rune
 	ReadBuildInfo(path string) (*buildinfo.BuildInfo, error)
 	ReadDir(dirname string) ([]os.DirEntry, error)
+	Remove(name string) error
 	RuntimeARCH() string
 	RuntimeOS() string
 	RuntimeVersion() string
@@ -44,6 +45,10 @@ func (s *defaultSystem) ReadBuildInfo(path string) (*buildinfo.BuildInfo, error)
 
 func (s *defaultSystem) ReadDir(dirname string) ([]os.DirEntry, error) {
 	return os.ReadDir(dirname)
+}
+
+func (s *defaultSystem) Remove(name string) error {
+	return os.Remove(name)
 }
 
 func (s *defaultSystem) RuntimeARCH() string {

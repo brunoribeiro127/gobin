@@ -260,7 +260,7 @@ func (t *GoToolchain) VulnCheck(path string) ([]Vulnerability, error) {
 		return nil, err
 	}
 
-	var vulns []Vulnerability
+	var vulns = make([]Vulnerability, 0, len(res.Statements))
 	for _, stmt := range res.Statements {
 		if stmt.Status == "affected" {
 			vulns = append(vulns, Vulnerability{

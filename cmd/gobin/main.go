@@ -14,17 +14,20 @@ import (
 
 func main() {
 	system := internal.NewSystem()
-	gobin := internal.NewGobin(
-		internal.NewGoBinaryManager(
-			system,
-			internal.NewGoToolchain(
-				internal.NewExecCombinedOutput,
-				internal.NewExecRun,
-				internal.NewScanExecCombinedOutput,
-				system,
-			),
-		),
+
+	toolchain := internal.NewGoToolchain(
 		internal.NewExecCombinedOutput,
+		internal.NewExecRun,
+		internal.NewScanExecCombinedOutput,
+		system,
+	)
+
+	gobin := internal.NewGobin(
+		internal.NewGoBinaryManager(system, toolchain),
+		internal.NewExecCombinedOutput,
+		os.Stderr,
+		os.Stdout,
+		system,
 	)
 
 	var verbose bool
@@ -33,13 +36,21 @@ func main() {
 	cmd := &cobra.Command{
 		Use:   "gobin",
 		Short: "gobin - CLI to manage Go binaries",
-		PersistentPreRun: func(_ *cobra.Command, _ []string) {
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 			level := slog.LevelWarn
 			if verbose {
 				level = slog.LevelDebug
 			}
 
 			slog.SetDefault(internal.NewLoggerWithLevel(level))
+
+			if parallelism < 1 {
+				err := errors.New("parallelism must be greater than 0")
+				fmt.Fprintf(os.Stderr, "error: %s\n\n", err.Error())
+				return err
+			}
+
+			return nil
 		},
 	}
 
