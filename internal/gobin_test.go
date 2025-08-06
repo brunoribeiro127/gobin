@@ -469,6 +469,68 @@ func TestListOutdatedBinaries(t *testing.T) {
 			},
 			expectedStdOut: "✅ All binaries are up to date\n",
 		},
+		"success-no-outdated-binaries-skip-error-built-without-go-modules": {
+			stdOut:                &bytes.Buffer{},
+			checkMajor:            false,
+			parallelism:           1,
+			mockGetAllBinaryInfos: []internal.BinaryInfo{binInfo1, binInfo2, binInfo3},
+			mockGetBinaryUpgradeInfoCalls: []mockGetBinaryUpgradeInfoCall{
+				{
+					info: binInfo1,
+					upgradeInfo: internal.BinaryUpgradeInfo{
+						BinaryInfo:         binInfo1,
+						LatestModulePath:   "example.com/mockorg/mockproj1",
+						LatestVersion:      "v0.1.0",
+						IsUpgradeAvailable: false,
+					},
+				},
+				{
+					info: binInfo2,
+					err:  internal.ErrBinaryBuiltWithoutGoModules,
+				},
+				{
+					info: binInfo3,
+					upgradeInfo: internal.BinaryUpgradeInfo{
+						BinaryInfo:         binInfo3,
+						LatestModulePath:   "example.com/mockorg/mockproj3/v2",
+						LatestVersion:      "v2.1.0",
+						IsUpgradeAvailable: false,
+					},
+				},
+			},
+			expectedStdOut: "✅ All binaries are up to date\n",
+		},
+		"success-no-outdated-binaries-with-error": {
+			stdOut:                &bytes.Buffer{},
+			checkMajor:            false,
+			parallelism:           1,
+			mockGetAllBinaryInfos: []internal.BinaryInfo{binInfo1, binInfo2, binInfo3},
+			mockGetBinaryUpgradeInfoCalls: []mockGetBinaryUpgradeInfoCall{
+				{
+					info: binInfo1,
+					upgradeInfo: internal.BinaryUpgradeInfo{
+						BinaryInfo:         binInfo1,
+						LatestModulePath:   "example.com/mockorg/mockproj1",
+						LatestVersion:      "v0.1.0",
+						IsUpgradeAvailable: false,
+					},
+				},
+				{
+					info: binInfo2,
+					err:  internal.ErrModuleInfoNotAvailable,
+				},
+				{
+					info: binInfo3,
+					upgradeInfo: internal.BinaryUpgradeInfo{
+						BinaryInfo:         binInfo3,
+						LatestModulePath:   "example.com/mockorg/mockproj3/v2",
+						LatestVersion:      "v2.1.0",
+						IsUpgradeAvailable: false,
+					},
+				},
+			},
+			expectedErr: internal.ErrModuleInfoNotAvailable,
+		},
 		"success-minor-upgrades": {
 			stdOut:                &bytes.Buffer{},
 			checkMajor:            false,

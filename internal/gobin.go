@@ -204,7 +204,9 @@ func (g *Gobin) ListOutdatedBinaries(
 			binUpInfo, infoErr := g.binaryManager.GetBinaryUpgradeInfo(
 				ctx, info, checkMajor,
 			)
-			if infoErr != nil {
+			if errors.Is(infoErr, ErrBinaryBuiltWithoutGoModules) {
+				return nil
+			} else if infoErr != nil {
 				return infoErr
 			}
 
@@ -221,7 +223,11 @@ func (g *Gobin) ListOutdatedBinaries(
 	waitErr := grp.Wait()
 
 	if len(outdated) == 0 {
-		fmt.Fprintln(g.stdOut, "✅ All binaries are up to date")
+		if waitErr == nil {
+			fmt.Fprintln(g.stdOut, "✅ All binaries are up to date")
+			return nil
+		}
+
 		return waitErr
 	}
 
