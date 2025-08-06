@@ -8,16 +8,19 @@ import (
 	"golang.org/x/vuln/scan"
 )
 
-type ScanExecCombinedOutputFunc func(args ...string) ExecCombinedOutput
+type ScanExecCombinedOutputFunc func(ctx context.Context, args ...string) ExecCombinedOutput
 
 type scanExecCombinedOutput struct {
 	cmd    *scan.Cmd
 	output *bytes.Buffer
 }
 
-func NewScanExecCombinedOutput(args ...string) ExecCombinedOutput {
+func NewScanExecCombinedOutput(
+	ctx context.Context,
+	args ...string,
+) ExecCombinedOutput {
 	var output bytes.Buffer
-	cmd := scan.Command(context.Background(), args...)
+	cmd := scan.Command(ctx, args...)
 	cmd.Stdout = &output
 	cmd.Stderr = &output
 	cmd.Env = os.Environ()

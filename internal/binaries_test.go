@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"context"
 	"debug/buildinfo"
 	"errors"
 	"os"
@@ -424,19 +425,21 @@ func TestDiagnoseBinary(t *testing.T) {
 				Once()
 
 			if tc.callGetModuleFile {
-				toolchain.EXPECT().GetModuleFile(tc.mockGetBuildInfo.Main.Path, "latest").
-					Return(tc.mockGetModuleFile, tc.mockGetModuleFileErr).
-					Once()
+				toolchain.EXPECT().GetModuleFile(
+					context.Background(),
+					tc.mockGetBuildInfo.Main.Path,
+					"latest",
+				).Return(tc.mockGetModuleFile, tc.mockGetModuleFileErr).Once()
 			}
 
 			if tc.callVulnCheck {
-				toolchain.EXPECT().VulnCheck(tc.path).
+				toolchain.EXPECT().VulnCheck(context.Background(), tc.path).
 					Return(tc.mockVulnCheckVulns, tc.mockVulnCheckErr).
 					Once()
 			}
 
 			binaryManager := internal.NewGoBinaryManager(system, toolchain)
-			diagnostic, err := binaryManager.DiagnoseBinary(tc.path)
+			diagnostic, err := binaryManager.DiagnoseBinary(context.Background(), tc.path)
 			assert.Equal(t, tc.expectedDiagnostic, diagnostic)
 			assert.Equal(t, tc.expectedHasIssues, diagnostic.HasIssues())
 			assert.Equal(t, tc.expectedError, err)
@@ -777,13 +780,14 @@ func TestGetBinaryRepository(t *testing.T) {
 
 			if tc.callGetModuleOrigin {
 				toolchain.EXPECT().GetModuleOrigin(
+					context.Background(),
 					tc.mockGetBuildInfo.Main.Path,
 					tc.mockGetBuildInfo.Main.Version,
 				).Return(tc.mockGetModuleOrigin, tc.mockGetModuleOriginErr).Once()
 			}
 
 			binaryManager := internal.NewGoBinaryManager(system, toolchain)
-			repository, err := binaryManager.GetBinaryRepository(tc.binary)
+			repository, err := binaryManager.GetBinaryRepository(context.Background(), tc.binary)
 			assert.Equal(t, tc.expectedRepository, repository)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -965,13 +969,15 @@ func TestGetBinaryUpgradeInfo(t *testing.T) {
 			toolchain := mocks.NewToolchain(t)
 
 			for _, call := range tc.mockGetLatestModuleVersionCalls {
-				toolchain.EXPECT().GetLatestModuleVersion(call.module).
+				toolchain.EXPECT().GetLatestModuleVersion(context.Background(), call.module).
 					Return(call.latestModule, call.latestVersion, call.err).
 					Once()
 			}
 
 			binaryManager := internal.NewGoBinaryManager(nil, toolchain)
-			info, err := binaryManager.GetBinaryUpgradeInfo(tc.info, tc.checkMajor)
+			info, err := binaryManager.GetBinaryUpgradeInfo(
+				context.Background(), tc.info, tc.checkMajor,
+			)
 			assert.Equal(t, tc.expectedInfo, info)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -1298,19 +1304,26 @@ func TestUpgradeBinary(t *testing.T) {
 				Once()
 
 			for _, call := range tc.mockGetLatestModuleVersionCalls {
-				toolchain.EXPECT().GetLatestModuleVersion(call.module).
+				toolchain.EXPECT().GetLatestModuleVersion(context.Background(), call.module).
 					Return(call.latestModule, call.latestVersion, call.err).
 					Once()
 			}
 
 			if tc.callInstall {
-				toolchain.EXPECT().Install(tc.mockInstallPackage, tc.mockInstallVersion).
-					Return(tc.mockInstallErr).
-					Once()
+				toolchain.EXPECT().Install(
+					context.Background(),
+					tc.mockInstallPackage,
+					tc.mockInstallVersion,
+				).Return(tc.mockInstallErr).Once()
 			}
 
 			binaryManager := internal.NewGoBinaryManager(nil, toolchain)
-			err := binaryManager.UpgradeBinary(tc.binFullPath, tc.majorUpgrade, tc.rebuild)
+			err := binaryManager.UpgradeBinary(
+				context.Background(),
+				tc.binFullPath,
+				tc.majorUpgrade,
+				tc.rebuild,
+			)
 			assert.Equal(t, tc.expectedError, err)
 		})
 	}

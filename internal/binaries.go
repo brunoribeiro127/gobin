@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"debug/buildinfo"
 	"errors"
 	"log/slog"
@@ -20,11 +21,11 @@ const (
 
 type Toolchain interface {
 	GetBuildInfo(path string) (*buildinfo.BuildInfo, error)
-	GetLatestModuleVersion(module string) (string, string, error)
-	GetModuleFile(module, version string) (*modfile.File, error)
-	GetModuleOrigin(module, version string) (*ModuleOrigin, error)
-	Install(pkg, version string) error
-	VulnCheck(path string) ([]Vulnerability, error)
+	GetLatestModuleVersion(ctx context.Context, module string) (string, string, error)
+	GetModuleFile(ctx context.Context, module, version string) (*modfile.File, error)
+	GetModuleOrigin(ctx context.Context, module, version string) (*ModuleOrigin, error)
+	Install(ctx context.Context, pkg, version string) error
+	VulnCheck(ctx context.Context, path string) ([]Vulnerability, error)
 }
 
 type BinaryInfo struct {
@@ -89,11 +90,20 @@ type GoBinaryManager struct {
 	toolchain Toolchain
 }
 
-func NewGoBinaryManager(system System, toolchain Toolchain) *GoBinaryManager {
-	return &GoBinaryManager{system: system, toolchain: toolchain}
+func NewGoBinaryManager(
+	system System,
+	toolchain Toolchain,
+) *GoBinaryManager {
+	return &GoBinaryManager{
+		system:    system,
+		toolchain: toolchain,
+	}
 }
 
-func (m *GoBinaryManager) DiagnoseBinary(path string) (BinaryDiagnostic, error) {
+func (m *GoBinaryManager) DiagnoseBinary(
+	ctx context.Context,
+	path string,
+) (BinaryDiagnostic, error) {
 	binaryName := filepath.Base(path)
 	logger := slog.Default().With("binary", binaryName, "path", path)
 
@@ -128,7 +138,7 @@ func (m *GoBinaryManager) DiagnoseBinary(path string) (BinaryDiagnostic, error) 
 
 	if buildInfo.Main.Sum != "" {
 		retracted, deprecated, modErr := m.diagnoseGoModFile(
-			buildInfo.Main.Path, buildInfo.Main.Version,
+			ctx, buildInfo.Main.Path, buildInfo.Main.Version,
 		)
 		if modErr != nil {
 			return BinaryDiagnostic{}, modErr
@@ -138,7 +148,7 @@ func (m *GoBinaryManager) DiagnoseBinary(path string) (BinaryDiagnostic, error) 
 		diagnostic.Deprecated = deprecated
 	}
 
-	diagnostic.Vulnerabilities, err = m.toolchain.VulnCheck(path)
+	diagnostic.Vulnerabilities, err = m.toolchain.VulnCheck(ctx, path)
 	if err != nil {
 		return BinaryDiagnostic{}, err
 	}
@@ -207,7 +217,10 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
 	return binInfo, nil
 }
 
-func (m *GoBinaryManager) GetBinaryRepository(binary string) (string, error) {
+func (m *GoBinaryManager) GetBinaryRepository(
+	ctx context.Context,
+	binary string,
+) (string, error) {
 	binPath, err := m.GetBinFullPath()
 	if err != nil {
 		return "", err
@@ -218,9 +231,7 @@ func (m *GoBinaryManager) GetBinaryRepository(binary string) (string, error) {
 		return "", err
 	}
 
-	modOrigin, err := m.toolchain.GetModuleOrigin(
-		binInfo.ModulePath, binInfo.ModuleVersion,
-	)
+	modOrigin, err := m.toolchain.GetModuleOrigin(ctx, binInfo.ModulePath, binInfo.ModuleVersion)
 	if err != nil &&
 		!errors.Is(err, ErrModuleNotFound) &&
 		!errors.Is(err, ErrModuleOriginNotAvailable) {
@@ -236,6 +247,7 @@ func (m *GoBinaryManager) GetBinaryRepository(binary string) (string, error) {
 }
 
 func (m *GoBinaryManager) GetBinaryUpgradeInfo(
+	ctx context.Context,
 	info BinaryInfo,
 	checkMajor bool,
 ) (BinaryUpgradeInfo, error) {
@@ -245,7 +257,7 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 		IsUpgradeAvailable: false,
 	}
 
-	modulePath, version, err := m.toolchain.GetLatestModuleVersion(binUpInfo.ModulePath)
+	modulePath, version, err := m.toolchain.GetLatestModuleVersion(ctx, binUpInfo.ModulePath)
 	if err != nil {
 		return BinaryUpgradeInfo{}, err
 	}
@@ -256,7 +268,7 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 
 	if checkMajor {
 		modulePath, version, err = m.checkModuleMajorUpgrade(
-			binUpInfo.ModulePath, binUpInfo.LatestVersion,
+			ctx, binUpInfo.ModulePath, binUpInfo.LatestVersion,
 		)
 		if err != nil {
 			return BinaryUpgradeInfo{}, err
@@ -309,6 +321,7 @@ func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
 }
 
 func (m *GoBinaryManager) UpgradeBinary(
+	ctx context.Context,
 	binFullPath string,
 	majorUpgrade bool,
 	rebuild bool,
@@ -318,13 +331,13 @@ func (m *GoBinaryManager) UpgradeBinary(
 		return err
 	}
 
-	binUpInfo, err := m.GetBinaryUpgradeInfo(info, majorUpgrade)
+	binUpInfo, err := m.GetBinaryUpgradeInfo(ctx, info, majorUpgrade)
 	if err != nil {
 		return err
 	}
 
 	if binUpInfo.IsUpgradeAvailable || rebuild {
-		return m.installBinary(binUpInfo)
+		return m.installBinary(ctx, binUpInfo)
 	}
 
 	return nil
@@ -355,6 +368,7 @@ func (m *GoBinaryManager) checkBinaryDuplicatesInPath(name string) []string {
 }
 
 func (m *GoBinaryManager) checkModuleMajorUpgrade(
+	ctx context.Context,
 	module, version string,
 ) (string, string, error) {
 	latestModulePath := module
@@ -367,7 +381,7 @@ func (m *GoBinaryManager) checkModuleMajorUpgrade(
 
 	for {
 		pkgMajor := pkg + "/" + nextMajorVersion(latestMajorVersion)
-		modulePath, majorVersion, err := m.toolchain.GetLatestModuleVersion(pkgMajor)
+		modulePath, majorVersion, err := m.toolchain.GetLatestModuleVersion(ctx, pkgMajor)
 		if err != nil {
 			if errors.Is(err, ErrModuleNotFound) {
 				break
@@ -383,11 +397,12 @@ func (m *GoBinaryManager) checkModuleMajorUpgrade(
 }
 
 func (m *GoBinaryManager) diagnoseGoModFile(
+	ctx context.Context,
 	module, version string,
 ) (string, string, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
-	modFile, err := m.toolchain.GetModuleFile(module, "latest")
+	modFile, err := m.toolchain.GetModuleFile(ctx, module, "latest")
 	if err != nil {
 		logger.Error("error downloading go.mod", "err", err)
 		return "", "", err
@@ -409,7 +424,10 @@ func (m *GoBinaryManager) diagnoseGoModFile(
 	return retracted, deprecated, err
 }
 
-func (m *GoBinaryManager) installBinary(info BinaryUpgradeInfo) error {
+func (m *GoBinaryManager) installBinary(
+	ctx context.Context,
+	info BinaryUpgradeInfo,
+) error {
 	baseModule := stripVersionSuffix(info.LatestModulePath)
 	packageSuffix := strings.TrimPrefix(info.PackagePath, info.ModulePath)
 
@@ -418,7 +436,7 @@ func (m *GoBinaryManager) installBinary(info BinaryUpgradeInfo) error {
 		pkg = baseModule + "/" + major + packageSuffix
 	}
 
-	return m.toolchain.Install(pkg, info.LatestVersion)
+	return m.toolchain.Install(ctx, pkg, info.LatestVersion)
 }
 
 func (m *GoBinaryManager) isBinary(path string) bool {

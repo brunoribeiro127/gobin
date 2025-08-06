@@ -2,6 +2,7 @@ package internal_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -356,13 +357,13 @@ func TestDiagnoseBinaries(t *testing.T) {
 			}
 
 			for _, call := range tc.mockDiagnoseBinaryCalls {
-				binaryManager.EXPECT().DiagnoseBinary(call.bin).
+				binaryManager.EXPECT().DiagnoseBinary(context.Background(), call.bin).
 					Return(call.info, call.err).
 					Once()
 			}
 
 			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil)
-			err := gobin.DiagnoseBinaries(tc.parallelism)
+			err := gobin.DiagnoseBinaries(context.Background(), tc.parallelism)
 			assert.Equal(t, tc.expectedErr, err)
 
 			bytes, err := io.ReadAll(tc.stdOut)
@@ -677,13 +678,15 @@ mockproj2 → example.com/mockorg/mockproj2 @ ` + "\033[31m" + `v1.1.0 ` + "\033
 				Once()
 
 			for _, call := range tc.mockGetBinaryUpgradeInfoCalls {
-				binaryManager.EXPECT().GetBinaryUpgradeInfo(call.info, tc.checkMajor).
-					Return(call.upgradeInfo, call.err).
-					Once()
+				binaryManager.EXPECT().GetBinaryUpgradeInfo(
+					context.Background(),
+					call.info,
+					tc.checkMajor,
+				).Return(call.upgradeInfo, call.err).Once()
 			}
 
 			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil)
-			err := gobin.ListOutdatedBinaries(tc.checkMajor, tc.parallelism)
+			err := gobin.ListOutdatedBinaries(context.Background(), tc.checkMajor, tc.parallelism)
 			assert.Equal(t, tc.expectedErr, err)
 
 			bytes, err := io.ReadAll(tc.stdOut)
@@ -983,7 +986,7 @@ func TestShowBinaryRepository(t *testing.T) {
 					Once()
 			}
 
-			execCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
+			execCmdFunc := func(_ context.Context, name string, args ...string) internal.ExecCombinedOutput {
 				switch tc.mockRuntimeOS {
 				case "darwin":
 					assert.Equal(t, "open", name)
@@ -1008,12 +1011,12 @@ func TestShowBinaryRepository(t *testing.T) {
 
 			binaryManager := mocks.NewBinaryManager(t)
 
-			binaryManager.EXPECT().GetBinaryRepository(tc.binary).
+			binaryManager.EXPECT().GetBinaryRepository(context.Background(), tc.binary).
 				Return(tc.mockGetBinaryRepository, tc.mockGetBinaryRepositoryErr).
 				Once()
 
 			gobin := internal.NewGobin(binaryManager, execCmdFunc, &stdErr, &stdOut, system)
-			err := gobin.ShowBinaryRepository(tc.binary, tc.open)
+			err := gobin.ShowBinaryRepository(context.Background(), tc.binary, tc.open)
 			assert.Equal(t, tc.expectedErr, err)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 			assert.Equal(t, tc.expectedStdOut, stdOut.String())
@@ -1181,13 +1184,22 @@ func TestUpgradeBinaries(t *testing.T) {
 			}
 
 			for _, call := range tc.mockUpgradeBinaryCalls {
-				binaryManager.EXPECT().UpgradeBinary(call.bin, tc.majorUpgrade, tc.rebuild).
-					Return(call.err).
-					Once()
+				binaryManager.EXPECT().UpgradeBinary(
+					context.Background(),
+					call.bin,
+					tc.majorUpgrade,
+					tc.rebuild,
+				).Return(call.err).Once()
 			}
 
 			gobin := internal.NewGobin(binaryManager, nil, &stdErr, nil, nil)
-			err := gobin.UpgradeBinaries(tc.majorUpgrade, tc.rebuild, tc.parallelism, tc.bins...)
+			err := gobin.UpgradeBinaries(
+				context.Background(),
+				tc.majorUpgrade,
+				tc.rebuild,
+				tc.parallelism,
+				tc.bins...,
+			)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 			assert.Equal(t, tc.expectedErr, err)
 		})
