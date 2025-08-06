@@ -433,7 +433,7 @@ func (g *Gobin) openResource(ctx context.Context, resource string) error {
 		cmd = g.execCmd(ctx, "cmd", "/c", "start", resource)
 	default:
 		err := fmt.Errorf("unsupported platform: %s", runtimeOS)
-		logger.Error("error opening resource", "err", err)
+		logger.ErrorContext(ctx, "error opening resource", "err", err)
 		return err
 	}
 
@@ -444,7 +444,7 @@ func (g *Gobin) openResource(ctx context.Context, resource string) error {
 			err = fmt.Errorf("%w: %s", err, outputStr)
 		}
 
-		logger.Error("error opening resource", "err", err)
+		logger.ErrorContext(ctx, "error opening resource", "err", err)
 		return err
 	}
 

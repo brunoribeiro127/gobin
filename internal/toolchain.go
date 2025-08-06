@@ -107,7 +107,7 @@ func (t *GoToolchain) GetLatestModuleVersion(
 	module string,
 ) (string, string, error) {
 	logger := slog.Default().With("module", module)
-	logger.Info("getting latest module version")
+	logger.InfoContext(ctx, "getting latest module version")
 
 	modLatest := fmt.Sprintf("%s@latest", module)
 	cmd := t.execCombinedOutput(ctx, "go", "list", "-m", "-json", modLatest)
@@ -120,11 +120,11 @@ func (t *GoToolchain) GetLatestModuleVersion(
 		}
 
 		if isModuleNotFound(err.Error()) {
-			logger.Warn("module not found", "err", err)
+			logger.WarnContext(ctx, "module not found", "err", err)
 			return "", "", ErrModuleNotFound
 		}
 
-		logger.Error("error getting latest version for module", "err", err)
+		logger.ErrorContext(ctx, "error getting latest version for module", "err", err)
 		return "", "", err
 	}
 
@@ -134,13 +134,13 @@ func (t *GoToolchain) GetLatestModuleVersion(
 	}
 
 	if err = json.Unmarshal(output, &res); err != nil {
-		logger.Error("error parsing module latest version response", "err", err)
+		logger.ErrorContext(ctx, "error parsing module latest version response", "err", err)
 		return "", "", err
 	}
 
 	if res.GoMod == nil {
 		err = ErrGoModFileNotAvailable
-		logger.Warn(err.Error())
+		logger.WarnContext(ctx, err.Error())
 		return "", "", err
 	}
 
@@ -148,19 +148,19 @@ func (t *GoToolchain) GetLatestModuleVersion(
 
 	bytes, err := os.ReadFile(*res.GoMod)
 	if err != nil {
-		logger.Error("error reading go mod file", "err", err)
+		logger.ErrorContext(ctx, "error reading go mod file", "err", err)
 		return "", "", err
 	}
 
 	modFile, err := modfile.Parse("go.mod", bytes, nil)
 	if err != nil {
-		logger.Error("error parsing go mod file", "err", err)
+		logger.ErrorContext(ctx, "error parsing go mod file", "err", err)
 		return "", "", err
 	}
 
 	if modFile.Module == nil {
 		err = ErrModuleInfoNotAvailable
-		logger.Warn(err.Error())
+		logger.WarnContext(ctx, err.Error())
 		return "", "", err
 	}
 
@@ -176,7 +176,7 @@ func (t *GoToolchain) GetModuleFile(
 	module, version string,
 ) (*modfile.File, error) {
 	logger := slog.Default().With("module", module, "version", version)
-	logger.Info("getting module file")
+	logger.InfoContext(ctx, "getting module file")
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
 	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", modVersion)
@@ -191,7 +191,7 @@ func (t *GoToolchain) GetModuleFile(
 			err = errors.New(res.Error)
 		}
 
-		logger.Error("error downloading module", "err", err)
+		logger.ErrorContext(ctx, "error downloading module", "err", err)
 		return nil, err
 	}
 
@@ -200,7 +200,7 @@ func (t *GoToolchain) GetModuleFile(
 	}
 
 	if err = json.Unmarshal(output, &res); err != nil {
-		logger.Error("error parsing module download response", "err", err)
+		logger.ErrorContext(ctx, "error parsing module download response", "err", err)
 		return nil, err
 	}
 
@@ -208,13 +208,13 @@ func (t *GoToolchain) GetModuleFile(
 
 	bytes, err := os.ReadFile(res.GoMod)
 	if err != nil {
-		logger.Error("error reading go mod file", "err", err)
+		logger.ErrorContext(ctx, "error reading go mod file", "err", err)
 		return nil, err
 	}
 
 	modFile, err := modfile.Parse("go.mod", bytes, nil)
 	if err != nil {
-		logger.Error("error parsing go mod file", "err", err)
+		logger.ErrorContext(ctx, "error parsing go mod file", "err", err)
 		return nil, err
 	}
 
@@ -230,7 +230,7 @@ func (t *GoToolchain) GetModuleOrigin(
 	module, version string,
 ) (*ModuleOrigin, error) {
 	logger := slog.Default().With("module", module, "version", version)
-	logger.Info("getting module origin")
+	logger.InfoContext(ctx, "getting module origin")
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
 	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", modVersion)
@@ -246,11 +246,11 @@ func (t *GoToolchain) GetModuleOrigin(
 		}
 
 		if isModuleNotFound(err.Error()) {
-			logger.Warn("module not found", "err", err)
+			logger.WarnContext(ctx, "module not found", "err", err)
 			return nil, ErrModuleNotFound
 		}
 
-		logger.Error("error downloading module", "err", err)
+		logger.ErrorContext(ctx, "error downloading module", "err", err)
 		return nil, err
 	}
 
@@ -259,13 +259,13 @@ func (t *GoToolchain) GetModuleOrigin(
 	}
 
 	if err = json.Unmarshal(output, &res); err != nil {
-		logger.Error("error parsing module download response", "err", err)
+		logger.ErrorContext(ctx, "error parsing module download response", "err", err)
 		return nil, err
 	}
 
 	if res.Origin == nil {
 		err = ErrModuleOriginNotAvailable
-		logger.Warn(err.Error())
+		logger.WarnContext(ctx, err.Error())
 		return nil, err
 	}
 
@@ -281,13 +281,13 @@ func (t *GoToolchain) Install(
 	pkg, version string,
 ) error {
 	logger := slog.Default().With("package", pkg, "version", version)
-	logger.Info("installing package")
+	logger.InfoContext(ctx, "installing package")
 
 	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)
 	cmd := t.execRun(ctx, "go", "install", "-a", pkgVersion)
 
 	if err := cmd.Run(); err != nil {
-		logger.Error("error installing binary", "err", err)
+		logger.ErrorContext(ctx, "error installing binary", "err", err)
 		return err
 	}
 
@@ -303,7 +303,7 @@ func (t *GoToolchain) VulnCheck(
 	path string,
 ) ([]Vulnerability, error) {
 	logger := slog.Default().With("path", path)
-	logger.Info("running govulncheck")
+	logger.InfoContext(ctx, "running govulncheck")
 
 	cmd := t.scanCombinedOutput(ctx, "-mode", "binary", "-format", "openvex", path)
 
@@ -314,7 +314,7 @@ func (t *GoToolchain) VulnCheck(
 			err = fmt.Errorf("%w: %s", err, outputStr)
 		}
 
-		logger.Error("error running govulncheck command", "err", err)
+		logger.ErrorContext(ctx, "error running govulncheck command", "err", err)
 		return nil, err
 	}
 
@@ -329,7 +329,7 @@ func (t *GoToolchain) VulnCheck(
 	}
 
 	if err = json.Unmarshal(output, &res); err != nil {
-		logger.Error("error parsing govulncheck response", "err", err)
+		logger.ErrorContext(ctx, "error parsing govulncheck response", "err", err)
 		return nil, err
 	}
 
