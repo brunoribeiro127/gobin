@@ -8,11 +8,13 @@
 
 **gobin** is a CLI tool that leverages the Go toolchain to list, inspect, upgrade, uninstall and diagnose Go binaries installed in the system.
 
-[![CI](https://img.shields.io/github/actions/workflow/status/brunoribeiro127/gobin/ci.yml?&branch=main)](https://github.com/brunoribeiro127/gobin/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/release/brunoribeiro127/gobin.svg)](https://github.com/brunoribeiro127/gobin/releases/latest)
-[![License](https://img.shields.io/badge/license-MIT%20or%20Apache--2.0-blue.svg)](#license)
-[![Go Reference](https://pkg.go.dev/badge/github.com/brunoribeiro127/gobin.svg)](https://pkg.go.dev/github.com/brunoribeiro127/gobin)
-[![Go Report Card](https://goreportcard.com/badge/github.com/brunoribeiro127/gobin)](https://goreportcard.com/report/github.com/brunoribeiro127/gobin)
+[![ci](https://img.shields.io/github/actions/workflow/status/brunoribeiro127/gobin/ci.yml?&branch=main)](https://github.com/brunoribeiro127/gobin/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/brunoribeiro127/gobin.svg)](https://github.com/brunoribeiro127/gobin/releases/latest)
+[![license](https://img.shields.io/badge/license-MIT%20or%20Apache--2.0-blue.svg)](#license)
+[![go version](https://img.shields.io/github/go-mod/go-version/brunoribeiro127/gobin)](./go.mod)
+[![go reference](https://pkg.go.dev/badge/github.com/brunoribeiro127/gobin.svg)](https://pkg.go.dev/github.com/brunoribeiro127/gobin)
+[![codecov](https://codecov.io/github/brunoribeiro127/gobin/graph/badge.svg?token=KPQGGWGGCC)](https://codecov.io/github/brunoribeiro127/gobin)
+[![go report card](https://goreportcard.com/badge/github.com/brunoribeiro127/gobin)](https://goreportcard.com/report/github.com/brunoribeiro127/gobin)
 
 ## Features
 
