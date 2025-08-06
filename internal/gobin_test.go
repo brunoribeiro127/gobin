@@ -90,7 +90,7 @@ type mockUpgradeBinaryCall struct {
 	err error
 }
 
-func TestDiagnoseBinaries(t *testing.T) {
+func TestGobin_DiagnoseBinaries(t *testing.T) {
 	mockproj1Diagnostic := internal.BinaryDiagnostic{
 		Name:      "mockproj1",
 		NotInPath: true,
@@ -373,7 +373,7 @@ func TestDiagnoseBinaries(t *testing.T) {
 	}
 }
 
-func TestListInstalledBinaries(t *testing.T) {
+func TestGobin_ListInstalledBinaries(t *testing.T) {
 	cases := map[string]struct {
 		stdOut                   io.ReadWriter
 		mockGetAllBinaryInfos    []internal.BinaryInfo
@@ -422,7 +422,7 @@ mockproj3 → example.com/mockorg/mockproj3/v2 @ v2.1.0
 	}
 }
 
-func TestListOutdatedBinaries(t *testing.T) {
+func TestGobin_ListOutdatedBinaries(t *testing.T) {
 	cases := map[string]struct {
 		stdOut                        io.ReadWriter
 		checkMajor                    bool
@@ -758,7 +758,7 @@ mockproj2 → example.com/mockorg/mockproj2 @ ` + "\033[31m" + `v1.1.0 ` + "\033
 	}
 }
 
-func TestPrintBinaryInfo(t *testing.T) {
+func TestGobin_PrintBinaryInfo(t *testing.T) {
 	cases := map[string]struct {
 		stdOut                io.ReadWriter
 		binary                string
@@ -880,7 +880,7 @@ Env Vars      CGO_ENABLED=1
 	}
 }
 
-func TestPrintShortVersion(t *testing.T) {
+func TestGobin_PrintShortVersion(t *testing.T) {
 	cases := map[string]struct {
 		binary               string
 		mockGetBinaryInfo    internal.BinaryInfo
@@ -920,7 +920,7 @@ func TestPrintShortVersion(t *testing.T) {
 	}
 }
 
-func TestPrintVersion(t *testing.T) {
+func TestGobin_PrintVersion(t *testing.T) {
 	cases := map[string]struct {
 		binary               string
 		mockGetBinaryInfo    internal.BinaryInfo
@@ -963,7 +963,7 @@ func TestPrintVersion(t *testing.T) {
 	}
 }
 
-func TestShowBinaryRepository(t *testing.T) {
+func TestGobin_ShowBinaryRepository(t *testing.T) {
 	cases := map[string]struct {
 		binary                     string
 		open                       bool
@@ -1086,7 +1086,7 @@ func TestShowBinaryRepository(t *testing.T) {
 	}
 }
 
-func TestUninstallBinary(t *testing.T) {
+func TestGobin_UninstallBinary(t *testing.T) {
 	cases := map[string]struct {
 		binary                string
 		mockGetBinFullPath    string
@@ -1149,7 +1149,7 @@ func TestUninstallBinary(t *testing.T) {
 	}
 }
 
-func TestUpgradeBinaries(t *testing.T) {
+func TestGobin_UpgradeBinaries(t *testing.T) {
 	cases := map[string]struct {
 		majorUpgrade                 bool
 		rebuild                      bool

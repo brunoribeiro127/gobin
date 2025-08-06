@@ -47,10 +47,10 @@ func main() {
 // configures the command-line interface, and runs the requested command. It
 // propagates the context to ensure a graceful shutdown.
 func run(ctx context.Context) int {
+	execCombinedOutput := internal.NewExecCombinedOutput
 	system := internal.NewSystem()
-
 	toolchain := internal.NewGoToolchain(
-		internal.NewExecCombinedOutput,
+		execCombinedOutput,
 		internal.NewExecRun,
 		internal.NewScanExecCombinedOutput,
 		system,
@@ -58,7 +58,7 @@ func run(ctx context.Context) int {
 
 	gobin := internal.NewGobin(
 		internal.NewGoBinaryManager(system, toolchain),
-		internal.NewExecCombinedOutput,
+		execCombinedOutput,
 		os.Stderr,
 		os.Stdout,
 		system,
