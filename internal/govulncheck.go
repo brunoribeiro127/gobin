@@ -8,13 +8,20 @@ import (
 	"golang.org/x/vuln/scan"
 )
 
+// ScanExecCombinedOutputFunc is a function that creates a new ExecCombinedOutput
+// that runs the govulncheck command.
 type ScanExecCombinedOutputFunc func(ctx context.Context, args ...string) ExecCombinedOutput
 
+// scanExecCombinedOutput is the default implementation of ExecCombinedOutput
+// that runs the govulncheck command.
 type scanExecCombinedOutput struct {
 	cmd    *scan.Cmd
 	output *bytes.Buffer
 }
 
+// NewScanExecCombinedOutput creates a new ExecCombinedOutput. It uses the scan
+// package to run the govulncheck command, injecting the environment variables
+// from the current process.
 func NewScanExecCombinedOutput(
 	ctx context.Context,
 	args ...string,
@@ -31,6 +38,9 @@ func NewScanExecCombinedOutput(
 	}
 }
 
+// CombinedOutput runs the govulncheck command and returns the combined output.
+// It starts the command and waits for it to complete, returning the combined
+// output of the command.
 func (s *scanExecCombinedOutput) CombinedOutput() ([]byte, error) {
 	if err := s.cmd.Start(); err != nil {
 		return s.output.Bytes(), err
