@@ -140,13 +140,17 @@ func TestDiagnoseBinary(t *testing.T) {
 			},
 			expectedHasIssues: true,
 		},
-		"success-orphaned-and-built-without-go-modules": {
-			path:                  "/home/user/go/bin/mockproj",
-			mockGetBuildInfo:      &buildinfo.BuildInfo{},
-			callRuntimeOSTimes:    2,
-			mockRuntimeOS:         "darwin",
+		"success-orphaned": {
+			path: "/home/user/go/bin/mockproj",
+			mockGetBuildInfo: func() *buildinfo.BuildInfo {
+				info := getBuildInfo("mockproj", "v0.0.0-20250714171936-2fc2d3f24795")
+				info.Main.Sum = ""
+				return info
+			}(),
+			callRuntimeOSTimes:    3,
+			mockRuntimeOS:         "linux",
 			callRuntimeARCH:       true,
-			mockRuntimeARCH:       "arm64",
+			mockRuntimeARCH:       "amd64",
 			callGetEnvVar:         true,
 			mockGetEnvVarValue:    "/home/user/go/bin:/usr/local/bin",
 			callPathListSeparator: true,
@@ -158,13 +162,52 @@ func TestDiagnoseBinary(t *testing.T) {
 				},
 				{
 					path: "/usr/local/bin/mockproj",
-					err:  os.ErrNotExist,
+					info: NewMockFileInfo("mockproj", os.FileMode(0755), false),
 				},
 			},
 			callRuntimeVersion: true,
-			mockRuntimeVersion: "go1.24.5",
+			mockRuntimeVersion: "go1.23.11",
 			callLookPath:       true,
+			mockLookPathErr:    os.ErrNotExist,
 			callVulnCheck:      true,
+			mockVulnCheckVulns: []internal.Vulnerability{
+				{ID: "GO-2025-3770", URL: "https://pkg.go.dev/vuln/GO-2025-3770"},
+			},
+			expectedDiagnostic: internal.BinaryDiagnostic{
+				Name:      "mockproj",
+				NotInPath: true,
+				DuplicatesInPath: []string{
+					"/home/user/go/bin/mockproj",
+					"/usr/local/bin/mockproj",
+				},
+				GoVersion: struct {
+					Actual   string
+					Expected string
+				}{
+					Actual:   "go1.24.5",
+					Expected: "go1.23.11",
+				},
+				Platform: struct {
+					Actual   string
+					Expected string
+				}{
+					Actual:   "darwin/arm64",
+					Expected: "linux/amd64",
+				},
+				IsPseudoVersion:       true,
+				NotBuiltWithGoModules: false,
+				IsOrphaned:            true,
+				Retracted:             "",
+				Deprecated:            "",
+				Vulnerabilities: []internal.Vulnerability{
+					{ID: "GO-2025-3770", URL: "https://pkg.go.dev/vuln/GO-2025-3770"},
+				},
+			},
+			expectedHasIssues: true,
+		},
+		"success-built-without-go-modules": {
+			path:                "/home/user/go/bin/mockproj",
+			mockGetBuildInfoErr: internal.ErrBinaryBuiltWithoutGoModules,
 			expectedDiagnostic: internal.BinaryDiagnostic{
 				Name:             "mockproj",
 				NotInPath:        false,
@@ -174,18 +217,18 @@ func TestDiagnoseBinary(t *testing.T) {
 					Expected string
 				}{
 					Actual:   "",
-					Expected: "go1.24.5",
+					Expected: "",
 				},
 				Platform: struct {
 					Actual   string
 					Expected string
 				}{
 					Actual:   "",
-					Expected: "darwin/arm64",
+					Expected: "",
 				},
 				IsPseudoVersion:       false,
 				NotBuiltWithGoModules: true,
-				IsOrphaned:            true,
+				IsOrphaned:            false,
 				Retracted:             "",
 				Deprecated:            "",
 				Vulnerabilities:       nil,

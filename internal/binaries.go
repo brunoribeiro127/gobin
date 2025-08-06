@@ -97,8 +97,17 @@ func (m *GoBinaryManager) DiagnoseBinary(path string) (BinaryDiagnostic, error) 
 	binaryName := filepath.Base(path)
 	logger := slog.Default().With("binary", binaryName, "path", path)
 
+	diagnostic := BinaryDiagnostic{
+		Name: binaryName,
+	}
+
 	buildInfo, err := m.toolchain.GetBuildInfo(path)
-	if err != nil && !errors.Is(err, ErrBinaryBuiltWithoutGoModules) {
+	if err != nil {
+		if errors.Is(err, ErrBinaryBuiltWithoutGoModules) {
+			diagnostic.NotBuiltWithGoModules = true
+			return diagnostic, nil
+		}
+
 		logger.Error("error reading binary build info", "err", err)
 		return BinaryDiagnostic{}, err
 	}
@@ -106,14 +115,9 @@ func (m *GoBinaryManager) DiagnoseBinary(path string) (BinaryDiagnostic, error) 
 	binPlatform := getBinaryPlatform(buildInfo)
 	runtimePlatform := m.system.RuntimeOS() + "/" + m.system.RuntimeARCH()
 
-	diagnostic := BinaryDiagnostic{
-		Name:                  binaryName,
-		DuplicatesInPath:      m.checkBinaryDuplicatesInPath(binaryName),
-		IsPseudoVersion:       module.IsPseudoVersion(buildInfo.Main.Version),
-		NotBuiltWithGoModules: buildInfo.Main.Path == "",
-		IsOrphaned:            buildInfo.Main.Sum == "",
-	}
-
+	diagnostic.DuplicatesInPath = m.checkBinaryDuplicatesInPath(binaryName)
+	diagnostic.IsPseudoVersion = module.IsPseudoVersion(buildInfo.Main.Version)
+	diagnostic.IsOrphaned = buildInfo.Main.Sum == ""
 	diagnostic.GoVersion.Actual = buildInfo.GoVersion
 	diagnostic.GoVersion.Expected = m.system.RuntimeVersion()
 	diagnostic.Platform.Actual = binPlatform
@@ -439,10 +443,6 @@ func getBinaryPlatform(info *buildinfo.BuildInfo) string {
 		case GOARCHEnvVar:
 			goArch = s.Value
 		}
-	}
-
-	if goOS == "" || goArch == "" {
-		return ""
 	}
 
 	return goOS + "/" + goArch

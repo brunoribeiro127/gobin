@@ -122,7 +122,38 @@ func TestDiagnoseBinaries(t *testing.T) {
 	}
 
 	mockproj2Diagnostic := internal.BinaryDiagnostic{
-		Name:             "mockproj",
+		Name:      "mockproj2",
+		NotInPath: true,
+		DuplicatesInPath: []string{
+			"/home/user/go/bin/mockproj2",
+			"/usr/local/bin/mockproj2",
+		},
+		GoVersion: struct {
+			Actual   string
+			Expected string
+		}{
+			Actual:   "go1.24.5",
+			Expected: "go1.23.11",
+		},
+		Platform: struct {
+			Actual   string
+			Expected string
+		}{
+			Actual:   "darwin/arm64",
+			Expected: "linux/amd64",
+		},
+		IsPseudoVersion:       true,
+		NotBuiltWithGoModules: false,
+		IsOrphaned:            true,
+		Retracted:             "",
+		Deprecated:            "",
+		Vulnerabilities: []internal.Vulnerability{
+			{ID: "GO-2025-3770", URL: "https://pkg.go.dev/vuln/GO-2025-3770"},
+		},
+	}
+
+	mockproj3Diagnostic := internal.BinaryDiagnostic{
+		Name:             "mockproj3",
 		NotInPath:        false,
 		DuplicatesInPath: nil,
 		GoVersion: struct {
@@ -130,18 +161,18 @@ func TestDiagnoseBinaries(t *testing.T) {
 			Expected string
 		}{
 			Actual:   "",
-			Expected: "go1.24.5",
+			Expected: "",
 		},
 		Platform: struct {
 			Actual   string
 			Expected string
 		}{
 			Actual:   "",
-			Expected: "darwin/arm64",
+			Expected: "",
 		},
 		IsPseudoVersion:       false,
 		NotBuiltWithGoModules: true,
-		IsOrphaned:            true,
+		IsOrphaned:            false,
 		Retracted:             "",
 		Deprecated:            "",
 		Vulnerabilities:       nil,
@@ -167,17 +198,14 @@ func TestDiagnoseBinaries(t *testing.T) {
 			mockListBinariesFullPaths: []string{
 				"/home/user/go/bin/mockproj1",
 				"/home/user/go/bin/mockproj2",
+				"/home/user/go/bin/mockproj3",
 			},
 			mockDiagnoseBinaryCalls: []mockDiagnoseBinaryCall{
 				{bin: "/home/user/go/bin/mockproj1", info: mockproj1Diagnostic},
 				{bin: "/home/user/go/bin/mockproj2", info: mockproj2Diagnostic},
+				{bin: "/home/user/go/bin/mockproj3", info: mockproj3Diagnostic},
 			},
-			expectedStdOut: `🛠️  mockproj
-    ❗ go version mismatch: expected go1.24.5, actual 
-    ❗ platform mismatch: expected darwin/arm64, actual 
-    ❗ built without Go modules (GO111MODULE=off)
-    ❗ orphaned: unknown source, likely built locally
-🛠️  mockproj1
+			expectedStdOut: `🛠️  mockproj1
     ❗ not in PATH
     ❗ duplicated in PATH:
         • /home/user/go/bin/mockproj1
@@ -189,8 +217,21 @@ func TestDiagnoseBinaries(t *testing.T) {
     ❗ deprecated module: mock deprecated
     ❗ found 1 vulnerability:
         • GO-2025-3770 (https://pkg.go.dev/vuln/GO-2025-3770)
+🛠️  mockproj2
+    ❗ not in PATH
+    ❗ duplicated in PATH:
+        • /home/user/go/bin/mockproj2
+        • /usr/local/bin/mockproj2
+    ❗ go version mismatch: expected go1.23.11, actual go1.24.5
+    ❗ platform mismatch: expected linux/amd64, actual darwin/arm64
+    ❗ pseudo-version
+    ❗ orphaned: unknown source, likely built locally
+    ❗ found 1 vulnerability:
+        • GO-2025-3770 (https://pkg.go.dev/vuln/GO-2025-3770)
+🛠️  mockproj3
+    ❗ built without Go modules (GO111MODULE=off)
 
-2 binaries checked, 2 with issues
+3 binaries checked, 3 with issues
 `,
 		},
 		"success-with-parallelism": {
@@ -201,17 +242,14 @@ func TestDiagnoseBinaries(t *testing.T) {
 			mockListBinariesFullPaths: []string{
 				"/home/user/go/bin/mockproj1",
 				"/home/user/go/bin/mockproj2",
+				"/home/user/go/bin/mockproj3",
 			},
 			mockDiagnoseBinaryCalls: []mockDiagnoseBinaryCall{
 				{bin: "/home/user/go/bin/mockproj1", info: mockproj1Diagnostic},
 				{bin: "/home/user/go/bin/mockproj2", info: mockproj2Diagnostic},
+				{bin: "/home/user/go/bin/mockproj3", info: mockproj3Diagnostic},
 			},
-			expectedStdOut: `🛠️  mockproj
-    ❗ go version mismatch: expected go1.24.5, actual 
-    ❗ platform mismatch: expected darwin/arm64, actual 
-    ❗ built without Go modules (GO111MODULE=off)
-    ❗ orphaned: unknown source, likely built locally
-🛠️  mockproj1
+			expectedStdOut: `🛠️  mockproj1
     ❗ not in PATH
     ❗ duplicated in PATH:
         • /home/user/go/bin/mockproj1
@@ -223,8 +261,21 @@ func TestDiagnoseBinaries(t *testing.T) {
     ❗ deprecated module: mock deprecated
     ❗ found 1 vulnerability:
         • GO-2025-3770 (https://pkg.go.dev/vuln/GO-2025-3770)
+🛠️  mockproj2
+    ❗ not in PATH
+    ❗ duplicated in PATH:
+        • /home/user/go/bin/mockproj2
+        • /usr/local/bin/mockproj2
+    ❗ go version mismatch: expected go1.23.11, actual go1.24.5
+    ❗ platform mismatch: expected linux/amd64, actual darwin/arm64
+    ❗ pseudo-version
+    ❗ orphaned: unknown source, likely built locally
+    ❗ found 1 vulnerability:
+        • GO-2025-3770 (https://pkg.go.dev/vuln/GO-2025-3770)
+🛠️  mockproj3
+    ❗ built without Go modules (GO111MODULE=off)
 
-2 binaries checked, 2 with issues
+3 binaries checked, 3 with issues
 `,
 		},
 		"partial-success-error-diagnose-binary": {
@@ -235,10 +286,12 @@ func TestDiagnoseBinaries(t *testing.T) {
 			mockListBinariesFullPaths: []string{
 				"/home/user/go/bin/mockproj1",
 				"/home/user/go/bin/mockproj2",
+				"/home/user/go/bin/mockproj3",
 			},
 			mockDiagnoseBinaryCalls: []mockDiagnoseBinaryCall{
 				{bin: "/home/user/go/bin/mockproj1", info: mockproj1Diagnostic},
 				{bin: "/home/user/go/bin/mockproj2", err: errors.New("unexpected error")},
+				{bin: "/home/user/go/bin/mockproj3", info: mockproj3Diagnostic},
 			},
 			expectedErr: errors.New("unexpected error"),
 			expectedStdOut: `🛠️  mockproj1
@@ -253,8 +306,10 @@ func TestDiagnoseBinaries(t *testing.T) {
     ❗ deprecated module: mock deprecated
     ❗ found 1 vulnerability:
         • GO-2025-3770 (https://pkg.go.dev/vuln/GO-2025-3770)
+🛠️  mockproj3
+    ❗ built without Go modules (GO111MODULE=off)
 
-1 binaries checked, 1 with issues
+2 binaries checked, 2 with issues
 `,
 		},
 		"error-get-bin-full-path": {
