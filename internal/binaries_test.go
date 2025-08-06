@@ -675,6 +675,15 @@ func TestGetBinaryRepository(t *testing.T) {
 			mockGetModuleOriginErr: internal.ErrModuleOriginNotAvailable,
 			expectedRepository:     "https://example.com/mockorg/mockproj",
 		},
+		"success-module-not-found": {
+			binary:                 "mockproj",
+			mockUserHomeDir:        "/home/user",
+			callGetBuildInfo:       true,
+			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
+			callGetModuleOrigin:    true,
+			mockGetModuleOriginErr: internal.ErrModuleNotFound,
+			expectedRepository:     "https://example.com/mockorg/mockproj",
+		},
 		"error-get-bin-full-path": {
 			binary:             "mockproj",
 			mockUserHomeDirErr: errors.New("unexpected error"),
@@ -693,8 +702,8 @@ func TestGetBinaryRepository(t *testing.T) {
 			callGetBuildInfo:       true,
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
 			callGetModuleOrigin:    true,
-			mockGetModuleOriginErr: internal.ErrModuleNotFound,
-			expectedError:          internal.ErrModuleNotFound,
+			mockGetModuleOriginErr: errors.New("unexpected error"),
+			expectedError:          errors.New("unexpected error"),
 		},
 	}
 
