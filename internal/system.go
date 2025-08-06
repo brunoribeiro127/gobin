@@ -9,16 +9,27 @@ import (
 
 // System is an interface that provides methods to interact with the system.
 type System interface {
+	// GetEnvVar returns the value of an environment variable.
 	GetEnvVar(key string) (string, bool)
+	// LookPath returns the path to an executable file in the PATH environment variable.
 	LookPath(file string) (string, error)
+	// PathListSeparator returns the OS-specific path list separator.
 	PathListSeparator() rune
+	// ReadBuildInfo reads build information from a Go binary file.
 	ReadBuildInfo(path string) (*buildinfo.BuildInfo, error)
+	// ReadDir reads the directory named by dirname and returns a list of directory entries.
 	ReadDir(dirname string) ([]os.DirEntry, error)
+	// Remove removes the named file or (empty) directory.
 	Remove(name string) error
+	// RuntimeARCH returns the architecture of the current runtime.
 	RuntimeARCH() string
+	// RuntimeOS returns the operating system of the current runtime.
 	RuntimeOS() string
+	// RuntimeVersion returns the version of the Go runtime.
 	RuntimeVersion() string
+	// Stat returns the FileInfo structure describing file.
 	Stat(name string) (os.FileInfo, error)
+	// UserHomeDir returns the current user's home directory.
 	UserHomeDir() (string, error)
 }
 

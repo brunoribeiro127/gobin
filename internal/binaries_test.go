@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/mod/modfile"
@@ -16,6 +17,72 @@ import (
 	"github.com/brunoribeiro127/gobin/internal"
 	"github.com/brunoribeiro127/gobin/internal/mocks"
 )
+
+type mockDirEntry struct {
+	name string
+}
+
+func NewMockDirEntry(name string) *mockDirEntry {
+	return &mockDirEntry{name: name}
+}
+
+func (m *mockDirEntry) Name() string {
+	return m.name
+}
+
+func (m *mockDirEntry) IsDir() bool {
+	return false
+}
+
+func (m *mockDirEntry) Type() os.FileMode {
+	return os.ModeIrregular
+}
+
+func (m *mockDirEntry) Info() (os.FileInfo, error) {
+	return nil, os.ErrNotExist
+}
+
+type mockFileInfo struct {
+	name  string
+	mode  os.FileMode
+	isDir bool
+}
+
+func NewMockFileInfo(
+	name string,
+	mode os.FileMode,
+	isDir bool,
+) *mockFileInfo {
+	return &mockFileInfo{
+		name:  name,
+		mode:  mode,
+		isDir: isDir,
+	}
+}
+
+func (m *mockFileInfo) Name() string {
+	return m.name
+}
+
+func (m *mockFileInfo) Size() int64 {
+	return 0
+}
+
+func (m *mockFileInfo) Mode() os.FileMode {
+	return m.mode
+}
+
+func (m *mockFileInfo) ModTime() time.Time {
+	return time.Time{}
+}
+
+func (m *mockFileInfo) IsDir() bool {
+	return m.isDir
+}
+
+func (m *mockFileInfo) Sys() any {
+	return nil
+}
 
 type mockGetBuildInfoCall struct {
 	path string
@@ -37,7 +104,7 @@ type mockStatInfoCall struct {
 }
 
 //nolint:gocognit
-func TestDiagnoseBinary(t *testing.T) {
+func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 	cases := map[string]struct {
 		path                  string
 		mockGetBuildInfo      *buildinfo.BuildInfo
@@ -447,7 +514,7 @@ func TestDiagnoseBinary(t *testing.T) {
 	}
 }
 
-func TestGetAllBinaryInfos(t *testing.T) {
+func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 	cases := map[string]struct {
 		mockUserHomeDir       string
 		mockUserHomeDirErr    error
@@ -594,7 +661,7 @@ func TestGetAllBinaryInfos(t *testing.T) {
 	}
 }
 
-func TestGetBinaryInfo(t *testing.T) {
+func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 	cases := map[string]struct {
 		path                string
 		mockGetBuildInfo    *buildinfo.BuildInfo
@@ -687,7 +754,7 @@ func TestGetBinaryInfo(t *testing.T) {
 	}
 }
 
-func TestGetBinaryRepository(t *testing.T) {
+func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 	cases := map[string]struct {
 		binary                 string
 		mockUserHomeDir        string
@@ -794,7 +861,7 @@ func TestGetBinaryRepository(t *testing.T) {
 	}
 }
 
-func TestGetBinaryUpgradeInfo(t *testing.T) {
+func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 	cases := map[string]struct {
 		info                            internal.BinaryInfo
 		checkMajor                      bool
@@ -984,7 +1051,7 @@ func TestGetBinaryUpgradeInfo(t *testing.T) {
 	}
 }
 
-func TestGetBinFullPath(t *testing.T) {
+func TestGoBinaryManager_GetBinFullPath(t *testing.T) {
 	cases := map[string]struct {
 		mockGOBINEnvVar    string
 		mockGOBINEnvVarOk  bool
@@ -1049,7 +1116,7 @@ func TestGetBinFullPath(t *testing.T) {
 	}
 }
 
-func TestListBinariesFullPaths(t *testing.T) {
+func TestGoBinaryManager_ListBinariesFullPaths(t *testing.T) {
 	cases := map[string]struct {
 		dir                string
 		mockReadDirEntries []os.DirEntry
@@ -1154,7 +1221,7 @@ func TestListBinariesFullPaths(t *testing.T) {
 	}
 }
 
-func TestUpgradeBinary(t *testing.T) {
+func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 	cases := map[string]struct {
 		binFullPath                     string
 		majorUpgrade                    bool

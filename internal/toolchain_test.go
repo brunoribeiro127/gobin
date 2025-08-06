@@ -19,7 +19,7 @@ import (
 	"github.com/brunoribeiro127/gobin/internal/mocks"
 )
 
-func TestGetBuildInfo(t *testing.T) {
+func TestGoToolchain_GetBuildInfo(t *testing.T) {
 	cases := map[string]struct {
 		path              string
 		mockReadFile      *buildinfo.BuildInfo
@@ -73,7 +73,7 @@ func TestGetBuildInfo(t *testing.T) {
 	}
 }
 
-func TestGetLatestModuleVersion(t *testing.T) {
+func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 	makeExecCmdOutput := func(t *testing.T, modFile string) []byte {
 		wd, err := os.Getwd()
 		require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestGetLatestModuleVersion(t *testing.T) {
 	}
 }
 
-func TestGetModuleFile(t *testing.T) {
+func TestGoToolchain_GetModuleFile(t *testing.T) {
 	makeExecCmdOutput := func(t *testing.T, modFile string) []byte {
 		wd, err := os.Getwd()
 		require.NoError(t, err)
@@ -285,7 +285,7 @@ func TestGetModuleFile(t *testing.T) {
 	}
 }
 
-func TestGetModuleOrigin(t *testing.T) {
+func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 	cases := map[string]struct {
 		module            string
 		version           string
@@ -308,7 +308,10 @@ func TestGetModuleOrigin(t *testing.T) {
 				VCS:  "git",
 				URL:  "https://github.com/mockorg/mockproj",
 				Hash: "1234567890",
-				Ref:  ptr("refs/heads/v0.1.0"),
+				Ref: func() *string {
+					v := "refs/heads/v0.1.0"
+					return &v
+				}(),
 			},
 		},
 		"error-module-not-found": {
@@ -366,7 +369,7 @@ func TestGetModuleOrigin(t *testing.T) {
 	}
 }
 
-func TestInstall(t *testing.T) {
+func TestGoToolchain_Install(t *testing.T) {
 	cases := map[string]struct {
 		pkg            string
 		version        string
@@ -407,7 +410,7 @@ func TestInstall(t *testing.T) {
 	}
 }
 
-func TestVulnCheck(t *testing.T) {
+func TestGoToolchain_VulnCheck(t *testing.T) {
 	cases := map[string]struct {
 		path              string
 		mockExecCmdOutput []byte
@@ -479,8 +482,4 @@ func TestVulnCheck(t *testing.T) {
 			}
 		})
 	}
-}
-
-func ptr(v string) *string {
-	return &v
 }
