@@ -21,6 +21,9 @@ var (
 	// ErrBinaryNotFound indicates the binary was not found.
 	ErrBinaryNotFound = errors.New("binary not found")
 
+	// ErrGoModFileNotAvailable indicates the go mod file is not available.
+	ErrGoModFileNotAvailable = errors.New("go mod file not available")
+
 	// ErrModuleNotFound indicates the module was not found.
 	ErrModuleNotFound = errors.New("module not found")
 
@@ -87,7 +90,7 @@ func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
 
 	if info.Main.Path == "" {
 		err = ErrBinaryBuiltWithoutGoModules
-		logger.Error("binary built without go modules", "err", err)
+		logger.Warn(err.Error())
 		return nil, err
 	}
 
@@ -126,8 +129,8 @@ func (t *GoToolchain) GetLatestModuleVersion(
 	}
 
 	var res struct {
-		GoMod   string `json:"GoMod"`
-		Version string `json:"Version"`
+		GoMod   *string `json:"GoMod"`
+		Version string  `json:"Version"`
 	}
 
 	if err = json.Unmarshal(output, &res); err != nil {
@@ -135,9 +138,15 @@ func (t *GoToolchain) GetLatestModuleVersion(
 		return "", "", err
 	}
 
-	logger = logger.With("go_mod_file", res.GoMod, "go_mod_version", res.Version)
+	if res.GoMod == nil {
+		err = ErrGoModFileNotAvailable
+		logger.Warn(err.Error())
+		return "", "", err
+	}
 
-	bytes, err := os.ReadFile(res.GoMod)
+	logger = logger.With("go_mod_file", *res.GoMod, "go_mod_version", res.Version)
+
+	bytes, err := os.ReadFile(*res.GoMod)
 	if err != nil {
 		logger.Error("error reading go mod file", "err", err)
 		return "", "", err
@@ -151,7 +160,7 @@ func (t *GoToolchain) GetLatestModuleVersion(
 
 	if modFile.Module == nil {
 		err = ErrModuleInfoNotAvailable
-		logger.Error("module info not available in go mod file", "err", err)
+		logger.Warn(err.Error())
 		return "", "", err
 	}
 
@@ -256,7 +265,7 @@ func (t *GoToolchain) GetModuleOrigin(
 
 	if res.Origin == nil {
 		err = ErrModuleOriginNotAvailable
-		logger.Error("module origin not available", "err", err)
+		logger.Warn(err.Error())
 		return nil, err
 	}
 
