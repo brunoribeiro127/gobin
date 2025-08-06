@@ -11,9 +11,7 @@ vars:
 
 tasks:
   build:
-    cmds:
-      - |
-        CGO_ENABLED=0 go build -v -trimpath -ldflags="-s -w" -o ./bin/gobin github.com/brunoribeiro127/gobin/cmd/gobin
+    cmd: CGO_ENABLED=0 go build -v -trimpath -ldflags="-s -w" -o ./bin/gobin github.com/brunoribeiro127/gobin/cmd/gobin
 
   check:
     deps:
@@ -25,13 +23,10 @@ tasks:
       - vulncheck
 
   clean:
-    cmds:
-      - |
-        rm -rf ./bin ./coverage ./dist
+    cmd: rm -rf ./bin ./coverage ./dist
 
   coverage:
-    cmds:
-      - |
+    cmd: |
         if command -v open >/dev/null; then
           open coverage/coverage.html
         else
@@ -39,41 +34,39 @@ tasks:
         fi
 
   fmt:
-    cmds:
-      - |
-        go fmt ./...
+    cmd: go fmt ./...
 
   install:
+    cmd: CGO_ENABLED=0 go install -trimpath -ldflags="-s -w" github.com/brunoribeiro127/gobin/cmd/gobin
+
+  install-dev-tools:
     cmds:
-      - |
-        CGO_ENABLED=0 go install -trimpath -ldflags="-s -w" -v -x github.com/brunoribeiro127/gobin/cmd/gobin
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.3.1
+      - go install github.com/vektra/mockery/v3@v3.5.2
+      - go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
   lint:
-    cmds:
-      - |
-        golangci-lint run
+    cmd: golangci-lint run
+
+  mockery:
+    cmd: mockery
+
+  run:
+    cmd: go run cmd/gobin/main.go {{.CLI_ARGS}}
 
   test:
     cmds:
-      - |
-        mkdir -p coverage
-        go clean -testcache
-        go test -failfast -coverprofile=coverage/coverage.txt -covermode count {{ catLines .INTERNAL_PACKAGES }}
-        go tool cover -func coverage/coverage.txt
-        go tool cover -html coverage/coverage.txt -o coverage/coverage.html
-        gocover-cobertura < coverage/coverage.txt > coverage/coverage.xml
+      - mkdir -p coverage
+      - go clean -testcache
+      - go test -coverprofile=coverage/coverage.txt -covermode count {{ catLines .INTERNAL_PACKAGES }}
+      - go tool cover -func coverage/coverage.txt
+      - go tool cover -html coverage/coverage.txt -o coverage/coverage.html
 
   tidy:
-    cmds:
-      - |
-        go mod tidy
+    cmd: go mod tidy
 
   vet:
-    cmds:
-      - |
-        go vet {{catLines .PACKAGES }}
+    cmd: go vet {{catLines .PACKAGES }}
 
   vulncheck:
-    cmds:
-      - |
-        govulncheck ./...
+    cmd: govulncheck ./...
