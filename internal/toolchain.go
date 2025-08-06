@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"debug/buildinfo"
 	"encoding/json"
 	"errors"
@@ -44,7 +45,7 @@ func NewGoToolchain(
 	execRun ExecRunFunc,
 	scanCombinedOutput ScanExecCombinedOutputFunc,
 	system System,
-) Toolchain {
+) *GoToolchain {
 	return &GoToolchain{
 		execCombinedOutput: execCombinedOutput,
 		execRun:            execRun,
@@ -74,21 +75,26 @@ func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
 	return info, nil
 }
 
-func (t *GoToolchain) GetLatestModuleVersion(module string) (string, string, error) {
+func (t *GoToolchain) GetLatestModuleVersion(
+	ctx context.Context,
+	module string,
+) (string, string, error) {
 	logger := slog.Default().With("module", module)
 
 	modLatest := fmt.Sprintf("%s@latest", module)
-	cmd := t.execCombinedOutput("go", "list", "-m", "-json", modLatest)
+	cmd := t.execCombinedOutput(ctx, "go", "list", "-m", "-json", modLatest)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		outputStr := strings.TrimSpace(string(output))
+		if outputStr != "" {
+			err = fmt.Errorf("%w: %s", err, outputStr)
+		}
 
-		if isModuleNotFound(outputStr) {
+		if isModuleNotFound(err.Error()) {
 			return "", "", ErrModuleNotFound
 		}
 
-		err = errors.New(outputStr)
 		logger.Error("error getting latest version for module", "err", err)
 		return "", "", err
 	}
@@ -126,11 +132,14 @@ func (t *GoToolchain) GetLatestModuleVersion(module string) (string, string, err
 	return modFile.Module.Mod.Path, res.Version, nil
 }
 
-func (t *GoToolchain) GetModuleFile(module, version string) (*modfile.File, error) {
+func (t *GoToolchain) GetModuleFile(
+	ctx context.Context,
+	module, version string,
+) (*modfile.File, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
-	cmd := t.execCombinedOutput("go", "mod", "download", "-json", modVersion)
+	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", modVersion)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -138,12 +147,10 @@ func (t *GoToolchain) GetModuleFile(module, version string) (*modfile.File, erro
 			Error string `json:"Error"`
 		}
 
-		if err = json.Unmarshal(output, &res); err != nil {
-			logger.Error("error parsing module download response", "err", err)
-			return nil, err
+		if jsonErr := json.Unmarshal(output, &res); jsonErr == nil {
+			err = errors.New(res.Error)
 		}
 
-		err = errors.New(res.Error)
 		logger.Error("error downloading module", "err", err)
 		return nil, err
 	}
@@ -174,11 +181,14 @@ func (t *GoToolchain) GetModuleFile(module, version string) (*modfile.File, erro
 	return modFile, nil
 }
 
-func (t *GoToolchain) GetModuleOrigin(module, version string) (*ModuleOrigin, error) {
+func (t *GoToolchain) GetModuleOrigin(
+	ctx context.Context,
+	module, version string,
+) (*ModuleOrigin, error) {
 	logger := slog.Default().With("module", module, "version", version)
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
-	cmd := t.execCombinedOutput("go", "mod", "download", "-json", modVersion)
+	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", modVersion)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -186,16 +196,14 @@ func (t *GoToolchain) GetModuleOrigin(module, version string) (*ModuleOrigin, er
 			Error string `json:"Error"`
 		}
 
-		if err = json.Unmarshal(output, &res); err != nil {
-			logger.Error("error parsing module download response", "err", err)
-			return nil, err
+		if jsonErr := json.Unmarshal(output, &res); jsonErr == nil {
+			err = errors.New(res.Error)
 		}
 
-		if isModuleNotFound(res.Error) {
+		if isModuleNotFound(err.Error()) {
 			return nil, ErrModuleNotFound
 		}
 
-		err = errors.New(res.Error)
 		logger.Error("error downloading module", "err", err)
 		return nil, err
 	}
@@ -218,11 +226,14 @@ func (t *GoToolchain) GetModuleOrigin(module, version string) (*ModuleOrigin, er
 	return res.Origin, nil
 }
 
-func (t *GoToolchain) Install(pkg, version string) error {
+func (t *GoToolchain) Install(
+	ctx context.Context,
+	pkg, version string,
+) error {
 	logger := slog.Default().With("package", pkg, "version", version)
 
 	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)
-	cmd := t.execRun("go", "install", "-a", pkgVersion)
+	cmd := t.execRun(ctx, "go", "install", "-a", pkgVersion)
 
 	if err := cmd.Run(); err != nil {
 		logger.Error("error installing binary", "err", err)
@@ -232,15 +243,21 @@ func (t *GoToolchain) Install(pkg, version string) error {
 	return nil
 }
 
-func (t *GoToolchain) VulnCheck(path string) ([]Vulnerability, error) {
+func (t *GoToolchain) VulnCheck(
+	ctx context.Context,
+	path string,
+) ([]Vulnerability, error) {
 	logger := slog.Default().With("path", path)
 
-	cmd := t.scanCombinedOutput("-mode", "binary", "-format", "openvex", path)
+	cmd := t.scanCombinedOutput(ctx, "-mode", "binary", "-format", "openvex", path)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		outputStr := strings.TrimSpace(string(output))
-		err = errors.New(outputStr)
+		if outputStr != "" {
+			err = fmt.Errorf("%w: %s", err, outputStr)
+		}
+
 		logger.Error("error running govulncheck command", "err", err)
 		return nil, err
 	}

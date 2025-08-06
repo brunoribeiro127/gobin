@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"context"
 	"debug/buildinfo"
 	"errors"
 	"fmt"
@@ -114,7 +115,7 @@ func TestGetLatestModuleVersion(t *testing.T) {
 				return []byte(`unexpected error	`)
 			}(),
 			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  errors.New("unexpected error"),
+			expectedError:  errors.New("exit status 1: unexpected error"),
 		},
 		"error-parsing-module-latest-version": {
 			module: "example.com/mockorg/mockproj",
@@ -149,14 +150,14 @@ func TestGetLatestModuleVersion(t *testing.T) {
 				Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).
 				Once()
 
-			execCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
+			execCmdFunc := func(_ context.Context, name string, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, "go", name)
 				assert.Equal(t, []string{"list", "-m", "-json", fmt.Sprintf("%s@latest", tc.module)}, args)
 				return execCmd
 			}
 
 			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
-			modulePath, version, err := toolchain.GetLatestModuleVersion(tc.module)
+			modulePath, version, err := toolchain.GetLatestModuleVersion(context.Background(), tc.module)
 			assert.Equal(t, tc.expectedModulePath, modulePath)
 			assert.Equal(t, tc.expectedVersion, version)
 			if tc.expectedError != nil {
@@ -230,14 +231,6 @@ func TestGetModuleFile(t *testing.T) {
 				},
 			},
 		},
-		"error-parsing-module-download-error-response": {
-			module: "example.com/mockorg/mockproj",
-			mockExecCmdOutput: func() []byte {
-				return []byte(``)
-			}(),
-			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  errors.New("unexpected end of JSON input"),
-		},
 		"error-downloading-module": {
 			module: "example.com/mockorg/mockproj",
 			mockExecCmdOutput: func() []byte {
@@ -274,14 +267,14 @@ func TestGetModuleFile(t *testing.T) {
 				Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).
 				Once()
 
-			execCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
+			execCmdFunc := func(_ context.Context, name string, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, "go", name)
 				assert.Equal(t, []string{"mod", "download", "-json", fmt.Sprintf("%s@%s", tc.module, tc.version)}, args)
 				return execCmd
 			}
 
 			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
-			modFile, err := toolchain.GetModuleFile(tc.module, tc.version)
+			modFile, err := toolchain.GetModuleFile(context.Background(), tc.module, tc.version)
 			assert.Equal(t, tc.expectedModFile, modFile)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -317,14 +310,6 @@ func TestGetModuleOrigin(t *testing.T) {
 				Hash: "1234567890",
 				Ref:  ptr("refs/heads/v0.1.0"),
 			},
-		},
-		"error-parsing-module-download-error-response": {
-			module: "example.com/mockorg/mockproj",
-			mockExecCmdOutput: func() []byte {
-				return []byte(``)
-			}(),
-			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  errors.New("unexpected end of JSON input"),
 		},
 		"error-module-not-found": {
 			module: "example.com/mockorg/mockproj",
@@ -363,14 +348,14 @@ func TestGetModuleOrigin(t *testing.T) {
 				Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).
 				Once()
 
-			execCmdFunc := func(name string, args ...string) internal.ExecCombinedOutput {
+			execCmdFunc := func(_ context.Context, name string, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, "go", name)
 				assert.Equal(t, []string{"mod", "download", "-json", fmt.Sprintf("%s@%s", tc.module, tc.version)}, args)
 				return execCmd
 			}
 
 			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
-			modOrigin, err := toolchain.GetModuleOrigin(tc.module, tc.version)
+			modOrigin, err := toolchain.GetModuleOrigin(context.Background(), tc.module, tc.version)
 			assert.Equal(t, tc.expectedModOrigin, modOrigin)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -405,14 +390,14 @@ func TestInstall(t *testing.T) {
 			execRun := mocks.NewExecRun(t)
 			execRun.EXPECT().Run().Return(tc.mockExecCmdErr).Once()
 
-			execRunFunc := func(name string, args ...string) internal.ExecRun {
+			execRunFunc := func(_ context.Context, name string, args ...string) internal.ExecRun {
 				assert.Equal(t, "go", name)
 				assert.Equal(t, []string{"install", "-a", fmt.Sprintf("%s@%s", tc.pkg, tc.version)}, args)
 				return execRun
 			}
 
 			toolchain := internal.NewGoToolchain(nil, execRunFunc, nil, nil)
-			err := toolchain.Install(tc.pkg, tc.version)
+			err := toolchain.Install(context.Background(), tc.pkg, tc.version)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 			} else {
@@ -462,8 +447,8 @@ func TestVulnCheck(t *testing.T) {
 		"error-running-govulncheck-command": {
 			path:              "/home/user/go/bin/mockproj",
 			mockExecCmdOutput: []byte(`unexpected error`),
-			mockExecCmdErr:    errors.New("unexpected error"),
-			expectedError:     errors.New("unexpected error"),
+			mockExecCmdErr:    errors.New("exit status 1"),
+			expectedError:     errors.New("exit status 1: unexpected error"),
 		},
 		"error-parsing-govulncheck-response": {
 			path:              "/home/user/go/bin/mockproj",
@@ -479,13 +464,13 @@ func TestVulnCheck(t *testing.T) {
 				Return(tc.mockExecCmdOutput, tc.mockExecCmdErr).
 				Once()
 
-			execCmdFunc := func(args ...string) internal.ExecCombinedOutput {
+			execCmdFunc := func(_ context.Context, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, []string{"-mode", "binary", "-format", "openvex", tc.path}, args)
 				return execCmd
 			}
 
 			toolchain := internal.NewGoToolchain(nil, nil, execCmdFunc, nil)
-			vulns, err := toolchain.VulnCheck(tc.path)
+			vulns, err := toolchain.VulnCheck(context.Background(), tc.path)
 			assert.Equal(t, tc.expectedVulns, vulns)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())

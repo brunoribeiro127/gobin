@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +16,34 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	resChan := make(chan int, 1)
+	go func() {
+		resChan <- run(ctx)
+	}()
+
+	select {
+	case exitCode := <-resChan:
+		cancel()
+		os.Exit(exitCode)
+	case <-sigChan:
+		cancel()
+
+		select {
+		case exitCode := <-resChan:
+			os.Exit(exitCode)
+		case sig := <-sigChan:
+			signal, _ := sig.(syscall.Signal)
+			os.Exit(128 + int(signal))
+		}
+	}
+}
+
+func run(ctx context.Context) int {
 	system := internal.NewSystem()
 
 	toolchain := internal.NewGoToolchain(
@@ -79,9 +110,11 @@ func main() {
 	cmd.AddCommand(newUpgradeCmd(gobin))
 	cmd.AddCommand(newVersionCmd(gobin))
 
-	if err := cmd.Execute(); err != nil {
-		os.Exit(1)
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		return 1
 	}
+
+	return 0
 }
 
 func newDoctorCmd(gobin *internal.Gobin) *cobra.Command {
@@ -108,7 +141,7 @@ Run this command regularly to make sure everything is ok with your installed bin
 
 			parallelism, _ := cmd.Flags().GetInt("parallelism")
 
-			return gobin.DiagnoseBinaries(parallelism)
+			return gobin.DiagnoseBinaries(cmd.Context(), parallelism)
 		},
 	}
 }
@@ -162,7 +195,7 @@ potentially breaking major version upgrades.`,
 
 			parallelism, _ := cmd.Flags().GetInt("parallelism")
 
-			return gobin.ListOutdatedBinaries(checkMajor, parallelism)
+			return gobin.ListOutdatedBinaries(cmd.Context(), checkMajor, parallelism)
 		},
 	}
 
@@ -196,7 +229,7 @@ falling back to constructing the URL from the module path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.ShowBinaryRepository(args[0], open)
+			return gobin.ShowBinaryRepository(cmd.Context(), args[0], open)
 		},
 	}
 
@@ -258,7 +291,12 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 				return err
 
 			case upgradeAll:
-				return gobin.UpgradeBinaries(majorUpgrade, rebuild, parallelism)
+				return gobin.UpgradeBinaries(
+					cmd.Context(),
+					majorUpgrade,
+					rebuild,
+					parallelism,
+				)
 
 			case len(args) == 0:
 				err := errors.New("no binaries specified (use --all to upgrade all)")
@@ -266,7 +304,13 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 				return err
 
 			default:
-				return gobin.UpgradeBinaries(majorUpgrade, rebuild, parallelism, args...)
+				return gobin.UpgradeBinaries(
+					cmd.Context(),
+					majorUpgrade,
+					rebuild,
+					parallelism,
+					args...,
+				)
 			}
 		},
 	}

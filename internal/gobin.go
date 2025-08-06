@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -94,14 +95,14 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 )
 
 type BinaryManager interface {
-	DiagnoseBinary(path string) (BinaryDiagnostic, error)
+	DiagnoseBinary(ctx context.Context, path string) (BinaryDiagnostic, error)
 	GetAllBinaryInfos() ([]BinaryInfo, error)
 	GetBinaryInfo(path string) (BinaryInfo, error)
-	GetBinaryRepository(binary string) (string, error)
-	GetBinaryUpgradeInfo(info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, error)
+	GetBinaryRepository(ctx context.Context, binary string) (string, error)
+	GetBinaryUpgradeInfo(ctx context.Context, info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, error)
 	GetBinFullPath() (string, error)
 	ListBinariesFullPaths(dir string) ([]string, error)
-	UpgradeBinary(binFullPath string, majorUpgrade bool, rebuild bool) error
+	UpgradeBinary(ctx context.Context, binFullPath string, majorUpgrade bool, rebuild bool) error
 }
 
 type Gobin struct {
@@ -128,7 +129,7 @@ func NewGobin(
 	}
 }
 
-func (g *Gobin) DiagnoseBinaries(parallelism int) error {
+func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
 	binFullPath, err := g.binaryManager.GetBinFullPath()
 	if err != nil {
 		return err
@@ -149,7 +150,7 @@ func (g *Gobin) DiagnoseBinaries(parallelism int) error {
 
 	for _, bin := range bins {
 		grp.Go(func() error {
-			diag, diagErr := g.binaryManager.DiagnoseBinary(bin)
+			diag, diagErr := g.binaryManager.DiagnoseBinary(ctx, bin)
 			if diagErr != nil {
 				return diagErr
 			}
@@ -180,7 +181,11 @@ func (g *Gobin) ListInstalledBinaries() error {
 	return g.printInstalledBinaries(binInfos)
 }
 
-func (g *Gobin) ListOutdatedBinaries(checkMajor bool, parallelism int) error {
+func (g *Gobin) ListOutdatedBinaries(
+	ctx context.Context,
+	checkMajor bool,
+	parallelism int,
+) error {
 	binInfos, err := g.binaryManager.GetAllBinaryInfos()
 	if err != nil {
 		return err
@@ -196,7 +201,9 @@ func (g *Gobin) ListOutdatedBinaries(checkMajor bool, parallelism int) error {
 
 	for _, info := range binInfos {
 		grp.Go(func() error {
-			binUpInfo, infoErr := g.binaryManager.GetBinaryUpgradeInfo(info, checkMajor)
+			binUpInfo, infoErr := g.binaryManager.GetBinaryUpgradeInfo(
+				ctx, info, checkMajor,
+			)
 			if infoErr != nil {
 				return infoErr
 			}
@@ -278,8 +285,8 @@ func (g *Gobin) PrintVersion(path string) error {
 	return nil
 }
 
-func (g *Gobin) ShowBinaryRepository(binary string, open bool) error {
-	repoURL, err := g.binaryManager.GetBinaryRepository(binary)
+func (g *Gobin) ShowBinaryRepository(ctx context.Context, binary string, open bool) error {
+	repoURL, err := g.binaryManager.GetBinaryRepository(ctx, binary)
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
 			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
@@ -289,7 +296,7 @@ func (g *Gobin) ShowBinaryRepository(binary string, open bool) error {
 	}
 
 	if open {
-		return g.openURL(repoURL, g.execCmd)
+		return g.openURL(ctx, repoURL, g.execCmd)
 	}
 
 	fmt.Fprintln(g.stdOut, repoURL)
@@ -314,7 +321,13 @@ func (g *Gobin) UninstallBinary(binary string) error {
 	return nil
 }
 
-func (g *Gobin) UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int, bins ...string) error {
+func (g *Gobin) UpgradeBinaries(
+	ctx context.Context,
+	majorUpgrade bool,
+	rebuild bool,
+	parallelism int,
+	bins ...string,
+) error {
 	binFullPath, err := g.binaryManager.GetBinFullPath()
 	if err != nil {
 		return err
@@ -337,7 +350,7 @@ func (g *Gobin) UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int
 
 	for _, bin := range binPaths {
 		grp.Go(func() error {
-			upErr := g.binaryManager.UpgradeBinary(bin, majorUpgrade, rebuild)
+			upErr := g.binaryManager.UpgradeBinary(ctx, bin, majorUpgrade, rebuild)
 			if errors.Is(upErr, ErrBinaryNotFound) {
 				fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", filepath.Base(bin))
 			}
@@ -348,18 +361,18 @@ func (g *Gobin) UpgradeBinaries(majorUpgrade bool, rebuild bool, parallelism int
 	return grp.Wait()
 }
 
-func (g *Gobin) openURL(url string, execCmd ExecCombinedOutputFunc) error {
+func (g *Gobin) openURL(ctx context.Context, url string, execCmd ExecCombinedOutputFunc) error {
 	logger := slog.Default().With("url", url)
 
 	var cmd ExecCombinedOutput
 	runtimeOS := g.system.RuntimeOS()
 	switch runtimeOS {
 	case "darwin":
-		cmd = execCmd("open", url)
+		cmd = execCmd(ctx, "open", url)
 	case "linux":
-		cmd = execCmd("xdg-open", url)
+		cmd = execCmd(ctx, "xdg-open", url)
 	case "windows":
-		cmd = execCmd("cmd", "/c", "start", url)
+		cmd = execCmd(ctx, "cmd", "/c", "start", url)
 	default:
 		err := fmt.Errorf("unsupported platform: %s", runtimeOS)
 		logger.Error("error opening url", "err", err)
