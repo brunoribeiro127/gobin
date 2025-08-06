@@ -25,7 +25,7 @@ func TestGoToolchain_GetBuildInfo(t *testing.T) {
 		mockReadFile      *buildinfo.BuildInfo
 		mockReadFileErr   error
 		expectedBuildInfo *buildinfo.BuildInfo
-		expectedError     error
+		expectedErr       error
 	}{
 		"success": {
 			path: "/home/user/go/bin/mockproj",
@@ -43,17 +43,17 @@ func TestGoToolchain_GetBuildInfo(t *testing.T) {
 		"error-binary-not-found": {
 			path:            "/home/user/go/bin/mockproj",
 			mockReadFileErr: os.ErrNotExist,
-			expectedError:   internal.ErrBinaryNotFound,
+			expectedErr:     internal.ErrBinaryNotFound,
 		},
 		"error-reading-build-info": {
 			path:            "/home/user/go/bin/mockproj",
 			mockReadFileErr: errors.New("unexpected error"),
-			expectedError:   errors.New("unexpected error"),
+			expectedErr:     errors.New("unexpected error"),
 		},
 		"error-binary-built-without-go-modules": {
-			path:          "/home/user/go/bin/mockproj",
-			mockReadFile:  &buildinfo.BuildInfo{},
-			expectedError: internal.ErrBinaryBuiltWithoutGoModules,
+			path:         "/home/user/go/bin/mockproj",
+			mockReadFile: &buildinfo.BuildInfo{},
+			expectedErr:  internal.ErrBinaryBuiltWithoutGoModules,
 		},
 	}
 
@@ -68,7 +68,7 @@ func TestGoToolchain_GetBuildInfo(t *testing.T) {
 			toolchain := internal.NewGoToolchain(nil, nil, nil, system)
 			buildInfo, err := toolchain.GetBuildInfo(tc.path)
 			assert.Equal(t, tc.expectedBuildInfo, buildInfo)
-			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }
@@ -87,7 +87,7 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 		mockExecCmdErr     error
 		expectedModulePath string
 		expectedVersion    string
-		expectedError      error
+		expectedErr        error
 	}{
 		"success": {
 			module:             "example.com/mockorg/mockproj",
@@ -107,7 +107,7 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 				return []byte(`no matching versions for query`)
 			}(),
 			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  internal.ErrModuleNotFound,
+			expectedErr:    internal.ErrModuleNotFound,
 		},
 		"error-getting-latest-version": {
 			module: "example.com/mockorg/mockproj",
@@ -115,31 +115,31 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 				return []byte(`unexpected error	`)
 			}(),
 			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  errors.New("exit status 1: unexpected error"),
+			expectedErr:    errors.New("exit status 1: unexpected error"),
 		},
 		"error-parsing-module-latest-version": {
 			module: "example.com/mockorg/mockproj",
 			mockExecCmdOutput: func() []byte {
 				return []byte(``)
 			}(),
-			expectedError: errors.New("unexpected end of JSON input"),
+			expectedErr: errors.New("unexpected end of JSON input"),
 		},
 		"error-reading-go-mod-file": {
 			module: "example.com/mockorg/mockproj",
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"GoMod":"./go.mod","Version":"v0.1.0"}`)
 			}(),
-			expectedError: errors.New("open ./go.mod: no such file or directory"),
+			expectedErr: errors.New("open ./go.mod: no such file or directory"),
 		},
 		"error-parsing-go-mod-file": {
 			module:            "example.com/mockorg/mockproj",
 			mockExecCmdOutput: makeExecCmdOutput(t, "invalid.go.mod"),
-			expectedError:     errors.New("go.mod:1: unknown directive: invalid"),
+			expectedErr:       errors.New("go.mod:1: unknown directive: invalid"),
 		},
 		"error-module-info-not-available": {
 			module:            "example.com/mockorg/mockproj",
 			mockExecCmdOutput: makeExecCmdOutput(t, "empty.go.mod"),
-			expectedError:     internal.ErrModuleInfoNotAvailable,
+			expectedErr:       internal.ErrModuleInfoNotAvailable,
 		},
 	}
 
@@ -160,8 +160,8 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 			modulePath, version, err := toolchain.GetLatestModuleVersion(context.Background(), tc.module)
 			assert.Equal(t, tc.expectedModulePath, modulePath)
 			assert.Equal(t, tc.expectedVersion, version)
-			if tc.expectedError != nil {
-				assert.EqualError(t, err, tc.expectedError.Error())
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
 				assert.NoError(t, err)
 			}
@@ -183,7 +183,7 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 		mockExecCmdOutput []byte
 		mockExecCmdErr    error
 		expectedModFile   *modfile.File
-		expectedError     error
+		expectedErr       error
 	}{
 		"success": {
 			module:            "example.com/mockorg/mockproj",
@@ -237,26 +237,26 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 				return []byte(`{"Error":"unexpected error"}`)
 			}(),
 			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  errors.New("unexpected error"),
+			expectedErr:    errors.New("unexpected error"),
 		},
 		"error-parsing-module-download-success-response": {
 			module: "example.com/mockorg/mockproj",
 			mockExecCmdOutput: func() []byte {
 				return []byte(``)
 			}(),
-			expectedError: errors.New("unexpected end of JSON input"),
+			expectedErr: errors.New("unexpected end of JSON input"),
 		},
 		"error-reading-go-mod-file": {
 			module: "example.com/mockorg/mockproj",
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"GoMod":"./go.mod"}`)
 			}(),
-			expectedError: errors.New("open ./go.mod: no such file or directory"),
+			expectedErr: errors.New("open ./go.mod: no such file or directory"),
 		},
 		"error-parsing-go-mod-file": {
 			module:            "example.com/mockorg/mockproj",
 			mockExecCmdOutput: makeExecCmdOutput(t, "invalid.go.mod"),
-			expectedError:     errors.New("go.mod:1: unknown directive: invalid"),
+			expectedErr:       errors.New("go.mod:1: unknown directive: invalid"),
 		},
 	}
 
@@ -276,8 +276,8 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
 			modFile, err := toolchain.GetModuleFile(context.Background(), tc.module, tc.version)
 			assert.Equal(t, tc.expectedModFile, modFile)
-			if tc.expectedError != nil {
-				assert.EqualError(t, err, tc.expectedError.Error())
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
 				assert.NoError(t, err)
 			}
@@ -292,7 +292,7 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 		mockExecCmdOutput []byte
 		mockExecCmdErr    error
 		expectedModOrigin *internal.ModuleOrigin
-		expectedError     error
+		expectedErr       error
 	}{
 		"success": {
 			module: "example.com/mockorg/mockproj",
@@ -320,7 +320,7 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 				return []byte(`{"Error":"not found"}`)
 			}(),
 			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  internal.ErrModuleNotFound,
+			expectedErr:    internal.ErrModuleNotFound,
 		},
 		"error-downloading-module": {
 			module: "example.com/mockorg/mockproj",
@@ -328,19 +328,19 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 				return []byte(`{"Error":"unexpected error"}`)
 			}(),
 			mockExecCmdErr: errors.New("exit status 1"),
-			expectedError:  errors.New("unexpected error"),
+			expectedErr:    errors.New("unexpected error"),
 		},
 		"error-parsing-module-download-success-response": {
 			module: "example.com/mockorg/mockproj",
 			mockExecCmdOutput: func() []byte {
 				return []byte(``)
 			}(),
-			expectedError: errors.New("unexpected end of JSON input"),
+			expectedErr: errors.New("unexpected end of JSON input"),
 		},
 		"error-module-origin-not-available": {
 			module:            "example.com/mockorg/mockproj",
 			mockExecCmdOutput: []byte(`{"Origin":null}`),
-			expectedError:     internal.ErrModuleOriginNotAvailable,
+			expectedErr:       internal.ErrModuleOriginNotAvailable,
 		},
 	}
 
@@ -360,8 +360,8 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
 			modOrigin, err := toolchain.GetModuleOrigin(context.Background(), tc.module, tc.version)
 			assert.Equal(t, tc.expectedModOrigin, modOrigin)
-			if tc.expectedError != nil {
-				assert.EqualError(t, err, tc.expectedError.Error())
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
 				assert.NoError(t, err)
 			}
@@ -374,7 +374,7 @@ func TestGoToolchain_Install(t *testing.T) {
 		pkg            string
 		version        string
 		mockExecCmdErr error
-		expectedError  error
+		expectedErr    error
 	}{
 		"success": {
 			pkg:     "example.com/mockorg/mockproj/cmd/mockproj",
@@ -384,7 +384,7 @@ func TestGoToolchain_Install(t *testing.T) {
 			pkg:            "example.com/mockorg/mockproj/cmd/mockproj",
 			version:        "v0.1.0",
 			mockExecCmdErr: errors.New("unexpected error"),
-			expectedError:  errors.New("unexpected error"),
+			expectedErr:    errors.New("unexpected error"),
 		},
 	}
 
@@ -401,8 +401,8 @@ func TestGoToolchain_Install(t *testing.T) {
 
 			toolchain := internal.NewGoToolchain(nil, execRunFunc, nil, nil)
 			err := toolchain.Install(context.Background(), tc.pkg, tc.version)
-			if tc.expectedError != nil {
-				assert.EqualError(t, err, tc.expectedError.Error())
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
 				assert.NoError(t, err)
 			}
@@ -416,7 +416,7 @@ func TestGoToolchain_VulnCheck(t *testing.T) {
 		mockExecCmdOutput []byte
 		mockExecCmdErr    error
 		expectedVulns     []internal.Vulnerability
-		expectedError     error
+		expectedErr       error
 	}{
 		"success-filter-vulns-by-affected-status": {
 			path: "/home/user/go/bin/mockproj",
@@ -451,12 +451,12 @@ func TestGoToolchain_VulnCheck(t *testing.T) {
 			path:              "/home/user/go/bin/mockproj",
 			mockExecCmdOutput: []byte(`unexpected error`),
 			mockExecCmdErr:    errors.New("exit status 1"),
-			expectedError:     errors.New("exit status 1: unexpected error"),
+			expectedErr:       errors.New("exit status 1: unexpected error"),
 		},
 		"error-parsing-govulncheck-response": {
 			path:              "/home/user/go/bin/mockproj",
 			mockExecCmdOutput: []byte(``),
-			expectedError:     errors.New("unexpected end of JSON input"),
+			expectedErr:       errors.New("unexpected end of JSON input"),
 		},
 	}
 
@@ -475,8 +475,8 @@ func TestGoToolchain_VulnCheck(t *testing.T) {
 			toolchain := internal.NewGoToolchain(nil, nil, execCmdFunc, nil)
 			vulns, err := toolchain.VulnCheck(context.Background(), tc.path)
 			assert.Equal(t, tc.expectedVulns, vulns)
-			if tc.expectedError != nil {
-				assert.EqualError(t, err, tc.expectedError.Error())
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
 				assert.NoError(t, err)
 			}

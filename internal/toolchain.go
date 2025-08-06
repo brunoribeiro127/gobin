@@ -73,6 +73,7 @@ func NewGoToolchain(
 // not exist or was not built with Go modules.
 func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
 	logger := slog.Default().With("path", path)
+	logger.Info("getting build info")
 
 	info, err := t.system.ReadBuildInfo(path)
 	if err != nil {
@@ -85,8 +86,9 @@ func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
 	}
 
 	if info.Main.Path == "" {
-		logger.Error(ErrBinaryBuiltWithoutGoModules.Error())
-		return nil, ErrBinaryBuiltWithoutGoModules
+		err = ErrBinaryBuiltWithoutGoModules
+		logger.Error("binary built without go modules", "err", err)
+		return nil, err
 	}
 
 	return info, nil
@@ -102,6 +104,7 @@ func (t *GoToolchain) GetLatestModuleVersion(
 	module string,
 ) (string, string, error) {
 	logger := slog.Default().With("module", module)
+	logger.Info("getting latest module version")
 
 	modLatest := fmt.Sprintf("%s@latest", module)
 	cmd := t.execCombinedOutput(ctx, "go", "list", "-m", "-json", modLatest)
@@ -114,6 +117,7 @@ func (t *GoToolchain) GetLatestModuleVersion(
 		}
 
 		if isModuleNotFound(err.Error()) {
+			logger.Warn("module not found", "err", err)
 			return "", "", ErrModuleNotFound
 		}
 
@@ -163,6 +167,7 @@ func (t *GoToolchain) GetModuleFile(
 	module, version string,
 ) (*modfile.File, error) {
 	logger := slog.Default().With("module", module, "version", version)
+	logger.Info("getting module file")
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
 	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", modVersion)
@@ -216,6 +221,7 @@ func (t *GoToolchain) GetModuleOrigin(
 	module, version string,
 ) (*ModuleOrigin, error) {
 	logger := slog.Default().With("module", module, "version", version)
+	logger.Info("getting module origin")
 
 	modVersion := fmt.Sprintf("%s@%s", module, version)
 	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", modVersion)
@@ -231,6 +237,7 @@ func (t *GoToolchain) GetModuleOrigin(
 		}
 
 		if isModuleNotFound(err.Error()) {
+			logger.Warn("module not found", "err", err)
 			return nil, ErrModuleNotFound
 		}
 
@@ -265,6 +272,7 @@ func (t *GoToolchain) Install(
 	pkg, version string,
 ) error {
 	logger := slog.Default().With("package", pkg, "version", version)
+	logger.Info("installing package")
 
 	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)
 	cmd := t.execRun(ctx, "go", "install", "-a", pkgVersion)
@@ -286,6 +294,7 @@ func (t *GoToolchain) VulnCheck(
 	path string,
 ) ([]Vulnerability, error) {
 	logger := slog.Default().With("path", path)
+	logger.Info("running govulncheck")
 
 	cmd := t.scanCombinedOutput(ctx, "-mode", "binary", "-format", "openvex", path)
 
