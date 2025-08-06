@@ -217,7 +217,9 @@ func (m *GoBinaryManager) GetBinaryRepository(binary string) (string, error) {
 	modOrigin, err := m.toolchain.GetModuleOrigin(
 		binInfo.ModulePath, binInfo.ModuleVersion,
 	)
-	if err != nil && !errors.Is(err, ErrModuleOriginNotAvailable) {
+	if err != nil &&
+		!errors.Is(err, ErrModuleNotFound) &&
+		!errors.Is(err, ErrModuleOriginNotAvailable) {
 		return "", err
 	}
 
