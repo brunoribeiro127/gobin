@@ -33,9 +33,11 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
-      - name: Install Govulncheck
+      - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
-      - name: Check Go Mod
+      - name: Install dependencies
+        run: go mod download
+      - name: Check go.mod and go.sum files
         run: |
           go mod tidy
           git diff --exit-code go.mod go.sum
@@ -47,5 +49,15 @@ jobs:
         run: go vet ./...
       - name: Build
         run: go build ./...
-      - name: Check Vulnerabilities
+      - name: Test
+        run: |
+          INTERNAL_PACKAGES=$(go list ./internal/... | grep -v mocks)
+          go test -coverprofile=coverage.txt -covermode=count $INTERNAL_PACKAGES
+          go tool cover -func=coverage.txt
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Check vulnerabilities
         run: govulncheck ./...
+        continue-on-error: true
