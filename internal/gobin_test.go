@@ -1080,9 +1080,9 @@ func TestGobin_ShowBinaryRepository(t *testing.T) {
 			gobin := internal.NewGobin(binaryManager, execCmdFunc, &stdErr, &stdOut, system)
 			err := gobin.ShowBinaryRepository(context.Background(), tc.binary, tc.open)
 			if tc.expectedErr != nil {
-				assert.EqualError(t, err, tc.expectedErr.Error())
+				require.EqualError(t, err, tc.expectedErr.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 			assert.Equal(t, tc.expectedStdOut, stdOut.String())

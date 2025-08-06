@@ -15,6 +15,8 @@ import (
 	"github.com/brunoribeiro127/gobin/internal"
 )
 
+const exitCodeSignalOffset = 128
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -37,10 +39,18 @@ func main() {
 		case exitCode := <-resChan:
 			os.Exit(exitCode)
 		case sig := <-sigChan:
-			signal, _ := sig.(syscall.Signal)
-			os.Exit(128 + int(signal))
+			exitWithSignal(sig)
 		}
 	}
+}
+
+// exitWithSignal exits the program with the appropriate signal exit code.
+func exitWithSignal(sig os.Signal) {
+	if s, ok := sig.(syscall.Signal); ok {
+		os.Exit(exitCodeSignalOffset + int(s))
+	}
+
+	os.Exit(1)
 }
 
 // run inits and runs the gobin command. It creates a new Gobin application,
