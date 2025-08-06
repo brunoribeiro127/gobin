@@ -287,7 +287,7 @@ func (g *Gobin) PrintBinaryInfo(binary string) error {
 
 	tmplParsed := template.Must(template.New("info").Parse(infoTemplate))
 	if err = tmplParsed.Execute(g.stdOut, binInfo); err != nil {
-		slog.Default().Error("error executing template", "err", err)
+		slog.Default().Error("error executing template", "template", tmplParsed.Name(), "err", err)
 		return err
 	}
 
@@ -344,7 +344,7 @@ func (g *Gobin) ShowBinaryRepository(ctx context.Context, binary string, open bo
 	}
 
 	if open {
-		return g.openURL(ctx, repoURL, g.execCmd)
+		return g.openResource(ctx, repoURL)
 	}
 
 	fmt.Fprintln(g.stdOut, repoURL)
@@ -417,31 +417,34 @@ func (g *Gobin) UpgradeBinaries(
 	return grp.Wait()
 }
 
-// openURL opens a URL in the default system browser. It returns an error if the
-// URL cannot be opened or the platform is not supported.
-func (g *Gobin) openURL(ctx context.Context, url string, execCmd ExecCombinedOutputFunc) error {
-	logger := slog.Default().With("url", url)
+// openResource opens a resource using the default system tools. It returns an
+// error if the resource cannot be opened or the platform is not supported.
+func (g *Gobin) openResource(ctx context.Context, resource string) error {
+	logger := slog.Default().With("resource", resource)
 
 	var cmd ExecCombinedOutput
 	runtimeOS := g.system.RuntimeOS()
 	switch runtimeOS {
 	case "darwin":
-		cmd = execCmd(ctx, "open", url)
+		cmd = g.execCmd(ctx, "open", resource)
 	case "linux":
-		cmd = execCmd(ctx, "xdg-open", url)
+		cmd = g.execCmd(ctx, "xdg-open", resource)
 	case "windows":
-		cmd = execCmd(ctx, "cmd", "/c", "start", url)
+		cmd = g.execCmd(ctx, "cmd", "/c", "start", resource)
 	default:
 		err := fmt.Errorf("unsupported platform: %s", runtimeOS)
-		logger.Error("error opening url", "err", err)
+		logger.Error("error opening resource", "err", err)
 		return err
 	}
 
 	output, err := cmd.CombinedOutput()
-	outputStr := strings.TrimSpace(string(output))
 	if err != nil {
-		err = errors.New(outputStr)
-		logger.Error("error opening url", "err", err)
+		outputStr := strings.TrimSpace(string(output))
+		if outputStr != "" {
+			err = fmt.Errorf("%w: %s", err, outputStr)
+		}
+
+		logger.Error("error opening resource", "err", err)
 		return err
 	}
 
@@ -474,7 +477,7 @@ func (g *Gobin) printBinaryDiagnostics(diags []BinaryDiagnostic) error {
 
 	tmplParsed := template.Must(template.New("doctor").Parse(doctorTemplate))
 	if err := tmplParsed.Execute(g.stdOut, data); err != nil {
-		slog.Default().Error("error executing template", "err", err)
+		slog.Default().Error("error executing template", "template", tmplParsed.Name(), "err", err)
 		return err
 	}
 
@@ -518,7 +521,7 @@ func (g *Gobin) printInstalledBinaries(binInfos []BinaryInfo) error {
 	}).Parse(listTemplate))
 
 	if err := tmplParsed.Execute(g.stdOut, data); err != nil {
-		slog.Default().Error("error executing template", "err", err)
+		slog.Default().Error("error executing template", "template", tmplParsed.Name(), "err", err)
 		return err
 	}
 

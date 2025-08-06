@@ -71,9 +71,9 @@ func run(ctx context.Context) int {
 		Use:   "gobin",
 		Short: "gobin - CLI to manage Go binaries",
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
-			level := slog.LevelWarn
+			level := slog.LevelError
 			if verbose {
-				level = slog.LevelDebug
+				level = slog.LevelInfo
 			}
 
 			slog.SetDefault(internal.NewLoggerWithLevel(level))

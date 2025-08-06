@@ -130,7 +130,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 		mockVulnCheckErr      error
 		expectedDiagnostic    internal.BinaryDiagnostic
 		expectedHasIssues     bool
-		expectedError         error
+		expectedErr           error
 	}{
 		"success-has-issues": {
 			path:                  "/home/user/go/bin/mockproj",
@@ -362,7 +362,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 		"error-get-build-info": {
 			path:                "/home/user/go/bin/mockproj",
 			mockGetBuildInfoErr: errors.New("unexpected error"),
-			expectedError:       errors.New("unexpected error"),
+			expectedErr:         errors.New("unexpected error"),
 		},
 		"error-get-module-file": {
 			path:                  "/home/user/go/bin/mockproj",
@@ -391,7 +391,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 			mockLookPathErr:      os.ErrNotExist,
 			callGetModuleFile:    true,
 			mockGetModuleFileErr: errors.New("unexpected error"),
-			expectedError:        errors.New("unexpected error"),
+			expectedErr:          errors.New("unexpected error"),
 		},
 		"error-vuln-check": {
 			path:                  "/home/user/go/bin/mockproj",
@@ -435,7 +435,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 			},
 			callVulnCheck:    true,
 			mockVulnCheckErr: errors.New("unexpected error"),
-			expectedError:    errors.New("unexpected error"),
+			expectedErr:      errors.New("unexpected error"),
 		},
 	}
 
@@ -509,7 +509,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 			diagnostic, err := binaryManager.DiagnoseBinary(context.Background(), tc.path)
 			assert.Equal(t, tc.expectedDiagnostic, diagnostic)
 			assert.Equal(t, tc.expectedHasIssues, diagnostic.HasIssues())
-			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }
@@ -526,7 +526,7 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 		mockRuntimeOSTimes    int
 		mockGetBuildInfoCalls []mockGetBuildInfoCall
 		expectedInfos         []internal.BinaryInfo
-		expectedError         error
+		expectedErr           error
 	}{
 		"success": {
 			mockUserHomeDir: "/home/user",
@@ -601,13 +601,13 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 		},
 		"error-get-bin-full-path": {
 			mockUserHomeDirErr: errors.New("unexpected error"),
-			expectedError:      errors.New("unexpected error"),
+			expectedErr:        errors.New("unexpected error"),
 		},
 		"error-list-binaries-full-paths": {
 			mockUserHomeDir: "/home/user",
 			callReadDir:     true,
 			mockReadDirErr:  os.ErrNotExist,
-			expectedError:   os.ErrNotExist,
+			expectedErr:     os.ErrNotExist,
 		},
 	}
 
@@ -656,7 +656,7 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 			binaryManager := internal.NewGoBinaryManager(system, toolchain)
 			infos, err := binaryManager.GetAllBinaryInfos()
 			assert.Equal(t, tc.expectedInfos, infos)
-			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }
@@ -667,7 +667,7 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 		mockGetBuildInfo    *buildinfo.BuildInfo
 		mockGetBuildInfoErr error
 		expectedInfo        internal.BinaryInfo
-		expectedError       error
+		expectedErr         error
 	}{
 		"success-base-info": {
 			path: "/home/user/go/bin/mockproj",
@@ -736,7 +736,7 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 		"error-get-build-info": {
 			path:                "/home/user/go/bin/mockproj",
 			mockGetBuildInfoErr: internal.ErrBinaryBuiltWithoutGoModules,
-			expectedError:       internal.ErrBinaryBuiltWithoutGoModules,
+			expectedErr:         internal.ErrBinaryBuiltWithoutGoModules,
 		},
 	}
 
@@ -749,7 +749,7 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 			binaryManager := internal.NewGoBinaryManager(nil, toolchain)
 			info, err := binaryManager.GetBinaryInfo(tc.path)
 			assert.Equal(t, tc.expectedInfo, info)
-			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }
@@ -766,7 +766,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 		mockGetModuleOrigin    *internal.ModuleOrigin
 		mockGetModuleOriginErr error
 		expectedRepository     string
-		expectedError          error
+		expectedErr            error
 	}{
 		"success-module-origin": {
 			binary:              "mockproj",
@@ -800,14 +800,14 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 		"error-get-bin-full-path": {
 			binary:             "mockproj",
 			mockUserHomeDirErr: errors.New("unexpected error"),
-			expectedError:      errors.New("unexpected error"),
+			expectedErr:        errors.New("unexpected error"),
 		},
 		"error-get-build-info": {
 			binary:              "mockproj",
 			mockUserHomeDir:     "/home/user",
 			callGetBuildInfo:    true,
 			mockGetBuildInfoErr: internal.ErrBinaryBuiltWithoutGoModules,
-			expectedError:       internal.ErrBinaryBuiltWithoutGoModules,
+			expectedErr:         internal.ErrBinaryBuiltWithoutGoModules,
 		},
 		"error-get-module-origin": {
 			binary:                 "mockproj",
@@ -816,7 +816,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
 			callGetModuleOrigin:    true,
 			mockGetModuleOriginErr: errors.New("unexpected error"),
-			expectedError:          errors.New("unexpected error"),
+			expectedErr:            errors.New("unexpected error"),
 		},
 	}
 
@@ -856,7 +856,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			binaryManager := internal.NewGoBinaryManager(system, toolchain)
 			repository, err := binaryManager.GetBinaryRepository(context.Background(), tc.binary)
 			assert.Equal(t, tc.expectedRepository, repository)
-			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }
@@ -867,7 +867,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 		checkMajor                      bool
 		mockGetLatestModuleVersionCalls []mockGetLatestModuleVersionCall
 		expectedInfo                    internal.BinaryUpgradeInfo
-		expectedError                   error
+		expectedErr                     error
 	}{
 		"success-check-minor-no-upgrade-available": {
 			info:       getBinaryInfo("mockproj", "v0.1.0"),
@@ -1011,7 +1011,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 					err:    internal.ErrModuleInfoNotAvailable,
 				},
 			},
-			expectedError: internal.ErrModuleInfoNotAvailable,
+			expectedErr: internal.ErrModuleInfoNotAvailable,
 		},
 		"error-get-latest-module-major-version": {
 			info:       getBinaryInfo("mockproj", "v0.1.0"),
@@ -1027,7 +1027,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 					err:    internal.ErrModuleInfoNotAvailable,
 				},
 			},
-			expectedError: internal.ErrModuleInfoNotAvailable,
+			expectedErr: internal.ErrModuleInfoNotAvailable,
 		},
 	}
 
@@ -1046,7 +1046,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 				context.Background(), tc.info, tc.checkMajor,
 			)
 			assert.Equal(t, tc.expectedInfo, info)
-			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }
@@ -1062,7 +1062,7 @@ func TestGoBinaryManager_GetBinFullPath(t *testing.T) {
 		mockUserHomeDir    string
 		mockUserHomeDirErr error
 		expectedPath       string
-		expectedError      error
+		expectedErr        error
 	}{
 		"success-gobin-env-var": {
 			mockGOBINEnvVar:   "/home/user/go/bin",
@@ -1085,7 +1085,7 @@ func TestGoBinaryManager_GetBinFullPath(t *testing.T) {
 			callGOPATHEnvVar:   true,
 			callUserHomeDir:    true,
 			mockUserHomeDirErr: errors.New("unexpected error"),
-			expectedError:      errors.New("unexpected error"),
+			expectedErr:        errors.New("unexpected error"),
 		},
 	}
 
@@ -1111,7 +1111,7 @@ func TestGoBinaryManager_GetBinFullPath(t *testing.T) {
 			binaryManager := internal.NewGoBinaryManager(system, nil)
 			path, err := binaryManager.GetBinFullPath()
 			assert.Equal(t, tc.expectedPath, path)
-			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }
@@ -1125,7 +1125,7 @@ func TestGoBinaryManager_ListBinariesFullPaths(t *testing.T) {
 		mockRuntimeOS      string
 		mockRuntimeOSTimes int
 		expectedBinaries   []string
-		expectedError      error
+		expectedErr        error
 	}{
 		"success-unix": {
 			dir: "/home/user/go/bin",
@@ -1180,7 +1180,7 @@ func TestGoBinaryManager_ListBinariesFullPaths(t *testing.T) {
 		"error-read-dir": {
 			dir:            "/home/user/go/bin",
 			mockReadDirErr: os.ErrNotExist,
-			expectedError:  os.ErrNotExist,
+			expectedErr:    os.ErrNotExist,
 		},
 		"skip-stat-error": {
 			dir: "/home/user/go/bin",
@@ -1190,6 +1190,7 @@ func TestGoBinaryManager_ListBinariesFullPaths(t *testing.T) {
 			mockStatInfoCalls: []mockStatInfoCall{
 				{path: "/home/user/go/bin/bin1", err: os.ErrNotExist},
 			},
+			expectedBinaries: []string{},
 		},
 	}
 
@@ -1216,7 +1217,7 @@ func TestGoBinaryManager_ListBinariesFullPaths(t *testing.T) {
 			binaryManager := internal.NewGoBinaryManager(system, nil)
 			binaries, err := binaryManager.ListBinariesFullPaths(tc.dir)
 			assert.Equal(t, tc.expectedBinaries, binaries)
-			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }
@@ -1233,7 +1234,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 		mockInstallPackage              string
 		mockInstallVersion              string
 		mockInstallErr                  error
-		expectedError                   error
+		expectedErr                     error
 	}{
 		"success-no-minor-upgrade-available": {
 			binFullPath:      "/home/user/go/bin/mockproj",
@@ -1327,7 +1328,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:        false,
 			rebuild:             false,
 			mockGetBuildInfoErr: internal.ErrBinaryBuiltWithoutGoModules,
-			expectedError:       internal.ErrBinaryBuiltWithoutGoModules,
+			expectedErr:         internal.ErrBinaryBuiltWithoutGoModules,
 		},
 		"error-get-latest-module-version": {
 			binFullPath:      "/home/user/go/bin/mockproj",
@@ -1340,7 +1341,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 					err:    internal.ErrModuleInfoNotAvailable,
 				},
 			},
-			expectedError: internal.ErrModuleInfoNotAvailable,
+			expectedErr: internal.ErrModuleInfoNotAvailable,
 		},
 		"error-install": {
 			binFullPath:      "/home/user/go/bin/mockproj",
@@ -1358,7 +1359,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockInstallPackage: "example.com/mockorg/mockproj/cmd/mockproj",
 			mockInstallVersion: "v1.0.0",
 			mockInstallErr:     errors.New("unexpected error"),
-			expectedError:      errors.New("unexpected error"),
+			expectedErr:        errors.New("unexpected error"),
 		},
 	}
 
@@ -1391,7 +1392,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 				tc.majorUpgrade,
 				tc.rebuild,
 			)
-			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }

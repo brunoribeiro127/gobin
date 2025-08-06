@@ -125,8 +125,6 @@ func (m *GoBinaryManager) DiagnoseBinary(
 	path string,
 ) (BinaryDiagnostic, error) {
 	binaryName := filepath.Base(path)
-	logger := slog.Default().With("binary", binaryName, "path", path)
-
 	diagnostic := BinaryDiagnostic{
 		Name: binaryName,
 	}
@@ -138,7 +136,6 @@ func (m *GoBinaryManager) DiagnoseBinary(
 			return diagnostic, nil
 		}
 
-		logger.Error("error reading binary build info", "err", err)
 		return BinaryDiagnostic{}, err
 	}
 
@@ -347,7 +344,6 @@ func (m *GoBinaryManager) GetBinFullPath() (string, error) {
 // of full paths to the binaries.
 func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
 	logger := slog.Default().With("dir", dir)
-	var binaries []string
 
 	entries, err := m.system.ReadDir(dir)
 	if err != nil {
@@ -355,6 +351,7 @@ func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
 		return nil, err
 	}
 
+	binaries := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		fullPath := filepath.Join(dir, entry.Name())
 		if m.isBinary(fullPath) {
@@ -395,10 +392,8 @@ func (m *GoBinaryManager) UpgradeBinary(
 // environment variable. It returns a list of full paths to the duplicate
 // binaries, or nil if there are no duplicates.
 func (m *GoBinaryManager) checkBinaryDuplicatesInPath(name string) []string {
-	var (
-		seen       = make(map[string]struct{})
-		duplicates []string
-	)
+	duplicates := []string{}
+	seen := make(map[string]struct{})
 
 	path, _ := m.system.GetEnvVar("PATH")
 	for dir := range strings.SplitSeq(path, string(m.system.PathListSeparator())) {
@@ -438,10 +433,9 @@ func (m *GoBinaryManager) checkModuleMajorUpgrade(
 	for {
 		pkgMajor := pkg + "/" + nextMajorVersion(latestMajorVersion)
 		modulePath, majorVersion, err := m.toolchain.GetLatestModuleVersion(ctx, pkgMajor)
-		if err != nil {
-			if errors.Is(err, ErrModuleNotFound) {
-				break
-			}
+		if errors.Is(err, ErrModuleNotFound) {
+			break
+		} else if err != nil {
 			return "", "", err
 		}
 
@@ -459,11 +453,8 @@ func (m *GoBinaryManager) diagnoseGoModFile(
 	ctx context.Context,
 	module, version string,
 ) (string, string, error) {
-	logger := slog.Default().With("module", module, "version", version)
-
 	modFile, err := m.toolchain.GetModuleFile(ctx, module, "latest")
 	if err != nil {
-		logger.Error("error downloading go.mod", "err", err)
 		return "", "", err
 	}
 
@@ -480,7 +471,7 @@ func (m *GoBinaryManager) diagnoseGoModFile(
 		deprecated = modFile.Module.Deprecated
 	}
 
-	return retracted, deprecated, err
+	return retracted, deprecated, nil
 }
 
 // installBinary installs a binary leveraging the toolchain. If the latest

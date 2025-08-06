@@ -1031,8 +1031,8 @@ func TestGobin_ShowBinaryRepository(t *testing.T) {
 			mockRuntimeOS:           "darwin",
 			callExecCmd:             true,
 			mockExecCmdOutput:       []byte("unexpected error"),
-			mockExecCmdErr:          errors.New("unexpected error"),
-			expectedErr:             errors.New("unexpected error"),
+			mockExecCmdErr:          errors.New("exit status 1"),
+			expectedErr:             errors.New("exit status 1: unexpected error"),
 		},
 	}
 
@@ -1079,7 +1079,11 @@ func TestGobin_ShowBinaryRepository(t *testing.T) {
 
 			gobin := internal.NewGobin(binaryManager, execCmdFunc, &stdErr, &stdOut, system)
 			err := gobin.ShowBinaryRepository(context.Background(), tc.binary, tc.open)
-			assert.Equal(t, tc.expectedErr, err)
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
+			} else {
+				assert.NoError(t, err)
+			}
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 			assert.Equal(t, tc.expectedStdOut, stdOut.String())
 		})
