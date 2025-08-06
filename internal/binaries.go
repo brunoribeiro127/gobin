@@ -15,19 +15,30 @@ import (
 )
 
 const (
+	// GOARCHEnvVar is the environment variable for the Go runtime architecture.
 	GOARCHEnvVar = "GOARCH"
-	GOOSEnvVar   = "GOOS"
+	// GOOSEnvVar is the environment variable for the Go runtime operating
+	// system.
+	GOOSEnvVar = "GOOS"
 )
 
+// Toolchain is an interface for a toolchain.
 type Toolchain interface {
+	// GetBuildInfo gets the build info for a binary.
 	GetBuildInfo(path string) (*buildinfo.BuildInfo, error)
+	// GetLatestModuleVersion gets the latest module version for a given module.
 	GetLatestModuleVersion(ctx context.Context, module string) (string, string, error)
+	// GetModuleFile gets the module file for a given module and version.
 	GetModuleFile(ctx context.Context, module, version string) (*modfile.File, error)
+	// GetModuleOrigin gets the module origin for a given module and version.
 	GetModuleOrigin(ctx context.Context, module, version string) (*ModuleOrigin, error)
+	// Install installs a package with a given version.
 	Install(ctx context.Context, pkg, version string) error
+	// VulnCheck checks for vulnerabilities in a binary.
 	VulnCheck(ctx context.Context, path string) ([]Vulnerability, error)
 }
 
+// BinaryInfo represents the information for a binary.
 type BinaryInfo struct {
 	Name           string
 	FullPath       string
@@ -44,6 +55,7 @@ type BinaryInfo struct {
 	EnvVars        []string
 }
 
+// BinaryUpgradeInfo represents the upgrade information for a binary.
 type BinaryUpgradeInfo struct {
 	BinaryInfo
 
@@ -52,6 +64,7 @@ type BinaryUpgradeInfo struct {
 	IsUpgradeAvailable bool
 }
 
+// BinaryDiagnostic represents the diagnostic results for a binary.
 type BinaryDiagnostic struct {
 	Name             string
 	NotInPath        bool
@@ -72,6 +85,7 @@ type BinaryDiagnostic struct {
 	Vulnerabilities       []Vulnerability
 }
 
+// HasIssues returns whether the binary has any issues.
 func (d BinaryDiagnostic) HasIssues() bool {
 	return d.NotInPath ||
 		len(d.DuplicatesInPath) > 0 ||
@@ -85,11 +99,13 @@ func (d BinaryDiagnostic) HasIssues() bool {
 		len(d.Vulnerabilities) > 0
 }
 
+// GoBinaryManager is a manager for Go binaries.
 type GoBinaryManager struct {
 	system    System
 	toolchain Toolchain
 }
 
+// NewGoBinaryManager creates a new GoBinaryManager.
 func NewGoBinaryManager(
 	system System,
 	toolchain Toolchain,
@@ -100,6 +116,10 @@ func NewGoBinaryManager(
 	}
 }
 
+// DiagnoseBinary diagnoses a binary leveraging the toolchain. It returns the
+// diagnostic results, or an error if the binary cannot be diagnosed (e.g. the
+// binary is not a Go binary, the build info cannot be read, or the binary was
+// built without Go modules). It also checks for vulnerabilities in the binary.
 func (m *GoBinaryManager) DiagnoseBinary(
 	ctx context.Context,
 	path string,
@@ -156,6 +176,9 @@ func (m *GoBinaryManager) DiagnoseBinary(
 	return diagnostic, nil
 }
 
+// GetAllBinaryInfos gets all binary infos in the Go binary directory. It
+// returns a list of binary infos, or an error if the binary directory cannot be
+// determined or listed. It skips silently failures to get the binary info.
 func (m *GoBinaryManager) GetAllBinaryInfos() ([]BinaryInfo, error) {
 	binFullPath, err := m.GetBinFullPath()
 	if err != nil {
@@ -178,6 +201,10 @@ func (m *GoBinaryManager) GetAllBinaryInfos() ([]BinaryInfo, error) {
 	return binInfos, nil
 }
 
+// GetBinaryInfo gets the binary info for a given path leveraging the toolchain.
+// It constructs the binary info from the binary's build info. It fails if the
+// binary does not exist, is not a Go binary, or the binary was built without
+// Go modules.
 func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
 	info, err := m.toolchain.GetBuildInfo(path)
 	if err != nil {
@@ -217,6 +244,9 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
 	return binInfo, nil
 }
 
+// GetBinaryRepository gets the repository URL for a binary leveraging the
+// toolchain. It returns the repository URL from the module origin, falling back
+// to the default repository URL if the module origin is not available.
 func (m *GoBinaryManager) GetBinaryRepository(
 	ctx context.Context,
 	binary string,
@@ -246,6 +276,12 @@ func (m *GoBinaryManager) GetBinaryRepository(
 	return repoURL, nil
 }
 
+// GetBinaryUpgradeInfo gets the upgrade information for a binary leveraging the
+// toolchain. It first checks if the binary has a minor version upgrade
+// available. Then, if the checkMajor flag is set, it checks if the binary has
+// a major version upgrade available. It returns the upgrade information, or an
+// error if the upgrade information cannot be determined (e.g. the module is
+// not found).
 func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 	ctx context.Context,
 	info BinaryInfo,
@@ -282,6 +318,13 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 	return binUpInfo, nil
 }
 
+// GetBinFullPath gets the full path to the Go binary directory. It determines
+// the full path to the Go binary directory by the following order:
+//  1. $GOBIN
+//  2. $GOPATH/bin
+//  3. $HOME/go/bin
+//
+// It returns an error if the user's home directory cannot be determined.
 func (m *GoBinaryManager) GetBinFullPath() (string, error) {
 	if gobin, ok := m.system.GetEnvVar("GOBIN"); ok {
 		return gobin, nil
@@ -300,6 +343,8 @@ func (m *GoBinaryManager) GetBinFullPath() (string, error) {
 	return filepath.Join(home, "go", "bin"), nil
 }
 
+// ListBinariesFullPaths lists all binaries in a directory. It returns the list
+// of full paths to the binaries.
 func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
 	logger := slog.Default().With("dir", dir)
 	var binaries []string
@@ -320,6 +365,9 @@ func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
 	return binaries, nil
 }
 
+// UpgradeBinary upgrades a binary leveraging the toolchain. It gets the binary
+// info and upgrade info, and installs the binary if an upgrade is available or
+// if the rebuild flag is set.
 func (m *GoBinaryManager) UpgradeBinary(
 	ctx context.Context,
 	binFullPath string,
@@ -343,6 +391,9 @@ func (m *GoBinaryManager) UpgradeBinary(
 	return nil
 }
 
+// checkBinaryDuplicatesInPath checks for duplicate binaries in the PATH
+// environment variable. It returns a list of full paths to the duplicate
+// binaries, or nil if there are no duplicates.
 func (m *GoBinaryManager) checkBinaryDuplicatesInPath(name string) []string {
 	var (
 		seen       = make(map[string]struct{})
@@ -367,6 +418,11 @@ func (m *GoBinaryManager) checkBinaryDuplicatesInPath(name string) []string {
 	return nil
 }
 
+// checkModuleMajorUpgrade checks if a module has a major version upgrade
+// available leveraging the toolchain. It returns the latest module path and
+// major version if an upgrade is available, otherwise it returns the original
+// module path and version. It adjusts the package path to include the major
+// version, following the Go module versioning rules.
 func (m *GoBinaryManager) checkModuleMajorUpgrade(
 	ctx context.Context,
 	module, version string,
@@ -396,6 +452,9 @@ func (m *GoBinaryManager) checkModuleMajorUpgrade(
 	return latestModulePath, latestMajorVersion, nil
 }
 
+// diagnoseGoModFile diagnoses the Go module file for a given module and
+// version leveraging the toolchain. It returns the retracted and deprecated
+// information if available.
 func (m *GoBinaryManager) diagnoseGoModFile(
 	ctx context.Context,
 	module, version string,
@@ -424,6 +483,9 @@ func (m *GoBinaryManager) diagnoseGoModFile(
 	return retracted, deprecated, err
 }
 
+// installBinary installs a binary leveraging the toolchain. If the latest
+// version is a major version v2 or higher, it adjusts the package path
+// to include the major version, following the Go module versioning rules.
 func (m *GoBinaryManager) installBinary(
 	ctx context.Context,
 	info BinaryUpgradeInfo,
@@ -439,6 +501,8 @@ func (m *GoBinaryManager) installBinary(
 	return m.toolchain.Install(ctx, pkg, info.LatestVersion)
 }
 
+// isBinary checks if a path is a binary file. It returns true if the path is a
+// regular file and executable for Unix, or if it is a Windows executable.
 func (m *GoBinaryManager) isBinary(path string) bool {
 	info, err := m.system.Stat(path)
 	if err != nil || info.IsDir() {
@@ -452,6 +516,7 @@ func (m *GoBinaryManager) isBinary(path string) bool {
 	return info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
 }
 
+// getBinaryPlatform returns the platform of a binary based on the build info.
 func getBinaryPlatform(info *buildinfo.BuildInfo) string {
 	var goOS, goArch string
 	for _, s := range info.Settings {
@@ -466,6 +531,7 @@ func getBinaryPlatform(info *buildinfo.BuildInfo) string {
 	return goOS + "/" + goArch
 }
 
+// nextMajorVersion returns the next major version for a given version.
 func nextMajorVersion(version string) string {
 	major := semver.Major(version)
 	if major == "v0" || major == "v1" {
@@ -477,6 +543,8 @@ func nextMajorVersion(version string) string {
 	return "v" + strconv.Itoa(majorNum+1)
 }
 
+// stripVersionSuffix removes the version suffix from a module path, or returns
+// the module path unchanged if it does not have a version suffix.
 func stripVersionSuffix(module string) string {
 	parts := strings.Split(module, "/")
 	lastPart := parts[len(parts)-1]

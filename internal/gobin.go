@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	// doctorTemplate is the template for the doctor command.
 	doctorTemplate = `{{- range .DiagsWithIssues -}}
 🛠️  {{ .Name }}
 {{- if .HasIssues }}
@@ -66,6 +67,7 @@ const (
 {{ .Total }} binaries checked, {{ .WithIssues }} with issues
 `
 
+	// infoTemplate is the template for the info command.
 	infoTemplate = `Path          {{.FullPath}}
 Package       {{.PackagePath}}
 Module        {{.ModulePath}}@{{.ModuleVersion}}
@@ -79,6 +81,7 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
               {{$env}}{{end}}{{end}}
 `
 
+	// listTemplate is the template for the list command.
 	listTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Version"}}
 {{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth 6)}}
 {{range .Binaries -}}
@@ -86,6 +89,7 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 {{end -}}
 `
 
+	// outdatedTemplate is the template for the outdated command.
 	outdatedTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Current"}} ↑ {{printf "%-*s" $.LatestVersionWidth "Latest"}}
 {{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth $.LatestVersionWidth 9)}}
 {{range .Binaries -}}
@@ -94,17 +98,27 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 `
 )
 
+// BinaryManager is an interface for a binary manager.
 type BinaryManager interface {
+	// DiagnoseBinary diagnoses issues in a binary.
 	DiagnoseBinary(ctx context.Context, path string) (BinaryDiagnostic, error)
+	// GetAllBinaryInfos gets all binary infos.
 	GetAllBinaryInfos() ([]BinaryInfo, error)
+	// GetBinaryInfo gets the binary info for a given path.
 	GetBinaryInfo(path string) (BinaryInfo, error)
+	// GetBinaryRepository gets the repository URL for a given binary.
 	GetBinaryRepository(ctx context.Context, binary string) (string, error)
+	// GetBinaryUpgradeInfo gets the upgrade information for a given binary.
 	GetBinaryUpgradeInfo(ctx context.Context, info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, error)
+	// GetBinFullPath gets the full path to the Go binary directory.
 	GetBinFullPath() (string, error)
+	// ListBinariesFullPaths lists all binary full paths in the Go binary directory.
 	ListBinariesFullPaths(dir string) ([]string, error)
+	// UpgradeBinary upgrades a binary.
 	UpgradeBinary(ctx context.Context, binFullPath string, majorUpgrade bool, rebuild bool) error
 }
 
+// Gobin is an application that manages Go binaries.
 type Gobin struct {
 	binaryManager BinaryManager
 	execCmd       ExecCombinedOutputFunc
@@ -113,6 +127,7 @@ type Gobin struct {
 	system        System
 }
 
+// NewGobin creates a new Gobin application.
 func NewGobin(
 	binaryManager BinaryManager,
 	execCmd ExecCombinedOutputFunc,
@@ -129,6 +144,11 @@ func NewGobin(
 	}
 }
 
+// DiagnoseBinaries diagnoses issues in all binaries in the Go binary directory.
+// It prints a template with the diagnostic results to the standard output (or
+// another defined io.Writer), or an error if the binary directory cannot be
+// determined or listed. The command runs in parallel, launching go routines to
+// diagnose binaries up to the given parallelism.
 func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
 	binFullPath, err := g.binaryManager.GetBinFullPath()
 	if err != nil {
@@ -172,6 +192,10 @@ func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
 	return waitErr
 }
 
+// ListInstalledBinaries lists all installed binaries in the Go binary directory.
+// It prints a template with the installed binaries to the standard output (or
+// another defined io.Writer), or an error if the binary directory cannot be
+// determined or listed.
 func (g *Gobin) ListInstalledBinaries() error {
 	binInfos, err := g.binaryManager.GetAllBinaryInfos()
 	if err != nil {
@@ -181,6 +205,11 @@ func (g *Gobin) ListInstalledBinaries() error {
 	return g.printInstalledBinaries(binInfos)
 }
 
+// ListOutdatedBinaries lists all outdated binaries in the Go binary directory.
+// It prints a template with the outdated binaries to the standard output (or
+// another defined io.Writer), or an error if the binary directory cannot be
+// determined or listed. The command runs in parallel, launching go routines to
+// check the upgrade information of the binaries up to the given parallelism.
 func (g *Gobin) ListOutdatedBinaries(
 	ctx context.Context,
 	checkMajor bool,
@@ -238,6 +267,9 @@ func (g *Gobin) ListOutdatedBinaries(
 	return waitErr
 }
 
+// PrintBinaryInfo prints the binary info for a given binary. It prints a
+// template with the binary info to the standard output (or another defined
+// io.Writer), or an error if the binary cannot be found.
 func (g *Gobin) PrintBinaryInfo(binary string) error {
 	binPath, err := g.binaryManager.GetBinFullPath()
 	if err != nil {
@@ -262,6 +294,9 @@ func (g *Gobin) PrintBinaryInfo(binary string) error {
 	return nil
 }
 
+// PrintShortVersion prints the short version of a given binary. It prints the
+// module version to the standard output (or another defined io.Writer), or an
+// error if the binary cannot be found.
 func (g *Gobin) PrintShortVersion(path string) error {
 	binInfo, err := g.binaryManager.GetBinaryInfo(path)
 	if err != nil {
@@ -273,6 +308,9 @@ func (g *Gobin) PrintShortVersion(path string) error {
 	return nil
 }
 
+// PrintVersion prints the version of a given binary. It prints the module
+// version, Go version, OS, and architecture to the standard output (or another
+// defined io.Writer), or an error if the binary cannot be found.
 func (g *Gobin) PrintVersion(path string) error {
 	binInfo, err := g.binaryManager.GetBinaryInfo(path)
 	if err != nil {
@@ -291,6 +329,10 @@ func (g *Gobin) PrintVersion(path string) error {
 	return nil
 }
 
+// ShowBinaryRepository shows the repository URL for a given binary. It prints
+// the repository URL to the standard output (or another defined io.Writer), or
+// an error if the binary cannot be found. If the open flag is set, it opens the
+// repository URL in the default system browser.
 func (g *Gobin) ShowBinaryRepository(ctx context.Context, binary string, open bool) error {
 	repoURL, err := g.binaryManager.GetBinaryRepository(ctx, binary)
 	if err != nil {
@@ -309,6 +351,8 @@ func (g *Gobin) ShowBinaryRepository(ctx context.Context, binary string, open bo
 	return nil
 }
 
+// UninstallBinary uninstalls a given binary by removing the binary file. It
+// returns an error if the binary cannot be found or removed.
 func (g *Gobin) UninstallBinary(binary string) error {
 	binPath, err := g.binaryManager.GetBinFullPath()
 	if err != nil {
@@ -327,6 +371,12 @@ func (g *Gobin) UninstallBinary(binary string) error {
 	return nil
 }
 
+// UpgradeBinaries upgrades the given binaries or all binaries in the Go binary
+// directory. If majorUpgrade is set, it upgrades the major version of the
+// binaries. If rebuild is set, it rebuilds the binaries. It returns an error if
+// the binary directory cannot be determined or listed. The command runs in
+// parallel, launching go routines to upgrade the binaries up to the given
+// parallelism.
 func (g *Gobin) UpgradeBinaries(
 	ctx context.Context,
 	majorUpgrade bool,
@@ -367,6 +417,8 @@ func (g *Gobin) UpgradeBinaries(
 	return grp.Wait()
 }
 
+// openURL opens a URL in the default system browser. It returns an error if the
+// URL cannot be opened or the platform is not supported.
 func (g *Gobin) openURL(ctx context.Context, url string, execCmd ExecCombinedOutputFunc) error {
 	logger := slog.Default().With("url", url)
 
@@ -396,6 +448,8 @@ func (g *Gobin) openURL(ctx context.Context, url string, execCmd ExecCombinedOut
 	return nil
 }
 
+// printBinaryDiagnostics prints the binary diagnostics to the standard output
+// (or another defined io.Writer).
 func (g *Gobin) printBinaryDiagnostics(diags []BinaryDiagnostic) error {
 	var diagWithIssues = make([]BinaryDiagnostic, 0, len(diags))
 	for _, d := range diags {
@@ -427,6 +481,8 @@ func (g *Gobin) printBinaryDiagnostics(diags []BinaryDiagnostic) error {
 	return nil
 }
 
+// printInstalledBinaries prints the installed binaries to the standard output
+// (or another defined io.Writer).
 func (g *Gobin) printInstalledBinaries(binInfos []BinaryInfo) error {
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
@@ -469,6 +525,8 @@ func (g *Gobin) printInstalledBinaries(binInfos []BinaryInfo) error {
 	return nil
 }
 
+// printOutdatedBinaries prints the outdated binaries to the standard output
+// (or another defined io.Writer).
 func (g *Gobin) printOutdatedBinaries(binInfos []BinaryUpgradeInfo) error {
 	sort.Slice(binInfos, func(i, j int) bool {
 		return binInfos[i].Name < binInfos[j].Name
@@ -523,6 +581,7 @@ func (g *Gobin) printOutdatedBinaries(binInfos []BinaryUpgradeInfo) error {
 	return nil
 }
 
+// add adds the given integers.
 func add(args ...int) int {
 	sum := 0
 	for _, v := range args {
@@ -531,6 +590,7 @@ func add(args ...int) int {
 	return sum
 }
 
+// colorize colorizes a given string with a given color.
 func colorize(s, color string) string {
 	colors := map[string]string{
 		"red":   "\033[31m",
@@ -540,6 +600,8 @@ func colorize(s, color string) string {
 	return colors[color] + s + colors["reset"]
 }
 
+// getColumnMaxWidth gets the maximum width of a column for a given header and
+// items.
 func getColumnMaxWidth[T any](header string, items []T, accessor func(T) string) int {
 	maxWidth := len(header)
 	for _, item := range items {

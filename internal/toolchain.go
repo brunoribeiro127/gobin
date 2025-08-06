@@ -14,13 +14,25 @@ import (
 )
 
 var (
+	// ErrBinaryBuiltWithoutGoModules indicates the binary was built without
+	// module support.
 	ErrBinaryBuiltWithoutGoModules = errors.New("binary built without go modules")
-	ErrBinaryNotFound              = errors.New("binary not found")
-	ErrModuleNotFound              = errors.New("module not found")
-	ErrModuleInfoNotAvailable      = errors.New("module info not available")
-	ErrModuleOriginNotAvailable    = errors.New("module origin not available")
+
+	// ErrBinaryNotFound indicates the binary was not found.
+	ErrBinaryNotFound = errors.New("binary not found")
+
+	// ErrModuleNotFound indicates the module was not found.
+	ErrModuleNotFound = errors.New("module not found")
+
+	// ErrModuleInfoNotAvailable indicates the module info is not available.
+	ErrModuleInfoNotAvailable = errors.New("module info not available")
+
+	// ErrModuleOriginNotAvailable indicates the module origin is not available.
+	ErrModuleOriginNotAvailable = errors.New("module origin not available")
 )
 
+// ModuleOrigin represents the origin of a module containing the version control
+// system, the URL, the hash and optionally the reference.
 type ModuleOrigin struct {
 	VCS  string  `json:"VCS"`
 	URL  string  `json:"URL"`
@@ -28,11 +40,13 @@ type ModuleOrigin struct {
 	Ref  *string `json:"Ref"`
 }
 
+// Vulnerability represents a vulnerability found in a binary.
 type Vulnerability struct {
 	ID  string
 	URL string
 }
 
+// GoToolchain is a toolchain to interact with the Go toolchain.
 type GoToolchain struct {
 	execCombinedOutput ExecCombinedOutputFunc
 	execRun            ExecRunFunc
@@ -40,6 +54,7 @@ type GoToolchain struct {
 	system             System
 }
 
+// NewGoToolchain creates a new GoToolchain to interact with the Go toolchain.
 func NewGoToolchain(
 	execCombinedOutput ExecCombinedOutputFunc,
 	execRun ExecRunFunc,
@@ -54,6 +69,8 @@ func NewGoToolchain(
 	}
 }
 
+// GetBuildInfo returns the build info for a binary. It fails if the binary does
+// not exist or was not built with Go modules.
 func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
 	logger := slog.Default().With("path", path)
 
@@ -75,6 +92,11 @@ func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
 	return info, nil
 }
 
+// GetLatestModuleVersion returns the latest module path and version of a module.
+// It uses the go list command with the option -m -json to get a json response with
+// the path to the go.mod file and the latest version. It fails if the module is
+// not found, the go list command fails or the go.mod file does not contain the
+// module information.
 func (t *GoToolchain) GetLatestModuleVersion(
 	ctx context.Context,
 	module string,
@@ -132,6 +154,10 @@ func (t *GoToolchain) GetLatestModuleVersion(
 	return modFile.Module.Mod.Path, res.Version, nil
 }
 
+// GetModuleFile returns the go.mod file for a module. It uses the go mod download
+// command with the module path and version to download the go.mod file and retrive
+// the location of it. It then parses the go.mod file and returns it. It fails if
+// the module is not found or the go mod download command fails.
 func (t *GoToolchain) GetModuleFile(
 	ctx context.Context,
 	module, version string,
@@ -181,6 +207,10 @@ func (t *GoToolchain) GetModuleFile(
 	return modFile, nil
 }
 
+// GetModuleOrigin returns the origin of a module. It uses the go mod download
+// command with the module path and version to download the go.mod file and retrive
+// the origin of the module. It fails if the module is not found or the go mod
+// download command fails.
 func (t *GoToolchain) GetModuleOrigin(
 	ctx context.Context,
 	module, version string,
@@ -226,6 +256,10 @@ func (t *GoToolchain) GetModuleOrigin(
 	return res.Origin, nil
 }
 
+// Install installs a package and its dependencies for the specified version.
+// It uses the go install command with the -a option to force the rebuild
+// of the package and its dependencies, even if they are already up to date.
+// It fails if the go install command fails.
 func (t *GoToolchain) Install(
 	ctx context.Context,
 	pkg, version string,
@@ -243,6 +277,10 @@ func (t *GoToolchain) Install(
 	return nil
 }
 
+// VulnCheck runs the govulncheck command to check for vulnerabilities in the
+// target binary. It returns a list of vulnerabilities found in the binary. It
+// uses the OpenVEX format and filters for affected vulnerabilities. It fails if
+// the govulncheck command fails.
 func (t *GoToolchain) VulnCheck(
 	ctx context.Context,
 	path string,
@@ -290,6 +328,8 @@ func (t *GoToolchain) VulnCheck(
 	return vulns, nil
 }
 
+// isModuleNotFound checks if the output contains a message indicating that a
+// module was not found by a go command.
 func isModuleNotFound(output string) bool {
 	output = strings.ToLower(output)
 	return strings.Contains(output, "no matching versions for query") ||

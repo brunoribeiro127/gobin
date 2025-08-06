@@ -43,6 +43,9 @@ func main() {
 	}
 }
 
+// run inits and runs the gobin command. It creates a new Gobin application,
+// configures the command-line interface, and runs the requested command. It
+// propagates the context to ensure a graceful shutdown.
 func run(ctx context.Context) int {
 	system := internal.NewSystem()
 
@@ -117,6 +120,8 @@ func run(ctx context.Context) int {
 	return 0
 }
 
+// newDoctorCmd creates a doctor command to diagnose issues with installed
+// binaries.
 func newDoctorCmd(gobin *internal.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
@@ -146,6 +151,7 @@ Run this command regularly to make sure everything is ok with your installed bin
 	}
 }
 
+// newInfoCmd creates a info command to print information about a binary.
 func newInfoCmd(gobin *internal.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:           "info [binary]",
@@ -160,6 +166,7 @@ func newInfoCmd(gobin *internal.Gobin) *cobra.Command {
 	}
 }
 
+// newListCmd creates a list command to list installed binaries.
 func newListCmd(gobin *internal.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:           "list",
@@ -174,6 +181,7 @@ func newListCmd(gobin *internal.Gobin) *cobra.Command {
 	}
 }
 
+// newOutdatedCmd creates a outdated command to list outdated binaries.
 func newOutdatedCmd(gobin *internal.Gobin) *cobra.Command {
 	var checkMajor bool
 
@@ -210,6 +218,8 @@ potentially breaking major version upgrades.`,
 	return cmd
 }
 
+// newRepoCmd creates a repo command to show/open the repository URL for a
+// binary.
 func newRepoCmd(gobin *internal.Gobin) *cobra.Command {
 	var open bool
 
@@ -244,6 +254,7 @@ falling back to constructing the URL from the module path.`,
 	return cmd
 }
 
+// newUninstallCmd creates a uninstall command to uninstall a binary.
 func newUninstallCmd(gobin *internal.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:           "uninstall [binary]",
@@ -258,6 +269,7 @@ func newUninstallCmd(gobin *internal.Gobin) *cobra.Command {
 	}
 }
 
+// newUpgradeCmd creates a upgrade command to upgrade a binary.
 func newUpgradeCmd(gobin *internal.Gobin) *cobra.Command {
 	var upgradeAll bool
 	var majorUpgrade bool
@@ -342,6 +354,7 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 	return cmd
 }
 
+// newVersionCmd creates a version command to print the version of the package.
 func newVersionCmd(gobin *internal.Gobin) *cobra.Command {
 	var short bool
 
