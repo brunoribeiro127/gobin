@@ -117,7 +117,7 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 			mockExecCmdErr: errors.New("exit status 1"),
 			expectedErr:    errors.New("exit status 1: unexpected error"),
 		},
-		"error-parsing-module-latest-version": {
+		"error-parsing-module-latest-version-response": {
 			module: "example.com/mockorg/mockproj",
 			mockExecCmdOutput: func() []byte {
 				return []byte(``)
@@ -130,6 +130,13 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 				return []byte(`{"GoMod":"./go.mod","Version":"v0.1.0"}`)
 			}(),
 			expectedErr: errors.New("open ./go.mod: no such file or directory"),
+		},
+		"error-go-mod-file-not-available": {
+			module: "example.com/mockorg/mockproj",
+			mockExecCmdOutput: func() []byte {
+				return []byte(`{"Version":"v0.1.0"}`)
+			}(),
+			expectedErr: internal.ErrGoModFileNotAvailable,
 		},
 		"error-parsing-go-mod-file": {
 			module:            "example.com/mockorg/mockproj",
