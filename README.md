@@ -70,6 +70,7 @@ task install
 | `doctor`             | Diagnose issues for binaries                |                                                                                                   |
 | `info [binary]`      | Show info about a binary                    |                                                                                                   |
 | `list`               | List installed binaries                     |                                                                                                   |
+| `install [packages]` | Install packages                            |                                                                                                   |
 | `outdated`           | List outdated binaries                      | `-m`, `--major` – include major version updates                                                   |
 | `repo [binary]`      | Show binary repository                      | `-o`, `--open` – open repository URL in the default browser                                       |
 | `uninstall [binary]` | Uninstall a binary                          |                                                                                                   |

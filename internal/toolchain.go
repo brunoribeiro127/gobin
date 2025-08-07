@@ -49,6 +49,22 @@ type Vulnerability struct {
 	URL string
 }
 
+// Toolchain is an interface for a toolchain.
+type Toolchain interface {
+	// GetBuildInfo gets the build info for a binary.
+	GetBuildInfo(path string) (*buildinfo.BuildInfo, error)
+	// GetLatestModuleVersion gets the latest module version for a given module.
+	GetLatestModuleVersion(ctx context.Context, module string) (string, string, error)
+	// GetModuleFile gets the module file for a given module and version.
+	GetModuleFile(ctx context.Context, module, version string) (*modfile.File, error)
+	// GetModuleOrigin gets the module origin for a given module and version.
+	GetModuleOrigin(ctx context.Context, module, version string) (*ModuleOrigin, error)
+	// Install installs a package with a given version.
+	Install(ctx context.Context, pkg, version string) error
+	// VulnCheck checks for vulnerabilities in a binary.
+	VulnCheck(ctx context.Context, path string) ([]Vulnerability, error)
+}
+
 // GoToolchain is a toolchain to interact with the Go toolchain.
 type GoToolchain struct {
 	execCombinedOutput ExecCombinedOutputFunc

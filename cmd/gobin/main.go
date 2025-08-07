@@ -116,6 +116,7 @@ func run(ctx context.Context) int {
 
 	cmd.AddCommand(newDoctorCmd(gobin))
 	cmd.AddCommand(newInfoCmd(gobin))
+	cmd.AddCommand(newInstallCmd(gobin))
 	cmd.AddCommand(newListCmd(gobin))
 	cmd.AddCommand(newOutdatedCmd(gobin))
 	cmd.AddCommand(newRepoCmd(gobin))
@@ -172,6 +173,32 @@ func newInfoCmd(gobin *internal.Gobin) *cobra.Command {
 			cmd.SilenceUsage = true
 
 			return gobin.PrintBinaryInfo(args[0])
+		},
+	}
+}
+
+// newInstallCmd creates a install command to install packages.
+func newInstallCmd(gobin *internal.Gobin) *cobra.Command {
+	return &cobra.Command{
+		Use:   "install [packages]",
+		Short: "Install packages",
+		Long: `Install compiles and installs the packages named by the import paths.
+
+Examples:
+  gobin install github.com/go-delve/delve/cmd/dlv@v1.15.1  # Install specific version
+  gobin install github.com/go-delve/delve/cmd/dlv          # Install latest version
+  gobin install github.com/go-delve/delve/cmd/dlv@latest   # Install latest version
+
+The package version is optional, defaulting to "latest".
+The GOFLAGS environment variable can be used to define build flags.`,
+		Args:          cobra.MinimumNArgs(1),
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
+			parallelism, _ := cmd.Flags().GetInt("parallelism")
+
+			return gobin.InstallPackages(cmd.Context(), parallelism, args...)
 		},
 	}
 }
@@ -291,12 +318,12 @@ func newUpgradeCmd(gobin *internal.Gobin) *cobra.Command {
 		Long: `Upgrade binaries to their latest versions. You can upgrade specific binaries or all outdated ones.
 
 Examples:
-  gobin upgrade dlv                    # Upgrade specific binary
-  gobin upgrade dlv air gotests        # Upgrade multiple binaries  
-  gobin upgrade --all                  # Upgrade all outdated binaries
-  gobin upgrade --all --major          # Include major version upgrades
-  gobin upgrade dlv --rebuild          # Force rebuild even if up-to-date
-  gobin upgrade --all --rebuild        # Rebuild all binaries with current Go version
+  gobin upgrade dlv                        # Upgrade specific binary
+  gobin upgrade dlv golangci-lint mockery  # Upgrade multiple binaries  
+  gobin upgrade --all                 	   # Upgrade all outdated binaries
+  gobin upgrade --all --major              # Include major version upgrades
+  gobin upgrade dlv --rebuild              # Force rebuild even if up-to-date
+  gobin upgrade --all --rebuild            # Rebuild all binaries with current Go version
 
 The --rebuild flag is useful when binaries are up-to-date but compiled with older Go versions.`,
 		Args:          cobra.ArbitraryArgs,

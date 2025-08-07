@@ -1116,6 +1116,49 @@ func TestGoBinaryManager_GetBinFullPath(t *testing.T) {
 	}
 }
 
+func TestGoBinaryManager_InstallPackage(t *testing.T) {
+	cases := map[string]struct {
+		pkgVersion     string
+		mockPkg        string
+		mockVersion    string
+		callInstall    bool
+		mockInstallErr error
+		expectedErr    error
+	}{
+		"success-package": {
+			pkgVersion:  "example.com/mockorg/mockproj/cmd/mockproj",
+			mockPkg:     "example.com/mockorg/mockproj/cmd/mockproj",
+			mockVersion: "latest",
+		},
+		"success-package-with-version": {
+			pkgVersion:  "example.com/mockorg/mockproj/cmd/mockproj@v1.0.0",
+			mockPkg:     "example.com/mockorg/mockproj/cmd/mockproj",
+			mockVersion: "v1.0.0",
+		},
+		"error-install": {
+			pkgVersion:     "example.com/mockorg/mockproj/cmd/mockproj@v1.0.0",
+			mockPkg:        "example.com/mockorg/mockproj/cmd/mockproj",
+			mockVersion:    "v1.0.0",
+			mockInstallErr: errors.New("exit status 1: unexpected error"),
+			expectedErr:    errors.New("exit status 1: unexpected error"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			toolchain := mocks.NewToolchain(t)
+
+			toolchain.EXPECT().Install(context.Background(), tc.mockPkg, tc.mockVersion).
+				Return(tc.mockInstallErr).
+				Once()
+
+			binaryManager := internal.NewGoBinaryManager(nil, toolchain)
+			err := binaryManager.InstallPackage(context.Background(), tc.pkgVersion)
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+}
+
 func TestGoBinaryManager_ListBinariesFullPaths(t *testing.T) {
 	cases := map[string]struct {
 		dir                string

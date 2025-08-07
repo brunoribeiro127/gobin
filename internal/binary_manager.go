@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
 )
@@ -22,21 +21,9 @@ const (
 	GOOSEnvVar = "GOOS"
 )
 
-// Toolchain is an interface for a toolchain.
-type Toolchain interface {
-	// GetBuildInfo gets the build info for a binary.
-	GetBuildInfo(path string) (*buildinfo.BuildInfo, error)
-	// GetLatestModuleVersion gets the latest module version for a given module.
-	GetLatestModuleVersion(ctx context.Context, module string) (string, string, error)
-	// GetModuleFile gets the module file for a given module and version.
-	GetModuleFile(ctx context.Context, module, version string) (*modfile.File, error)
-	// GetModuleOrigin gets the module origin for a given module and version.
-	GetModuleOrigin(ctx context.Context, module, version string) (*ModuleOrigin, error)
-	// Install installs a package with a given version.
-	Install(ctx context.Context, pkg, version string) error
-	// VulnCheck checks for vulnerabilities in a binary.
-	VulnCheck(ctx context.Context, path string) ([]Vulnerability, error)
-}
+var (
+	ErrInvalidPackageVersion = errors.New("invalid package version")
+)
 
 // BinaryInfo represents the information for a binary.
 type BinaryInfo struct {
@@ -97,6 +84,28 @@ func (d BinaryDiagnostic) HasIssues() bool {
 		d.Retracted != "" ||
 		d.Deprecated != "" ||
 		len(d.Vulnerabilities) > 0
+}
+
+// BinaryManager is an interface for a binary manager.
+type BinaryManager interface {
+	// DiagnoseBinary diagnoses issues in a binary.
+	DiagnoseBinary(ctx context.Context, path string) (BinaryDiagnostic, error)
+	// GetAllBinaryInfos gets all binary infos.
+	GetAllBinaryInfos() ([]BinaryInfo, error)
+	// GetBinaryInfo gets the binary info for a given path.
+	GetBinaryInfo(path string) (BinaryInfo, error)
+	// GetBinaryRepository gets the repository URL for a given binary.
+	GetBinaryRepository(ctx context.Context, binary string) (string, error)
+	// GetBinaryUpgradeInfo gets the upgrade information for a given binary.
+	GetBinaryUpgradeInfo(ctx context.Context, info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, error)
+	// GetBinFullPath gets the full path to the Go binary directory.
+	GetBinFullPath() (string, error)
+	// InstallPackage installs a package.
+	InstallPackage(ctx context.Context, pkgVersion string) error
+	// ListBinariesFullPaths lists all binary full paths in the Go binary directory.
+	ListBinariesFullPaths(dir string) ([]string, error)
+	// UpgradeBinary upgrades a binary.
+	UpgradeBinary(ctx context.Context, binFullPath string, majorUpgrade bool, rebuild bool) error
 }
 
 // GoBinaryManager is a manager for Go binaries.
@@ -338,6 +347,21 @@ func (m *GoBinaryManager) GetBinFullPath() (string, error) {
 	}
 
 	return filepath.Join(home, "go", "bin"), nil
+}
+
+// InstallPackage installs a package leveraging the toolchain. If version is
+// not provided, it installs the latest version.
+func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkgVersion string) error {
+	pkg := pkgVersion
+	version := "latest"
+
+	//nolint:mnd // expected package version format: package@version
+	if parts := strings.Split(pkgVersion, "@"); len(parts) == 2 {
+		pkg = parts[0]
+		version = parts[1]
+	}
+
+	return m.toolchain.Install(ctx, pkg, version)
 }
 
 // ListBinariesFullPaths lists all binaries in a directory. It returns the list
