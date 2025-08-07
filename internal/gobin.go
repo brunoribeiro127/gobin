@@ -98,26 +98,6 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 `
 )
 
-// BinaryManager is an interface for a binary manager.
-type BinaryManager interface {
-	// DiagnoseBinary diagnoses issues in a binary.
-	DiagnoseBinary(ctx context.Context, path string) (BinaryDiagnostic, error)
-	// GetAllBinaryInfos gets all binary infos.
-	GetAllBinaryInfos() ([]BinaryInfo, error)
-	// GetBinaryInfo gets the binary info for a given path.
-	GetBinaryInfo(path string) (BinaryInfo, error)
-	// GetBinaryRepository gets the repository URL for a given binary.
-	GetBinaryRepository(ctx context.Context, binary string) (string, error)
-	// GetBinaryUpgradeInfo gets the upgrade information for a given binary.
-	GetBinaryUpgradeInfo(ctx context.Context, info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, error)
-	// GetBinFullPath gets the full path to the Go binary directory.
-	GetBinFullPath() (string, error)
-	// ListBinariesFullPaths lists all binary full paths in the Go binary directory.
-	ListBinariesFullPaths(dir string) ([]string, error)
-	// UpgradeBinary upgrades a binary.
-	UpgradeBinary(ctx context.Context, binFullPath string, majorUpgrade bool, rebuild bool) error
-}
-
 // Gobin is an application that manages Go binaries.
 type Gobin struct {
 	binaryManager BinaryManager
@@ -190,6 +170,26 @@ func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
 	}
 
 	return waitErr
+}
+
+// InstallPackages installs the given packages. It returns an error if any of
+// the packages cannot be installed. The command runs in parallel, launching go
+// routines to install the packages up to the given parallelism.
+func (g *Gobin) InstallPackages(
+	ctx context.Context,
+	parallelism int,
+	packages ...string,
+) error {
+	grp := new(errgroup.Group)
+	grp.SetLimit(parallelism)
+
+	for _, pkg := range packages {
+		grp.Go(func() error {
+			return g.binaryManager.InstallPackage(ctx, pkg)
+		})
+	}
+
+	return grp.Wait()
 }
 
 // ListInstalledBinaries lists all installed binaries in the Go binary directory.

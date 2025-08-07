@@ -373,6 +373,47 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 	}
 }
 
+func TestGobin_InstallPackages(t *testing.T) {
+	cases := map[string]struct {
+		parallelism int
+		packages    []string
+		expectedErr error
+	}{
+		"success-single-package": {
+			parallelism: 1,
+			packages:    []string{"example.com/mockorg/mockproj/cmd/mockproj@latest"},
+		},
+		"success-multiple-packages-with-parallelism": {
+			parallelism: 2,
+			packages: []string{
+				"example.com/mockorg/mockproj/cmd/mockproj@latest",
+				"example.com/mockorg/mockproj2/cmd/mockproj2@v1.1.0",
+			},
+		},
+		"error-install-package": {
+			parallelism: 1,
+			packages:    []string{"example.com/mockorg/mockproj/cmd/mockproj@latest"},
+			expectedErr: errors.New("exit status 1: unexpected error"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			binaryManager := mocks.NewBinaryManager(t)
+
+			for _, pkg := range tc.packages {
+				binaryManager.EXPECT().InstallPackage(context.Background(), pkg).
+					Return(tc.expectedErr).
+					Once()
+			}
+
+			gobin := internal.NewGobin(binaryManager, nil, nil, nil, nil)
+			err := gobin.InstallPackages(context.Background(), tc.parallelism, tc.packages...)
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+}
+
 func TestGobin_ListInstalledBinaries(t *testing.T) {
 	cases := map[string]struct {
 		stdOut                   io.ReadWriter
