@@ -158,6 +158,129 @@ func (_c *System_LookPath_Call) RunAndReturn(run func(file string) (string, erro
 	return _c
 }
 
+// MkdirAll provides a mock function for the type System
+func (_mock *System) MkdirAll(path string, perm os.FileMode) error {
+	ret := _mock.Called(path, perm)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MkdirAll")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, os.FileMode) error); ok {
+		r0 = returnFunc(path, perm)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// System_MkdirAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MkdirAll'
+type System_MkdirAll_Call struct {
+	*mock.Call
+}
+
+// MkdirAll is a helper method to define mock.On call
+//   - path string
+//   - perm os.FileMode
+func (_e *System_Expecter) MkdirAll(path interface{}, perm interface{}) *System_MkdirAll_Call {
+	return &System_MkdirAll_Call{Call: _e.mock.On("MkdirAll", path, perm)}
+}
+
+func (_c *System_MkdirAll_Call) Run(run func(path string, perm os.FileMode)) *System_MkdirAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 os.FileMode
+		if args[1] != nil {
+			arg1 = args[1].(os.FileMode)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *System_MkdirAll_Call) Return(err error) *System_MkdirAll_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *System_MkdirAll_Call) RunAndReturn(run func(path string, perm os.FileMode) error) *System_MkdirAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MkdirTemp provides a mock function for the type System
+func (_mock *System) MkdirTemp(dir string, pattern string) (string, error) {
+	ret := _mock.Called(dir, pattern)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MkdirTemp")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (string, error)); ok {
+		return returnFunc(dir, pattern)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = returnFunc(dir, pattern)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(dir, pattern)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// System_MkdirTemp_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MkdirTemp'
+type System_MkdirTemp_Call struct {
+	*mock.Call
+}
+
+// MkdirTemp is a helper method to define mock.On call
+//   - dir string
+//   - pattern string
+func (_e *System_Expecter) MkdirTemp(dir interface{}, pattern interface{}) *System_MkdirTemp_Call {
+	return &System_MkdirTemp_Call{Call: _e.mock.On("MkdirTemp", dir, pattern)}
+}
+
+func (_c *System_MkdirTemp_Call) Run(run func(dir string, pattern string)) *System_MkdirTemp_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *System_MkdirTemp_Call) Return(s string, err error) *System_MkdirTemp_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *System_MkdirTemp_Call) RunAndReturn(run func(dir string, pattern string) (string, error)) *System_MkdirTemp_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // PathListSeparator provides a mock function for the type System
 func (_mock *System) PathListSeparator() rune {
 	ret := _mock.Called()
@@ -377,6 +500,114 @@ func (_c *System_Remove_Call) RunAndReturn(run func(name string) error) *System_
 	return _c
 }
 
+// RemoveAll provides a mock function for the type System
+func (_mock *System) RemoveAll(path string) error {
+	ret := _mock.Called(path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RemoveAll")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(path)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// System_RemoveAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveAll'
+type System_RemoveAll_Call struct {
+	*mock.Call
+}
+
+// RemoveAll is a helper method to define mock.On call
+//   - path string
+func (_e *System_Expecter) RemoveAll(path interface{}) *System_RemoveAll_Call {
+	return &System_RemoveAll_Call{Call: _e.mock.On("RemoveAll", path)}
+}
+
+func (_c *System_RemoveAll_Call) Run(run func(path string)) *System_RemoveAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *System_RemoveAll_Call) Return(err error) *System_RemoveAll_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *System_RemoveAll_Call) RunAndReturn(run func(path string) error) *System_RemoveAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Rename provides a mock function for the type System
+func (_mock *System) Rename(oldpath string, newpath string) error {
+	ret := _mock.Called(oldpath, newpath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Rename")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(oldpath, newpath)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// System_Rename_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Rename'
+type System_Rename_Call struct {
+	*mock.Call
+}
+
+// Rename is a helper method to define mock.On call
+//   - oldpath string
+//   - newpath string
+func (_e *System_Expecter) Rename(oldpath interface{}, newpath interface{}) *System_Rename_Call {
+	return &System_Rename_Call{Call: _e.mock.On("Rename", oldpath, newpath)}
+}
+
+func (_c *System_Rename_Call) Run(run func(oldpath string, newpath string)) *System_Rename_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *System_Rename_Call) Return(err error) *System_Rename_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *System_Rename_Call) RunAndReturn(run func(oldpath string, newpath string) error) *System_Rename_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RuntimeARCH provides a mock function for the type System
 func (_mock *System) RuntimeARCH() string {
 	ret := _mock.Called()
@@ -567,6 +798,63 @@ func (_c *System_Stat_Call) Return(v os.FileInfo, err error) *System_Stat_Call {
 }
 
 func (_c *System_Stat_Call) RunAndReturn(run func(name string) (os.FileInfo, error)) *System_Stat_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Symlink provides a mock function for the type System
+func (_mock *System) Symlink(oldname string, newname string) error {
+	ret := _mock.Called(oldname, newname)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Symlink")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(oldname, newname)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// System_Symlink_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Symlink'
+type System_Symlink_Call struct {
+	*mock.Call
+}
+
+// Symlink is a helper method to define mock.On call
+//   - oldname string
+//   - newname string
+func (_e *System_Expecter) Symlink(oldname interface{}, newname interface{}) *System_Symlink_Call {
+	return &System_Symlink_Call{Call: _e.mock.On("Symlink", oldname, newname)}
+}
+
+func (_c *System_Symlink_Call) Run(run func(oldname string, newname string)) *System_Symlink_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *System_Symlink_Call) Return(err error) *System_Symlink_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *System_Symlink_Call) RunAndReturn(run func(oldname string, newname string) error) *System_Symlink_Call {
 	_c.Call.Return(run)
 	return _c
 }

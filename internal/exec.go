@@ -9,6 +9,7 @@ import (
 // ExecRun is an interface that represents a command that can be run.
 type ExecRun interface {
 	Run() error
+	InjectEnv(env ...string)
 }
 
 // ExecRunFunc is a function that creates a new ExecRun that runs a command.
@@ -50,6 +51,11 @@ func NewExecRun(
 // Run runs the command and returns the error if the command fails.
 func (e *execRun) Run() error {
 	return e.cmd.Run()
+}
+
+// InjectEnv injects environment variables into the command.
+func (e *execRun) InjectEnv(env ...string) {
+	e.cmd.Env = append(e.cmd.Env, env...)
 }
 
 // execCombinedOutput is the default implementation of ExecCombinedOutput that

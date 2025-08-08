@@ -105,6 +105,7 @@ type Gobin struct {
 	stdErr        io.Writer
 	stdOut        io.Writer
 	system        System
+	workspace     Workspace
 }
 
 // NewGobin creates a new Gobin application.
@@ -114,6 +115,7 @@ func NewGobin(
 	stdErr io.Writer,
 	stdOut io.Writer,
 	system System,
+	workspace Workspace,
 ) *Gobin {
 	return &Gobin{
 		binaryManager: binaryManager,
@@ -121,6 +123,7 @@ func NewGobin(
 		stdErr:        stdErr,
 		stdOut:        stdOut,
 		system:        system,
+		workspace:     workspace,
 	}
 }
 
@@ -130,12 +133,7 @@ func NewGobin(
 // determined or listed. The command runs in parallel, launching go routines to
 // diagnose binaries up to the given parallelism.
 func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
-	binFullPath, err := g.binaryManager.GetBinFullPath()
-	if err != nil {
-		return err
-	}
-
-	bins, err := g.binaryManager.ListBinariesFullPaths(binFullPath)
+	bins, err := g.binaryManager.ListBinariesFullPaths(g.workspace.GetGoBinPath())
 	if err != nil {
 		return err
 	}
@@ -271,12 +269,9 @@ func (g *Gobin) ListOutdatedBinaries(
 // template with the binary info to the standard output (or another defined
 // io.Writer), or an error if the binary cannot be found.
 func (g *Gobin) PrintBinaryInfo(binary string) error {
-	binPath, err := g.binaryManager.GetBinFullPath()
-	if err != nil {
-		return err
-	}
-
-	binInfo, err := g.binaryManager.GetBinaryInfo(filepath.Join(binPath, binary))
+	binInfo, err := g.binaryManager.GetBinaryInfo(
+		filepath.Join(g.workspace.GetGoBinPath(), binary),
+	)
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
 			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
@@ -354,12 +349,7 @@ func (g *Gobin) ShowBinaryRepository(ctx context.Context, binary string, open bo
 // UninstallBinary uninstalls a given binary by removing the binary file. It
 // returns an error if the binary cannot be found or removed.
 func (g *Gobin) UninstallBinary(binary string) error {
-	binPath, err := g.binaryManager.GetBinFullPath()
-	if err != nil {
-		return err
-	}
-
-	err = g.system.Remove(filepath.Join(binPath, binary))
+	err := g.system.Remove(filepath.Join(g.workspace.GetGoBinPath(), binary))
 	if errors.Is(err, os.ErrNotExist) {
 		fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
 		return err
@@ -384,13 +374,11 @@ func (g *Gobin) UpgradeBinaries(
 	parallelism int,
 	bins ...string,
 ) error {
-	binFullPath, err := g.binaryManager.GetBinFullPath()
-	if err != nil {
-		return err
-	}
+	binFullPath := g.workspace.GetGoBinPath()
 
 	var binPaths []string
 	if len(bins) == 0 {
+		var err error
 		binPaths, err = g.binaryManager.ListBinariesFullPaths(binFullPath)
 		if err != nil {
 			return err
@@ -425,11 +413,11 @@ func (g *Gobin) openResource(ctx context.Context, resource string) error {
 	var cmd ExecCombinedOutput
 	runtimeOS := g.system.RuntimeOS()
 	switch runtimeOS {
-	case "darwin":
+	case darwinOS:
 		cmd = g.execCmd(ctx, "open", resource)
-	case "linux":
+	case linuxOS:
 		cmd = g.execCmd(ctx, "xdg-open", resource)
-	case "windows":
+	case windowsOS:
 		cmd = g.execCmd(ctx, "cmd", "/c", "start", resource)
 	default:
 		err := fmt.Errorf("unsupported platform: %s", runtimeOS)
