@@ -13,14 +13,24 @@ type System interface {
 	GetEnvVar(key string) (string, bool)
 	// LookPath returns the path to an executable file in the PATH environment variable.
 	LookPath(file string) (string, error)
+	// MkdirAll creates a directory named path, along with any necessary parents,
+	// with mode perm.
+	MkdirAll(path string, perm os.FileMode) error
+	// MkdirTemp creates a new temporary directory.
+	MkdirTemp(dir, pattern string) (string, error)
 	// PathListSeparator returns the OS-specific path list separator.
 	PathListSeparator() rune
 	// ReadBuildInfo reads build information from a Go binary file.
 	ReadBuildInfo(path string) (*buildinfo.BuildInfo, error)
-	// ReadDir reads the directory named by dirname and returns a list of directory entries.
+	// ReadDir reads the directory named by dirname and returns a list of
+	// directory entries.
 	ReadDir(dirname string) ([]os.DirEntry, error)
 	// Remove removes the named file or (empty) directory.
 	Remove(name string) error
+	// RemoveAll removes path and any children it contains.
+	RemoveAll(path string) error
+	// Rename renames (moves) oldpath to newpath.
+	Rename(oldpath, newpath string) error
 	// RuntimeARCH returns the architecture of the current runtime.
 	RuntimeARCH() string
 	// RuntimeOS returns the operating system of the current runtime.
@@ -29,6 +39,8 @@ type System interface {
 	RuntimeVersion() string
 	// Stat returns the FileInfo structure describing file.
 	Stat(name string) (os.FileInfo, error)
+	// Symlink creates newname as a symbolic link to oldname.
+	Symlink(oldname, newname string) error
 	// UserHomeDir returns the current user's home directory.
 	UserHomeDir() (string, error)
 }
@@ -49,6 +61,18 @@ func (s *defaultSystem) GetEnvVar(key string) (string, bool) {
 // LookPath returns the path to an executable file in the PATH environment variable.
 func (s *defaultSystem) LookPath(file string) (string, error) {
 	return exec.LookPath(file)
+}
+
+// MkdirAll creates a directory named path, along with any necessary parents,
+// with mode perm.
+func (s *defaultSystem) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
+
+// MkdirTemp creates a new temporary directory in the directory dir
+// and returns the pathname of the new directory.
+func (s *defaultSystem) MkdirTemp(dir, pattern string) (string, error) {
+	return os.MkdirTemp(dir, pattern)
 }
 
 // PathListSeparator returns the OS-specific path list separator for the PATH
@@ -72,6 +96,16 @@ func (s *defaultSystem) Remove(name string) error {
 	return os.Remove(name)
 }
 
+// RemoveAll removes path and any children it contains.
+func (s *defaultSystem) RemoveAll(path string) error {
+	return os.RemoveAll(path)
+}
+
+// Rename renames (moves) oldpath to newpath.
+func (s *defaultSystem) Rename(oldpath, newpath string) error {
+	return os.Rename(oldpath, newpath)
+}
+
 // RuntimeARCH returns the architecture for the current runtime.
 func (s *defaultSystem) RuntimeARCH() string {
 	return runtime.GOARCH
@@ -90,6 +124,11 @@ func (s *defaultSystem) RuntimeVersion() string {
 // Stat returns a FileInfo describing the named file.
 func (s *defaultSystem) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
+}
+
+// Symlink creates newname as a symbolic link to oldname.
+func (s *defaultSystem) Symlink(oldname, newname string) error {
+	return os.Symlink(oldname, newname)
 }
 
 // UserHomeDir returns the current user's home directory.

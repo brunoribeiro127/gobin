@@ -378,16 +378,19 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 
 func TestGoToolchain_Install(t *testing.T) {
 	cases := map[string]struct {
+		path           string
 		pkg            string
 		version        string
 		mockExecCmdErr error
 		expectedErr    error
 	}{
 		"success": {
+			path:    "/home/user/.gobin/.tmp/mockproj-1234567890",
 			pkg:     "example.com/mockorg/mockproj/cmd/mockproj",
 			version: "v0.1.0",
 		},
 		"error-installing-binary": {
+			path:           "/home/user/.gobin/.tmp/mockproj-1234567890",
 			pkg:            "example.com/mockorg/mockproj/cmd/mockproj",
 			version:        "v0.1.0",
 			mockExecCmdErr: errors.New("unexpected error"),
@@ -399,6 +402,7 @@ func TestGoToolchain_Install(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			execRun := mocks.NewExecRun(t)
 			execRun.EXPECT().Run().Return(tc.mockExecCmdErr).Once()
+			execRun.EXPECT().InjectEnv([]string{"GOBIN=" + tc.path}).Once()
 
 			execRunFunc := func(_ context.Context, name string, args ...string) internal.ExecRun {
 				assert.Equal(t, "go", name)
@@ -407,7 +411,7 @@ func TestGoToolchain_Install(t *testing.T) {
 			}
 
 			toolchain := internal.NewGoToolchain(nil, execRunFunc, nil, nil)
-			err := toolchain.Install(context.Background(), tc.pkg, tc.version)
+			err := toolchain.Install(context.Background(), tc.path, tc.pkg, tc.version)
 			if tc.expectedErr != nil {
 				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {

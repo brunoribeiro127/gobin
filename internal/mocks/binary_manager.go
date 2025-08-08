@@ -159,59 +159,6 @@ func (_c *BinaryManager_GetAllBinaryInfos_Call) RunAndReturn(run func() ([]inter
 	return _c
 }
 
-// GetBinFullPath provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) GetBinFullPath() (string, error) {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetBinFullPath")
-	}
-
-	var r0 string
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func() (string, error)); ok {
-		return returnFunc()
-	}
-	if returnFunc, ok := ret.Get(0).(func() string); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// BinaryManager_GetBinFullPath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBinFullPath'
-type BinaryManager_GetBinFullPath_Call struct {
-	*mock.Call
-}
-
-// GetBinFullPath is a helper method to define mock.On call
-func (_e *BinaryManager_Expecter) GetBinFullPath() *BinaryManager_GetBinFullPath_Call {
-	return &BinaryManager_GetBinFullPath_Call{Call: _e.mock.On("GetBinFullPath")}
-}
-
-func (_c *BinaryManager_GetBinFullPath_Call) Run(run func()) *BinaryManager_GetBinFullPath_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *BinaryManager_GetBinFullPath_Call) Return(s string, err error) *BinaryManager_GetBinFullPath_Call {
-	_c.Call.Return(s, err)
-	return _c
-}
-
-func (_c *BinaryManager_GetBinFullPath_Call) RunAndReturn(run func() (string, error)) *BinaryManager_GetBinFullPath_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // GetBinaryInfo provides a mock function for the type BinaryManager
 func (_mock *BinaryManager) GetBinaryInfo(path string) (internal.BinaryInfo, error) {
 	ret := _mock.Called(path)

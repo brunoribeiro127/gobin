@@ -59,8 +59,8 @@ type Toolchain interface {
 	GetModuleFile(ctx context.Context, module, version string) (*modfile.File, error)
 	// GetModuleOrigin gets the module origin for a given module and version.
 	GetModuleOrigin(ctx context.Context, module, version string) (*ModuleOrigin, error)
-	// Install installs a package with a given version.
-	Install(ctx context.Context, pkg, version string) error
+	// Install installs a package in the target path.
+	Install(ctx context.Context, path, pkg, version string) error
 	// VulnCheck checks for vulnerabilities in a binary.
 	VulnCheck(ctx context.Context, path string) ([]Vulnerability, error)
 }
@@ -288,19 +288,20 @@ func (t *GoToolchain) GetModuleOrigin(
 	return res.Origin, nil
 }
 
-// Install installs a package and its dependencies for the specified version.
-// It uses the go install command with the -a option to force the rebuild
-// of the package and its dependencies, even if they are already up to date.
-// It fails if the go install command fails.
+// Install installs a package and its dependencies for the specified version in
+// the target path. It uses the go install command with the -a option to force
+// the rebuild of the package and its dependencies, even if they are already
+// up to date. It fails if the go install command fails.
 func (t *GoToolchain) Install(
 	ctx context.Context,
-	pkg, version string,
+	path, pkg, version string,
 ) error {
-	logger := slog.Default().With("package", pkg, "version", version)
+	logger := slog.Default().With("path", path, "package", pkg, "version", version)
 	logger.InfoContext(ctx, "installing package")
 
 	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)
 	cmd := t.execRun(ctx, "go", "install", "-a", pkgVersion)
+	cmd.InjectEnv("GOBIN=" + path)
 
 	if err := cmd.Run(); err != nil {
 		logger.ErrorContext(ctx, "error installing binary", "err", err)

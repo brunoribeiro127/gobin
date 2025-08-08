@@ -505,7 +505,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					Once()
 			}
 
-			binaryManager := internal.NewGoBinaryManager(system, toolchain)
+			binaryManager := internal.NewGoBinaryManager(system, toolchain, nil)
 			diagnostic, err := binaryManager.DiagnoseBinary(context.Background(), tc.path)
 			assert.Equal(t, tc.expectedDiagnostic, diagnostic)
 			assert.Equal(t, tc.expectedHasIssues, diagnostic.HasIssues())
@@ -516,9 +516,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 
 func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 	cases := map[string]struct {
-		mockUserHomeDir       string
-		mockUserHomeDirErr    error
-		callReadDir           bool
+		mockGetGoBinPath      string
 		mockReadDirEntries    []os.DirEntry
 		mockReadDirErr        error
 		mockStatInfoCalls     []mockStatInfoCall
@@ -529,8 +527,7 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 		expectedErr           error
 	}{
 		"success": {
-			mockUserHomeDir: "/home/user",
-			callReadDir:     true,
+			mockGetGoBinPath: "/home/user/go/bin",
 			mockReadDirEntries: []os.DirEntry{
 				NewMockDirEntry("bin1"),
 				NewMockDirEntry("dir1"),
@@ -565,8 +562,7 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 			},
 		},
 		"success-skip-get-binary-info-error": {
-			mockUserHomeDir: "/home/user",
-			callReadDir:     true,
+			mockGetGoBinPath: "/home/user/go/bin",
 			mockReadDirEntries: []os.DirEntry{
 				NewMockDirEntry("bin1"),
 				NewMockDirEntry("dir1"),
@@ -599,39 +595,26 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 				getBinaryInfo("bin1", "v0.1.0"),
 			},
 		},
-		"error-get-bin-full-path": {
-			mockUserHomeDirErr: errors.New("unexpected error"),
-			expectedErr:        errors.New("unexpected error"),
-		},
 		"error-list-binaries-full-paths": {
-			mockUserHomeDir: "/home/user",
-			callReadDir:     true,
-			mockReadDirErr:  os.ErrNotExist,
-			expectedErr:     os.ErrNotExist,
+			mockGetGoBinPath: "/home/user/go/bin",
+			mockReadDirErr:   os.ErrNotExist,
+			expectedErr:      os.ErrNotExist,
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			workspace := mocks.NewWorkspace(t)
+
+			workspace.EXPECT().GetGoBinPath().
+				Return(tc.mockGetGoBinPath).
+				Once()
+
 			system := mocks.NewSystem(t)
 
-			system.EXPECT().GetEnvVar("GOBIN").
-				Return("", false).
+			system.EXPECT().ReadDir(tc.mockGetGoBinPath).
+				Return(tc.mockReadDirEntries, tc.mockReadDirErr).
 				Once()
-
-			system.EXPECT().GetEnvVar("GOPATH").
-				Return("", false).
-				Once()
-
-			system.EXPECT().UserHomeDir().
-				Return(tc.mockUserHomeDir, tc.mockUserHomeDirErr).
-				Once()
-
-			if tc.callReadDir {
-				system.EXPECT().ReadDir(filepath.Join(tc.mockUserHomeDir, "go", "bin")).
-					Return(tc.mockReadDirEntries, tc.mockReadDirErr).
-					Once()
-			}
 
 			for _, call := range tc.mockStatInfoCalls {
 				system.EXPECT().Stat(call.path).
@@ -653,7 +636,7 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 					Once()
 			}
 
-			binaryManager := internal.NewGoBinaryManager(system, toolchain)
+			binaryManager := internal.NewGoBinaryManager(system, toolchain, workspace)
 			infos, err := binaryManager.GetAllBinaryInfos()
 			assert.Equal(t, tc.expectedInfos, infos)
 			assert.Equal(t, tc.expectedErr, err)
@@ -746,7 +729,7 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 			toolchain.EXPECT().GetBuildInfo(tc.path).
 				Return(tc.mockGetBuildInfo, tc.mockGetBuildInfoErr).Once()
 
-			binaryManager := internal.NewGoBinaryManager(nil, toolchain)
+			binaryManager := internal.NewGoBinaryManager(nil, toolchain, nil)
 			info, err := binaryManager.GetBinaryInfo(tc.path)
 			assert.Equal(t, tc.expectedInfo, info)
 			assert.Equal(t, tc.expectedErr, err)
@@ -757,9 +740,7 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 	cases := map[string]struct {
 		binary                 string
-		mockUserHomeDir        string
-		mockUserHomeDirErr     error
-		callGetBuildInfo       bool
+		mockGetGoBinPath       string
 		mockGetBuildInfo       *buildinfo.BuildInfo
 		mockGetBuildInfoErr    error
 		callGetModuleOrigin    bool
@@ -770,8 +751,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 	}{
 		"success-module-origin": {
 			binary:              "mockproj",
-			mockUserHomeDir:     "/home/user",
-			callGetBuildInfo:    true,
+			mockGetGoBinPath:    "/home/user/go/bin",
 			mockGetBuildInfo:    getBuildInfo("mockproj", "v0.1.0"),
 			callGetModuleOrigin: true,
 			mockGetModuleOrigin: &internal.ModuleOrigin{
@@ -781,8 +761,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 		},
 		"success-module-origin-not-available": {
 			binary:                 "mockproj",
-			mockUserHomeDir:        "/home/user",
-			callGetBuildInfo:       true,
+			mockGetGoBinPath:       "/home/user/go/bin",
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
 			callGetModuleOrigin:    true,
 			mockGetModuleOriginErr: internal.ErrModuleOriginNotAvailable,
@@ -790,29 +769,21 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 		},
 		"success-module-not-found": {
 			binary:                 "mockproj",
-			mockUserHomeDir:        "/home/user",
-			callGetBuildInfo:       true,
+			mockGetGoBinPath:       "/home/user/go/bin",
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
 			callGetModuleOrigin:    true,
 			mockGetModuleOriginErr: internal.ErrModuleNotFound,
 			expectedRepository:     "https://example.com/mockorg/mockproj",
 		},
-		"error-get-bin-full-path": {
-			binary:             "mockproj",
-			mockUserHomeDirErr: errors.New("unexpected error"),
-			expectedErr:        errors.New("unexpected error"),
-		},
 		"error-get-build-info": {
 			binary:              "mockproj",
-			mockUserHomeDir:     "/home/user",
-			callGetBuildInfo:    true,
+			mockGetGoBinPath:    "/home/user/go/bin",
 			mockGetBuildInfoErr: internal.ErrBinaryBuiltWithoutGoModules,
 			expectedErr:         internal.ErrBinaryBuiltWithoutGoModules,
 		},
 		"error-get-module-origin": {
 			binary:                 "mockproj",
-			mockUserHomeDir:        "/home/user",
-			callGetBuildInfo:       true,
+			mockGetGoBinPath:       "/home/user/go/bin",
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
 			callGetModuleOrigin:    true,
 			mockGetModuleOriginErr: errors.New("unexpected error"),
@@ -822,28 +793,18 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			system := mocks.NewSystem(t)
+			workspace := mocks.NewWorkspace(t)
 
-			system.EXPECT().GetEnvVar("GOBIN").
-				Return("", false).
-				Once()
-
-			system.EXPECT().GetEnvVar("GOPATH").
-				Return("", false).
-				Once()
-
-			system.EXPECT().UserHomeDir().
-				Return(tc.mockUserHomeDir, tc.mockUserHomeDirErr).
+			workspace.EXPECT().GetGoBinPath().
+				Return(tc.mockGetGoBinPath).
 				Once()
 
 			toolchain := mocks.NewToolchain(t)
 
-			if tc.callGetBuildInfo {
-				toolchain.EXPECT().
-					GetBuildInfo(filepath.Join(tc.mockUserHomeDir, "go", "bin", tc.binary)).
-					Return(tc.mockGetBuildInfo, tc.mockGetBuildInfoErr).
-					Once()
-			}
+			toolchain.EXPECT().
+				GetBuildInfo(filepath.Join(tc.mockGetGoBinPath, tc.binary)).
+				Return(tc.mockGetBuildInfo, tc.mockGetBuildInfoErr).
+				Once()
 
 			if tc.callGetModuleOrigin {
 				toolchain.EXPECT().GetModuleOrigin(
@@ -853,7 +814,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 				).Return(tc.mockGetModuleOrigin, tc.mockGetModuleOriginErr).Once()
 			}
 
-			binaryManager := internal.NewGoBinaryManager(system, toolchain)
+			binaryManager := internal.NewGoBinaryManager(nil, toolchain, workspace)
 			repository, err := binaryManager.GetBinaryRepository(context.Background(), tc.binary)
 			assert.Equal(t, tc.expectedRepository, repository)
 			assert.Equal(t, tc.expectedErr, err)
@@ -1041,7 +1002,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 					Once()
 			}
 
-			binaryManager := internal.NewGoBinaryManager(nil, toolchain)
+			binaryManager := internal.NewGoBinaryManager(nil, toolchain, nil)
 			info, err := binaryManager.GetBinaryUpgradeInfo(
 				context.Background(), tc.info, tc.checkMajor,
 			)
@@ -1051,108 +1012,339 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 	}
 }
 
-func TestGoBinaryManager_GetBinFullPath(t *testing.T) {
-	cases := map[string]struct {
-		mockGOBINEnvVar    string
-		mockGOBINEnvVarOk  bool
-		callGOPATHEnvVar   bool
-		mockGOPATHEnvVar   string
-		mockGOPATHEnvVarOk bool
-		callUserHomeDir    bool
-		mockUserHomeDir    string
-		mockUserHomeDirErr error
-		expectedPath       string
-		expectedErr        error
-	}{
-		"success-gobin-env-var": {
-			mockGOBINEnvVar:   "/home/user/go/bin",
-			mockGOBINEnvVarOk: true,
-			expectedPath:      "/home/user/go/bin",
-		},
-		"success-gopath-env-var": {
-			callGOPATHEnvVar:   true,
-			mockGOPATHEnvVar:   "/home/user/go",
-			mockGOPATHEnvVarOk: true,
-			expectedPath:       "/home/user/go/bin",
-		},
-		"success-user-home-dir": {
-			callGOPATHEnvVar: true,
-			callUserHomeDir:  true,
-			mockUserHomeDir:  "/home/user",
-			expectedPath:     "/home/user/go/bin",
-		},
-		"error-user-home-dir": {
-			callGOPATHEnvVar:   true,
-			callUserHomeDir:    true,
-			mockUserHomeDirErr: errors.New("unexpected error"),
-			expectedErr:        errors.New("unexpected error"),
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			system := mocks.NewSystem(t)
-
-			system.EXPECT().GetEnvVar("GOBIN").
-				Return(tc.mockGOBINEnvVar, tc.mockGOBINEnvVarOk).
-				Once()
-
-			if tc.callGOPATHEnvVar {
-				system.EXPECT().GetEnvVar("GOPATH").
-					Return(tc.mockGOPATHEnvVar, tc.mockGOPATHEnvVarOk).
-					Once()
-			}
-			if tc.callUserHomeDir {
-				system.EXPECT().UserHomeDir().
-					Return(tc.mockUserHomeDir, tc.mockUserHomeDirErr).
-					Once()
-			}
-
-			binaryManager := internal.NewGoBinaryManager(system, nil)
-			path, err := binaryManager.GetBinFullPath()
-			assert.Equal(t, tc.expectedPath, path)
-			assert.Equal(t, tc.expectedErr, err)
-		})
-	}
-}
-
+//nolint:gocognit
 func TestGoBinaryManager_InstallPackage(t *testing.T) {
 	cases := map[string]struct {
-		pkgVersion     string
-		mockPkg        string
-		mockVersion    string
-		callInstall    bool
-		mockInstallErr error
-		expectedErr    error
+		pkgVersion              string
+		callGetInternalTempPath bool
+		mockInternalTempPath    string
+		callMkdirTemp           bool
+		mockMkdirTempPattern    string
+		mockMkdirTempPath       string
+		mockMkdirTempErr        error
+		callRemoveAll           bool
+		mockRemoveAllErr        error
+		callInstall             bool
+		mockInstallPackage      string
+		mockInstallVersion      string
+		mockInstallErr          error
+		callGetBuildInfo        bool
+		mockGetBuildInfoPath    string
+		mockGetBuildInfo        *buildinfo.BuildInfo
+		mockGetBuildInfoErr     error
+		callGetInternalBinPath  bool
+		mockInternalBinPath     string
+		callRename              bool
+		mockRenameSrc           string
+		mockRenameDst           string
+		mockRenameErr           error
+		callGetGoBinPath        bool
+		mockGoBinPath           string
+		callRemove              bool
+		mockRemovePath          string
+		mockRemoveErr           error
+		callSymlink             bool
+		mockSymlinkSrc          string
+		mockSymlinkDst          string
+		mockSymlinkErr          error
+		expectedErr             error
 	}{
 		"success-package": {
-			pkgVersion:  "example.com/mockorg/mockproj/cmd/mockproj",
-			mockPkg:     "example.com/mockorg/mockproj/cmd/mockproj",
-			mockVersion: "latest",
+			pkgVersion:              "example.com/mockorg/mockproj/cmd/mockproj",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "latest",
+			callGetBuildInfo:        true,
+			mockGetBuildInfoPath:    "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo:        getBuildInfo("mockproj", "v1.0.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.0.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v1.0.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
 		},
 		"success-package-with-version": {
-			pkgVersion:  "example.com/mockorg/mockproj/cmd/mockproj@v1.0.0",
-			mockPkg:     "example.com/mockorg/mockproj/cmd/mockproj",
-			mockVersion: "v1.0.0",
+			pkgVersion:              "example.com/mockorg/mockproj/cmd/mockproj@v1.0.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.0.0",
+			callGetBuildInfo:        true,
+			mockGetBuildInfoPath:    "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo:        getBuildInfo("mockproj", "v1.0.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.0.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v1.0.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
+		},
+		"success-package-version-suffix-with-version": {
+			pkgVersion:              "example.com/mockorg/mockproj/v2@v2.0.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/v2",
+			mockInstallVersion:      "v2.0.0",
+			callGetBuildInfo:        true,
+			mockGetBuildInfoPath:    "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo:        getBuildInfo("mockproj", "v2.0.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v2.0.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v2.0.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
+		},
+		"error-mkdir-temp": {
+			pkgVersion:              "example.com/mockorg/mockproj/cmd/mockproj@v1.1.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			mockMkdirTempErr:        os.ErrNotExist,
+			expectedErr:             os.ErrNotExist,
 		},
 		"error-install": {
-			pkgVersion:     "example.com/mockorg/mockproj/cmd/mockproj@v1.0.0",
-			mockPkg:        "example.com/mockorg/mockproj/cmd/mockproj",
-			mockVersion:    "v1.0.0",
-			mockInstallErr: errors.New("exit status 1: unexpected error"),
-			expectedErr:    errors.New("exit status 1: unexpected error"),
+			pkgVersion:              "example.com/mockorg/mockproj/cmd/mockproj@v1.1.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			mockInstallErr:          errors.New("exit status 1: unexpected error"),
+			expectedErr:             errors.New("exit status 1: unexpected error"),
+		},
+		"error-get-build-info": {
+			pkgVersion:              "example.com/mockorg/mockproj/cmd/mockproj@v1.1.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo:        true,
+			mockGetBuildInfoPath:    "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo:        getBuildInfo("mockproj", "v1.1.0"),
+			mockGetBuildInfoErr:     os.ErrNotExist,
+			expectedErr:             os.ErrNotExist,
+		},
+		"error-rename": {
+			pkgVersion:              "example.com/mockorg/mockproj/cmd/mockproj@v1.1.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo:        true,
+			mockGetBuildInfoPath:    "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo:        getBuildInfo("mockproj", "v1.1.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.1.0",
+			mockRenameErr:           os.ErrExist,
+			expectedErr:             os.ErrExist,
+		},
+		"error-remove": {
+			pkgVersion:              "example.com/mockorg/mockproj/cmd/mockproj@v1.1.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo:        true,
+			mockGetBuildInfoPath:    "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo:        getBuildInfo("mockproj", "v1.1.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.1.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			mockRemoveErr:           errors.New("unexpected error"),
+			expectedErr:             errors.New("unexpected error"),
+		},
+		"error-symlink": {
+			pkgVersion:              "example.com/mockorg/mockproj/cmd/mockproj@v1.1.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo:        true,
+			mockGetBuildInfoPath:    "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo:        getBuildInfo("mockproj", "v1.1.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.1.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v1.1.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
+			mockSymlinkErr:          os.ErrExist,
+			expectedErr:             os.ErrExist,
+		},
+		"skip-error-remove-all": {
+			pkgVersion:              "example.com/mockorg/mockproj/cmd/mockproj",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			mockRemoveAllErr:        os.ErrNotExist,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "latest",
+			callGetBuildInfo:        true,
+			mockGetBuildInfoPath:    "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo:        getBuildInfo("mockproj", "v1.0.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.0.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v1.0.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			workspace := mocks.NewWorkspace(t)
+
+			if tc.callGetInternalTempPath {
+				workspace.EXPECT().GetInternalTempPath().
+					Return(tc.mockInternalTempPath).
+					Once()
+			}
+
+			if tc.callGetInternalBinPath {
+				workspace.EXPECT().GetInternalBinPath().
+					Return(tc.mockInternalBinPath).
+					Once()
+			}
+
+			if tc.callGetGoBinPath {
+				workspace.EXPECT().GetGoBinPath().
+					Return(tc.mockGoBinPath).
+					Once()
+			}
+
+			system := mocks.NewSystem(t)
+
+			if tc.callMkdirTemp {
+				system.EXPECT().MkdirTemp(tc.mockInternalTempPath, tc.mockMkdirTempPattern).
+					Return(tc.mockMkdirTempPath, tc.mockMkdirTempErr).Once()
+			}
+
+			if tc.callRemoveAll {
+				system.EXPECT().RemoveAll(tc.mockMkdirTempPath).
+					Return(tc.mockRemoveAllErr).Once()
+			}
+
+			if tc.callRename {
+				system.EXPECT().Rename(tc.mockRenameSrc, tc.mockRenameDst).
+					Return(tc.mockRenameErr).Once()
+			}
+
+			if tc.callRemove {
+				system.EXPECT().Remove(tc.mockRemovePath).
+					Return(tc.mockRemoveErr).Once()
+			}
+
+			if tc.callSymlink {
+				system.EXPECT().Symlink(tc.mockSymlinkSrc, tc.mockSymlinkDst).
+					Return(tc.mockSymlinkErr).Once()
+			}
+
 			toolchain := mocks.NewToolchain(t)
 
-			toolchain.EXPECT().Install(context.Background(), tc.mockPkg, tc.mockVersion).
-				Return(tc.mockInstallErr).
-				Once()
+			if tc.callGetBuildInfo {
+				toolchain.EXPECT().GetBuildInfo(tc.mockGetBuildInfoPath).
+					Return(tc.mockGetBuildInfo, tc.mockGetBuildInfoErr).
+					Once()
+			}
 
-			binaryManager := internal.NewGoBinaryManager(nil, toolchain)
+			if tc.callInstall {
+				toolchain.EXPECT().Install(
+					context.Background(),
+					tc.mockMkdirTempPath,
+					tc.mockInstallPackage,
+					tc.mockInstallVersion,
+				).Return(tc.mockInstallErr).Once()
+			}
+
+			binaryManager := internal.NewGoBinaryManager(system, toolchain, workspace)
 			err := binaryManager.InstallPackage(context.Background(), tc.pkgVersion)
 			assert.Equal(t, tc.expectedErr, err)
 		})
@@ -1257,7 +1449,7 @@ func TestGoBinaryManager_ListBinariesFullPaths(t *testing.T) {
 					Times(tc.mockRuntimeOSTimes)
 			}
 
-			binaryManager := internal.NewGoBinaryManager(system, nil)
+			binaryManager := internal.NewGoBinaryManager(system, nil, nil)
 			binaries, err := binaryManager.ListBinariesFullPaths(tc.dir)
 			assert.Equal(t, tc.expectedBinaries, binaries)
 			assert.Equal(t, tc.expectedErr, err)
@@ -1265,6 +1457,7 @@ func TestGoBinaryManager_ListBinariesFullPaths(t *testing.T) {
 	}
 }
 
+//nolint:gocognit
 func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 	cases := map[string]struct {
 		binFullPath                     string
@@ -1273,10 +1466,37 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 		mockGetBuildInfo                *buildinfo.BuildInfo
 		mockGetBuildInfoErr             error
 		mockGetLatestModuleVersionCalls []mockGetLatestModuleVersionCall
+		callGetInternalTempPath         bool
+		mockInternalTempPath            string
+		callMkdirTemp                   bool
+		mockMkdirTempPattern            string
+		mockMkdirTempPath               string
+		mockMkdirTempErr                error
+		callRemoveAll                   bool
+		mockRemoveAllErr                error
 		callInstall                     bool
 		mockInstallPackage              string
 		mockInstallVersion              string
 		mockInstallErr                  error
+		callGetBuildInfo2               bool
+		mockGetBuildInfo2Path           string
+		mockGetBuildInfo2               *buildinfo.BuildInfo
+		mockGetBuildInfo2Err            error
+		callGetInternalBinPath          bool
+		mockInternalBinPath             string
+		callRename                      bool
+		mockRenameSrc                   string
+		mockRenameDst                   string
+		mockRenameErr                   error
+		callGetGoBinPath                bool
+		mockGoBinPath                   string
+		callRemove                      bool
+		mockRemovePath                  string
+		mockRemoveErr                   error
+		callSymlink                     bool
+		mockSymlinkSrc                  string
+		mockSymlinkDst                  string
+		mockSymlinkErr                  error
 		expectedErr                     error
 	}{
 		"success-no-minor-upgrade-available": {
@@ -1321,25 +1541,67 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 					latestVersion: "v0.1.0",
 				},
 			},
-			callInstall:        true,
-			mockInstallPackage: "example.com/mockorg/mockproj/cmd/mockproj",
-			mockInstallVersion: "v0.1.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v0.1.0",
+			callGetBuildInfo2:       true,
+			mockGetBuildInfo2Path:   "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo2:       getBuildInfo("mockproj", "v0.1.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v0.1.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v0.1.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
 		},
 		"success-minor-upgrade-available": {
 			binFullPath:      "/home/user/go/bin/mockproj",
 			majorUpgrade:     false,
 			rebuild:          false,
-			mockGetBuildInfo: getBuildInfo("mockproj", "v0.1.0"),
+			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
 					latestModule:  "example.com/mockorg/mockproj",
-					latestVersion: "v1.0.0",
+					latestVersion: "v1.1.0",
 				},
 			},
-			callInstall:        true,
-			mockInstallPackage: "example.com/mockorg/mockproj/cmd/mockproj",
-			mockInstallVersion: "v1.0.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo2:       true,
+			mockGetBuildInfo2Path:   "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo2:       getBuildInfo("mockproj", "v1.1.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.1.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v1.1.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
 		},
 		"success-major-upgrade-available": {
 			binFullPath:      "/home/user/go/bin/mockproj",
@@ -1362,9 +1624,30 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 					err:    internal.ErrModuleNotFound,
 				},
 			},
-			callInstall:        true,
-			mockInstallPackage: "example.com/mockorg/mockproj/v2/cmd/mockproj",
-			mockInstallVersion: "v2.0.0",
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/v2/cmd/mockproj",
+			mockInstallVersion:      "v2.0.0",
+			callGetBuildInfo2:       true,
+			mockGetBuildInfo2Path:   "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo2:       getBuildInfo("mockproj", "v2.0.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v2.0.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v2.0.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
 		},
 		"error-get-build-info": {
 			binFullPath:         "/home/user/go/bin/mockproj",
@@ -1386,28 +1669,273 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			},
 			expectedErr: internal.ErrModuleInfoNotAvailable,
 		},
-		"error-install": {
+		"error-mkdir-temp": {
 			binFullPath:      "/home/user/go/bin/mockproj",
 			majorUpgrade:     false,
 			rebuild:          false,
-			mockGetBuildInfo: getBuildInfo("mockproj", "v0.1.0"),
+			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
 					latestModule:  "example.com/mockorg/mockproj",
-					latestVersion: "v1.0.0",
+					latestVersion: "v1.1.0",
 				},
 			},
-			callInstall:        true,
-			mockInstallPackage: "example.com/mockorg/mockproj/cmd/mockproj",
-			mockInstallVersion: "v1.0.0",
-			mockInstallErr:     errors.New("unexpected error"),
-			expectedErr:        errors.New("unexpected error"),
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			mockMkdirTempErr:        os.ErrNotExist,
+			expectedErr:             os.ErrNotExist,
+		},
+		"error-install": {
+			binFullPath:      "/home/user/go/bin/mockproj",
+			majorUpgrade:     false,
+			rebuild:          false,
+			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
+				{
+					module:        "example.com/mockorg/mockproj",
+					latestModule:  "example.com/mockorg/mockproj",
+					latestVersion: "v1.1.0",
+				},
+			},
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			mockInstallErr:          errors.New("exit status 1: unexpected error"),
+			expectedErr:             errors.New("exit status 1: unexpected error"),
+		},
+		"error-get-build-info-2": {
+			binFullPath:      "/home/user/go/bin/mockproj",
+			majorUpgrade:     false,
+			rebuild:          false,
+			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
+				{
+					module:        "example.com/mockorg/mockproj",
+					latestModule:  "example.com/mockorg/mockproj",
+					latestVersion: "v1.1.0",
+				},
+			},
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo2:       true,
+			mockGetBuildInfo2Path:   "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo2:       getBuildInfo("mockproj", "v1.1.0"),
+			mockGetBuildInfo2Err:    os.ErrNotExist,
+			expectedErr:             os.ErrNotExist,
+		},
+		"error-rename": {
+			binFullPath:      "/home/user/go/bin/mockproj",
+			majorUpgrade:     false,
+			rebuild:          false,
+			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
+				{
+					module:        "example.com/mockorg/mockproj",
+					latestModule:  "example.com/mockorg/mockproj",
+					latestVersion: "v1.1.0",
+				},
+			},
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo2:       true,
+			mockGetBuildInfo2Path:   "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo2:       getBuildInfo("mockproj", "v1.1.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.1.0",
+			mockRenameErr:           os.ErrExist,
+			expectedErr:             os.ErrExist,
+		},
+		"error-remove": {
+			binFullPath:      "/home/user/go/bin/mockproj",
+			majorUpgrade:     false,
+			rebuild:          false,
+			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
+				{
+					module:        "example.com/mockorg/mockproj",
+					latestModule:  "example.com/mockorg/mockproj",
+					latestVersion: "v1.1.0",
+				},
+			},
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo2:       true,
+			mockGetBuildInfo2Path:   "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo2:       getBuildInfo("mockproj", "v1.1.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.1.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			mockRemoveErr:           errors.New("unexpected error"),
+			expectedErr:             errors.New("unexpected error"),
+		},
+		"error-symlink": {
+			binFullPath:      "/home/user/go/bin/mockproj",
+			majorUpgrade:     false,
+			rebuild:          false,
+			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
+				{
+					module:        "example.com/mockorg/mockproj",
+					latestModule:  "example.com/mockorg/mockproj",
+					latestVersion: "v1.1.0",
+				},
+			},
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo2:       true,
+			mockGetBuildInfo2Path:   "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo2:       getBuildInfo("mockproj", "v1.1.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.1.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v1.1.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
+			mockSymlinkErr:          os.ErrExist,
+			expectedErr:             os.ErrExist,
+		},
+		"skip-error-remove-all": {
+			binFullPath:      "/home/user/go/bin/mockproj",
+			majorUpgrade:     false,
+			rebuild:          false,
+			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
+				{
+					module:        "example.com/mockorg/mockproj",
+					latestModule:  "example.com/mockorg/mockproj",
+					latestVersion: "v1.1.0",
+				},
+			},
+			callGetInternalTempPath: true,
+			mockInternalTempPath:    "/home/user/.gobin/.tmp",
+			callMkdirTemp:           true,
+			mockMkdirTempPattern:    "mockproj-*",
+			mockMkdirTempPath:       "/home/user/.gobin/.tmp/mockproj-0123456789",
+			callRemoveAll:           true,
+			mockRemoveAllErr:        os.ErrNotExist,
+			callInstall:             true,
+			mockInstallPackage:      "example.com/mockorg/mockproj/cmd/mockproj",
+			mockInstallVersion:      "v1.1.0",
+			callGetBuildInfo2:       true,
+			mockGetBuildInfo2Path:   "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockGetBuildInfo2:       getBuildInfo("mockproj", "v1.1.0"),
+			callGetInternalBinPath:  true,
+			mockInternalBinPath:     "/home/user/.gobin/bin",
+			callRename:              true,
+			mockRenameSrc:           "/home/user/.gobin/.tmp/mockproj-0123456789/mockproj",
+			mockRenameDst:           "/home/user/.gobin/bin/mockproj@v1.1.0",
+			callGetGoBinPath:        true,
+			mockGoBinPath:           "/home/user/go/bin",
+			callRemove:              true,
+			mockRemovePath:          "/home/user/go/bin/mockproj",
+			callSymlink:             true,
+			mockSymlinkSrc:          "/home/user/.gobin/bin/mockproj@v1.1.0",
+			mockSymlinkDst:          "/home/user/go/bin/mockproj",
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			workspace := mocks.NewWorkspace(t)
+
+			if tc.callGetInternalTempPath {
+				workspace.EXPECT().GetInternalTempPath().
+					Return(tc.mockInternalTempPath).
+					Once()
+			}
+
+			if tc.callGetInternalBinPath {
+				workspace.EXPECT().GetInternalBinPath().
+					Return(tc.mockInternalBinPath).
+					Once()
+			}
+
+			if tc.callGetGoBinPath {
+				workspace.EXPECT().GetGoBinPath().
+					Return(tc.mockGoBinPath).
+					Once()
+			}
+
+			system := mocks.NewSystem(t)
+
+			if tc.callMkdirTemp {
+				system.EXPECT().MkdirTemp(tc.mockInternalTempPath, tc.mockMkdirTempPattern).
+					Return(tc.mockMkdirTempPath, tc.mockMkdirTempErr).Once()
+			}
+
+			if tc.callRemoveAll {
+				system.EXPECT().RemoveAll(tc.mockMkdirTempPath).
+					Return(tc.mockRemoveAllErr).Once()
+			}
+
+			if tc.callRename {
+				system.EXPECT().Rename(tc.mockRenameSrc, tc.mockRenameDst).
+					Return(tc.mockRenameErr).Once()
+			}
+
+			if tc.callRemove {
+				system.EXPECT().Remove(tc.mockRemovePath).
+					Return(tc.mockRemoveErr).Once()
+			}
+
+			if tc.callSymlink {
+				system.EXPECT().Symlink(tc.mockSymlinkSrc, tc.mockSymlinkDst).
+					Return(tc.mockSymlinkErr).Once()
+			}
+
 			toolchain := mocks.NewToolchain(t)
 
 			toolchain.EXPECT().GetBuildInfo(tc.binFullPath).
@@ -1420,15 +1948,22 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 					Once()
 			}
 
+			if tc.callGetBuildInfo2 {
+				toolchain.EXPECT().GetBuildInfo(tc.mockGetBuildInfo2Path).
+					Return(tc.mockGetBuildInfo2, tc.mockGetBuildInfo2Err).
+					Once()
+			}
+
 			if tc.callInstall {
 				toolchain.EXPECT().Install(
 					context.Background(),
+					tc.mockMkdirTempPath,
 					tc.mockInstallPackage,
 					tc.mockInstallVersion,
 				).Return(tc.mockInstallErr).Once()
 			}
 
-			binaryManager := internal.NewGoBinaryManager(nil, toolchain)
+			binaryManager := internal.NewGoBinaryManager(system, toolchain, workspace)
 			err := binaryManager.UpgradeBinary(
 				context.Background(),
 				tc.binFullPath,

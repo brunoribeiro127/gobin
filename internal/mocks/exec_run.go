@@ -35,6 +35,54 @@ func (_m *ExecRun) EXPECT() *ExecRun_Expecter {
 	return &ExecRun_Expecter{mock: &_m.Mock}
 }
 
+// InjectEnv provides a mock function for the type ExecRun
+func (_mock *ExecRun) InjectEnv(env ...string) {
+	if len(env) > 0 {
+		_mock.Called(env)
+	} else {
+		_mock.Called()
+	}
+
+	return
+}
+
+// ExecRun_InjectEnv_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InjectEnv'
+type ExecRun_InjectEnv_Call struct {
+	*mock.Call
+}
+
+// InjectEnv is a helper method to define mock.On call
+//   - env ...string
+func (_e *ExecRun_Expecter) InjectEnv(env ...interface{}) *ExecRun_InjectEnv_Call {
+	return &ExecRun_InjectEnv_Call{Call: _e.mock.On("InjectEnv",
+		append([]interface{}{}, env...)...)}
+}
+
+func (_c *ExecRun_InjectEnv_Call) Run(run func(env ...string)) *ExecRun_InjectEnv_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 []string
+		var variadicArgs []string
+		if len(args) > 0 {
+			variadicArgs = args[0].([]string)
+		}
+		arg0 = variadicArgs
+		run(
+			arg0...,
+		)
+	})
+	return _c
+}
+
+func (_c *ExecRun_InjectEnv_Call) Return() *ExecRun_InjectEnv_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *ExecRun_InjectEnv_Call) RunAndReturn(run func(env ...string)) *ExecRun_InjectEnv_Call {
+	_c.Run(run)
+	return _c
+}
+
 // Run provides a mock function for the type ExecRun
 func (_mock *ExecRun) Run() error {
 	ret := _mock.Called()

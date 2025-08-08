@@ -21,7 +21,7 @@
 - Inspect binary information
 - List and show outdated binaries
 - Upgrade individual or all outdated binaries
-- Uninstall binaries
+- Install and uninstall binaries
 - Diagnose and troubleshoot issues with installed binaries
 
 ## Installation
@@ -86,9 +86,16 @@ These flags can be used with any command:
 | `-v`, `--verbose` | Enable verbose output (debug logging) |
 | `-p`, `--parallelism` | Number of concurrent operations (default: number of CPU cores) |
 
-## Installation Path
+## Binary Management
 
-The installation path for binaries is determined by the following flow:
+Installation of multiple versions of the same binary is supported. The `GOBIN` environment variable is used to redirect the binary installation to an internal temporary directory. Then, the binary is moved to the internal binary path with the format `<binary>@<version>`. Finally, a symbolic link is created to the Go binary path to ensure the binary is available in the system path.
+
+Binaries are installed internally in the following paths:
+
+- Linux/MacOS: `$HOME/.gobin/bin`
+- Windows: `%USERPROFILE%\AppData\Local\gobin\bin`
+
+The Go binary installation path is determined by the following:
 - checks if the `GOBIN` environment variable is set
 - if not, checks if the `GOPATH` environment variable is set
 - if not, use the default path `$HOME/go/bin`

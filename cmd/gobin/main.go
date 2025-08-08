@@ -59,19 +59,28 @@ func exitWithSignal(sig os.Signal) {
 func run(ctx context.Context) int {
 	execCombinedOutput := internal.NewExecCombinedOutput
 	system := internal.NewSystem()
-	toolchain := internal.NewGoToolchain(
-		execCombinedOutput,
-		internal.NewExecRun,
-		internal.NewScanExecCombinedOutput,
-		system,
-	)
+
+	workspace, err := internal.NewWorkspace(system)
+	if err != nil {
+		return 1
+	}
 
 	gobin := internal.NewGobin(
-		internal.NewGoBinaryManager(system, toolchain),
+		internal.NewGoBinaryManager(
+			system,
+			internal.NewGoToolchain(
+				execCombinedOutput,
+				internal.NewExecRun,
+				internal.NewScanExecCombinedOutput,
+				system,
+			),
+			workspace,
+		),
 		execCombinedOutput,
 		os.Stderr,
 		os.Stdout,
 		system,
+		workspace,
 	)
 
 	var verbose bool
@@ -89,9 +98,9 @@ func run(ctx context.Context) int {
 			slog.SetDefault(internal.NewLoggerWithLevel(level))
 
 			if parallelism < 1 {
-				err := errors.New("parallelism must be greater than 0")
-				fmt.Fprintf(os.Stderr, "error: %s\n\n", err.Error())
-				return err
+				parallelismErr := errors.New("parallelism must be greater than 0")
+				fmt.Fprintf(os.Stderr, "error: %s\n\n", parallelismErr.Error())
+				return parallelismErr
 			}
 
 			return nil
@@ -124,7 +133,7 @@ func run(ctx context.Context) int {
 	cmd.AddCommand(newUpgradeCmd(gobin))
 	cmd.AddCommand(newVersionCmd(gobin))
 
-	if err := cmd.ExecuteContext(ctx); err != nil {
+	if err = cmd.ExecuteContext(ctx); err != nil {
 		return 1
 	}
 

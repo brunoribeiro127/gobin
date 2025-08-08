@@ -182,8 +182,7 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 	cases := map[string]struct {
 		stdOut                       io.ReadWriter
 		parallelism                  int
-		mockGetBinFullPath           string
-		mockGetBinFullPathErr        error
+		mockGetGoBinPath             string
 		callListBinariesFullPaths    bool
 		mockListBinariesFullPaths    []string
 		mockListBinariesFullPathsErr error
@@ -194,7 +193,7 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 		"success": {
 			stdOut:                    &bytes.Buffer{},
 			parallelism:               1,
-			mockGetBinFullPath:        "/home/user/go/bin",
+			mockGetGoBinPath:          "/home/user/go/bin",
 			callListBinariesFullPaths: true,
 			mockListBinariesFullPaths: []string{
 				"/home/user/go/bin/mockproj1",
@@ -238,7 +237,7 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 		"success-with-parallelism": {
 			stdOut:                    &bytes.Buffer{},
 			parallelism:               2,
-			mockGetBinFullPath:        "/home/user/go/bin",
+			mockGetGoBinPath:          "/home/user/go/bin",
 			callListBinariesFullPaths: true,
 			mockListBinariesFullPaths: []string{
 				"/home/user/go/bin/mockproj1",
@@ -282,7 +281,7 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 		"partial-success-error-diagnose-binary": {
 			stdOut:                    &bytes.Buffer{},
 			parallelism:               1,
-			mockGetBinFullPath:        "/home/user/go/bin",
+			mockGetGoBinPath:          "/home/user/go/bin",
 			callListBinariesFullPaths: true,
 			mockListBinariesFullPaths: []string{
 				"/home/user/go/bin/mockproj1",
@@ -313,14 +312,9 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 2 binaries checked, 2 with issues
 `,
 		},
-		"error-get-bin-full-path": {
-			stdOut:                &bytes.Buffer{},
-			mockGetBinFullPathErr: errors.New("unexpected error"),
-			expectedErr:           errors.New("unexpected error"),
-		},
 		"error-list-binaries-full-paths": {
 			stdOut:                       &bytes.Buffer{},
-			mockGetBinFullPath:           "/home/user/go/bin",
+			mockGetGoBinPath:             "/home/user/go/bin",
 			callListBinariesFullPaths:    true,
 			mockListBinariesFullPathsErr: os.ErrNotExist,
 			expectedErr:                  os.ErrNotExist,
@@ -328,7 +322,7 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 		"error-write-error": {
 			stdOut:                    &errorWriter{},
 			parallelism:               1,
-			mockGetBinFullPath:        "/home/user/go/bin",
+			mockGetGoBinPath:          "/home/user/go/bin",
 			callListBinariesFullPaths: true,
 			mockListBinariesFullPaths: []string{
 				"/home/user/go/bin/mockproj1",
@@ -344,14 +338,16 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			binaryManager := mocks.NewBinaryManager(t)
+			workspace := mocks.NewWorkspace(t)
 
-			binaryManager.EXPECT().GetBinFullPath().
-				Return(tc.mockGetBinFullPath, tc.mockGetBinFullPathErr).
+			workspace.EXPECT().GetGoBinPath().
+				Return(tc.mockGetGoBinPath).
 				Once()
 
+			binaryManager := mocks.NewBinaryManager(t)
+
 			if tc.callListBinariesFullPaths {
-				binaryManager.EXPECT().ListBinariesFullPaths(tc.mockGetBinFullPath).
+				binaryManager.EXPECT().ListBinariesFullPaths(tc.mockGetGoBinPath).
 					Return(tc.mockListBinariesFullPaths, tc.mockListBinariesFullPathsErr).
 					Once()
 			}
@@ -362,7 +358,7 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 					Once()
 			}
 
-			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil)
+			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil, workspace)
 			err := gobin.DiagnoseBinaries(context.Background(), tc.parallelism)
 			assert.Equal(t, tc.expectedErr, err)
 
@@ -407,7 +403,7 @@ func TestGobin_InstallPackages(t *testing.T) {
 					Once()
 			}
 
-			gobin := internal.NewGobin(binaryManager, nil, nil, nil, nil)
+			gobin := internal.NewGobin(binaryManager, nil, nil, nil, nil, nil)
 			err := gobin.InstallPackages(context.Background(), tc.parallelism, tc.packages...)
 			assert.Equal(t, tc.expectedErr, err)
 		})
@@ -452,7 +448,7 @@ mockproj3 → example.com/mockorg/mockproj3/v2 @ v2.1.0
 				Return(tc.mockGetAllBinaryInfos, tc.mockGetAllBinaryInfosErr).
 				Once()
 
-			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil)
+			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil, nil)
 			err := gobin.ListInstalledBinaries()
 			assert.Equal(t, tc.expectedErr, err)
 
@@ -788,7 +784,7 @@ mockproj2 → example.com/mockorg/mockproj2 @ ` + "\033[31m" + `v1.1.0 ` + "\033
 				).Return(call.upgradeInfo, call.err).Once()
 			}
 
-			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil)
+			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil, nil)
 			err := gobin.ListOutdatedBinaries(context.Background(), tc.checkMajor, tc.parallelism)
 			assert.Equal(t, tc.expectedErr, err)
 
@@ -801,22 +797,21 @@ mockproj2 → example.com/mockorg/mockproj2 @ ` + "\033[31m" + `v1.1.0 ` + "\033
 
 func TestGobin_PrintBinaryInfo(t *testing.T) {
 	cases := map[string]struct {
-		stdOut                io.ReadWriter
-		binary                string
-		mockGetBinFullPath    string
-		mockGetBinFullPathErr error
-		callGetBinaryInfo     bool
-		mockGetBinaryInfo     internal.BinaryInfo
-		mockGetBinaryInfoErr  error
-		expectedErr           error
-		expectedStdErr        string
-		expectedStdOut        string
+		stdOut               io.ReadWriter
+		binary               string
+		mockGetGoBinPath     string
+		callGetBinaryInfo    bool
+		mockGetBinaryInfo    internal.BinaryInfo
+		mockGetBinaryInfoErr error
+		expectedErr          error
+		expectedStdErr       string
+		expectedStdOut       string
 	}{
 		"success-base-info": {
-			stdOut:             &bytes.Buffer{},
-			binary:             "mockproj1",
-			mockGetBinFullPath: "/home/user/go/bin",
-			callGetBinaryInfo:  true,
+			stdOut:            &bytes.Buffer{},
+			binary:            "mockproj1",
+			mockGetGoBinPath:  "/home/user/go/bin",
+			callGetBinaryInfo: true,
 			mockGetBinaryInfo: internal.BinaryInfo{
 				Name:          "mockproj",
 				FullPath:      "/home/user/go/bin/mockproj",
@@ -840,10 +835,10 @@ Env Vars      CGO_ENABLED=1
 `,
 		},
 		"success-all-info": {
-			stdOut:             &bytes.Buffer{},
-			binary:             "mockproj1",
-			mockGetBinFullPath: "/home/user/go/bin",
-			callGetBinaryInfo:  true,
+			stdOut:            &bytes.Buffer{},
+			binary:            "mockproj1",
+			mockGetGoBinPath:  "/home/user/go/bin",
+			callGetBinaryInfo: true,
 			mockGetBinaryInfo: internal.BinaryInfo{
 				Name:           "mockproj",
 				FullPath:       "/home/user/go/bin/mockproj",
@@ -868,28 +863,22 @@ Platform      darwin/arm64/v8.0
 Env Vars      CGO_ENABLED=1
 `,
 		},
-		"error-get-bin-full-path": {
-			stdOut:                &bytes.Buffer{},
-			binary:                "mockproj1",
-			mockGetBinFullPathErr: errors.New("unexpected error"),
-			expectedErr:           errors.New("unexpected error"),
-		},
 		"error-get-binary-info": {
 			stdOut:               &bytes.Buffer{},
 			binary:               "mockproj1",
-			mockGetBinFullPath:   "/home/user/go/bin",
+			mockGetGoBinPath:     "/home/user/go/bin",
 			callGetBinaryInfo:    true,
 			mockGetBinaryInfoErr: internal.ErrBinaryNotFound,
 			expectedErr:          internal.ErrBinaryNotFound,
 			expectedStdErr:       "❌ binary \"mockproj1\" not found\n",
 		},
 		"error-write-error": {
-			stdOut:             &errorWriter{},
-			binary:             "mockproj1",
-			mockGetBinFullPath: "/home/user/go/bin",
-			callGetBinaryInfo:  true,
-			mockGetBinaryInfo:  internal.BinaryInfo{},
-			expectedErr:        errMockWriteError,
+			stdOut:            &errorWriter{},
+			binary:            "mockproj1",
+			mockGetGoBinPath:  "/home/user/go/bin",
+			callGetBinaryInfo: true,
+			mockGetBinaryInfo: internal.BinaryInfo{},
+			expectedErr:       errMockWriteError,
 		},
 	}
 
@@ -897,19 +886,21 @@ Env Vars      CGO_ENABLED=1
 		t.Run(name, func(t *testing.T) {
 			var stdErr bytes.Buffer
 
-			binaryManager := mocks.NewBinaryManager(t)
+			workspace := mocks.NewWorkspace(t)
 
-			binaryManager.EXPECT().GetBinFullPath().
-				Return(tc.mockGetBinFullPath, tc.mockGetBinFullPathErr).
+			workspace.EXPECT().GetGoBinPath().
+				Return(tc.mockGetGoBinPath).
 				Once()
 
+			binaryManager := mocks.NewBinaryManager(t)
+
 			if tc.callGetBinaryInfo {
-				binaryManager.EXPECT().GetBinaryInfo(filepath.Join(tc.mockGetBinFullPath, tc.binary)).
+				binaryManager.EXPECT().GetBinaryInfo(filepath.Join(tc.mockGetGoBinPath, tc.binary)).
 					Return(tc.mockGetBinaryInfo, tc.mockGetBinaryInfoErr).
 					Once()
 			}
 
-			gobin := internal.NewGobin(binaryManager, nil, &stdErr, tc.stdOut, nil)
+			gobin := internal.NewGobin(binaryManager, nil, &stdErr, tc.stdOut, nil, workspace)
 			err := gobin.PrintBinaryInfo(tc.binary)
 			assert.Equal(t, tc.expectedErr, err)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
@@ -953,7 +944,7 @@ func TestGobin_PrintShortVersion(t *testing.T) {
 				Return(tc.mockGetBinaryInfo, tc.mockGetBinaryInfoErr).
 				Once()
 
-			gobin := internal.NewGobin(binaryManager, nil, nil, &stdOut, nil)
+			gobin := internal.NewGobin(binaryManager, nil, nil, &stdOut, nil, nil)
 			err := gobin.PrintShortVersion(tc.binary)
 			assert.Equal(t, tc.expectedErr, err)
 			assert.Equal(t, tc.expectedStdOut, stdOut.String())
@@ -996,7 +987,7 @@ func TestGobin_PrintVersion(t *testing.T) {
 				Return(tc.mockGetBinaryInfo, tc.mockGetBinaryInfoErr).
 				Once()
 
-			gobin := internal.NewGobin(binaryManager, nil, nil, &stdOut, nil)
+			gobin := internal.NewGobin(binaryManager, nil, nil, &stdOut, nil, nil)
 			err := gobin.PrintVersion(tc.binary)
 			assert.Equal(t, tc.expectedErr, err)
 			assert.Equal(t, tc.expectedStdOut, stdOut.String())
@@ -1118,7 +1109,7 @@ func TestGobin_ShowBinaryRepository(t *testing.T) {
 				Return(tc.mockGetBinaryRepository, tc.mockGetBinaryRepositoryErr).
 				Once()
 
-			gobin := internal.NewGobin(binaryManager, execCmdFunc, &stdErr, &stdOut, system)
+			gobin := internal.NewGobin(binaryManager, execCmdFunc, &stdErr, &stdOut, system, nil)
 			err := gobin.ShowBinaryRepository(context.Background(), tc.binary, tc.open)
 			if tc.expectedErr != nil {
 				require.EqualError(t, err, tc.expectedErr.Error())
@@ -1133,38 +1124,32 @@ func TestGobin_ShowBinaryRepository(t *testing.T) {
 
 func TestGobin_UninstallBinary(t *testing.T) {
 	cases := map[string]struct {
-		binary                string
-		mockGetBinFullPath    string
-		mockGetBinFullPathErr error
-		callRemove            bool
-		mockRemoveErr         error
-		expectedErr           error
-		expectedStdErr        string
+		binary           string
+		mockGetGoBinPath string
+		callRemove       bool
+		mockRemoveErr    error
+		expectedErr      error
+		expectedStdErr   string
 	}{
 		"success": {
-			binary:             "mockproj1",
-			mockGetBinFullPath: "/home/user/go/bin",
-			callRemove:         true,
-		},
-		"error-get-bin-full-path": {
-			binary:                "mockproj1",
-			mockGetBinFullPathErr: errors.New("unexpected error"),
-			expectedErr:           errors.New("unexpected error"),
+			binary:           "mockproj1",
+			mockGetGoBinPath: "/home/user/go/bin",
+			callRemove:       true,
 		},
 		"error-binary-not-found": {
-			binary:             "mockproj1",
-			mockGetBinFullPath: "/home/user/go/bin",
-			callRemove:         true,
-			mockRemoveErr:      os.ErrNotExist,
-			expectedErr:        os.ErrNotExist,
-			expectedStdErr:     "❌ binary \"mockproj1\" not found\n",
+			binary:           "mockproj1",
+			mockGetGoBinPath: "/home/user/go/bin",
+			callRemove:       true,
+			mockRemoveErr:    os.ErrNotExist,
+			expectedErr:      os.ErrNotExist,
+			expectedStdErr:   "❌ binary \"mockproj1\" not found\n",
 		},
 		"error-remove-binary": {
-			binary:             "mockproj1",
-			mockGetBinFullPath: "/home/user/go/bin",
-			callRemove:         true,
-			mockRemoveErr:      errors.New("unexpected error"),
-			expectedErr:        errors.New("unexpected error"),
+			binary:           "mockproj1",
+			mockGetGoBinPath: "/home/user/go/bin",
+			callRemove:       true,
+			mockRemoveErr:    errors.New("unexpected error"),
+			expectedErr:      errors.New("unexpected error"),
 		},
 	}
 
@@ -1172,21 +1157,21 @@ func TestGobin_UninstallBinary(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var stdErr bytes.Buffer
 
-			binaryManager := mocks.NewBinaryManager(t)
+			workspace := mocks.NewWorkspace(t)
 
-			binaryManager.EXPECT().GetBinFullPath().
-				Return(tc.mockGetBinFullPath, tc.mockGetBinFullPathErr).
+			workspace.EXPECT().GetGoBinPath().
+				Return(tc.mockGetGoBinPath).
 				Once()
 
 			system := mocks.NewSystem(t)
 
 			if tc.callRemove {
-				system.EXPECT().Remove(filepath.Join(tc.mockGetBinFullPath, tc.binary)).
+				system.EXPECT().Remove(filepath.Join(tc.mockGetGoBinPath, tc.binary)).
 					Return(tc.mockRemoveErr).
 					Once()
 			}
 
-			gobin := internal.NewGobin(binaryManager, nil, &stdErr, nil, system)
+			gobin := internal.NewGobin(nil, nil, &stdErr, nil, system, workspace)
 			err := gobin.UninstallBinary(tc.binary)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 			assert.Equal(t, tc.expectedErr, err)
@@ -1200,8 +1185,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 		rebuild                      bool
 		parallelism                  int
 		bins                         []string
-		mockGetBinFullPath           string
-		mockGetBinFullPathErr        error
+		mockGetGoBinPath             string
 		callListBinariesFullPaths    bool
 		mockListBinariesFullPaths    []string
 		mockListBinariesFullPathsErr error
@@ -1211,7 +1195,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 	}{
 		"success-all-bins": {
 			parallelism:               1,
-			mockGetBinFullPath:        "/home/user/go/bin",
+			mockGetGoBinPath:          "/home/user/go/bin",
 			callListBinariesFullPaths: true,
 			mockListBinariesFullPaths: []string{
 				"/home/user/go/bin/mockproj1",
@@ -1230,7 +1214,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 				"mockproj2",
 				"mockproj3",
 			},
-			mockGetBinFullPath: "/home/user/go/bin",
+			mockGetGoBinPath: "/home/user/go/bin",
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
 				{bin: "/home/user/go/bin/mockproj2"},
 				{bin: "/home/user/go/bin/mockproj3"},
@@ -1238,7 +1222,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 		},
 		"success-with-parallelism": {
 			parallelism:               2,
-			mockGetBinFullPath:        "/home/user/go/bin",
+			mockGetGoBinPath:          "/home/user/go/bin",
 			callListBinariesFullPaths: true,
 			mockListBinariesFullPaths: []string{
 				"/home/user/go/bin/mockproj1",
@@ -1251,21 +1235,17 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 				{bin: "/home/user/go/bin/mockproj3"},
 			},
 		},
-		"error-get-bin-full-path": {
-			mockGetBinFullPathErr: errors.New("unexpected error"),
-			expectedErr:           errors.New("unexpected error"),
-		},
 		"error-list-binaries-full-paths": {
 			parallelism:                  1,
-			mockGetBinFullPath:           "/home/user/go/bin",
+			mockGetGoBinPath:             "/home/user/go/bin",
 			callListBinariesFullPaths:    true,
 			mockListBinariesFullPathsErr: errors.New("unexpected error"),
 			expectedErr:                  errors.New("unexpected error"),
 		},
 		"error-upgrade-binary": {
-			parallelism:        1,
-			bins:               []string{"mockproj1"},
-			mockGetBinFullPath: "/home/user/go/bin",
+			parallelism:      1,
+			bins:             []string{"mockproj1"},
+			mockGetGoBinPath: "/home/user/go/bin",
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
 				{bin: "/home/user/go/bin/mockproj1", err: internal.ErrBinaryNotFound},
 			},
@@ -1278,14 +1258,16 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var stdErr bytes.Buffer
 
-			binaryManager := mocks.NewBinaryManager(t)
+			workspace := mocks.NewWorkspace(t)
 
-			binaryManager.EXPECT().GetBinFullPath().
-				Return(tc.mockGetBinFullPath, tc.mockGetBinFullPathErr).
+			workspace.EXPECT().GetGoBinPath().
+				Return(tc.mockGetGoBinPath).
 				Once()
 
+			binaryManager := mocks.NewBinaryManager(t)
+
 			if tc.callListBinariesFullPaths {
-				binaryManager.EXPECT().ListBinariesFullPaths(tc.mockGetBinFullPath).
+				binaryManager.EXPECT().ListBinariesFullPaths(tc.mockGetGoBinPath).
 					Return(tc.mockListBinariesFullPaths, tc.mockListBinariesFullPathsErr).
 					Once()
 			}
@@ -1299,7 +1281,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 				).Return(call.err).Once()
 			}
 
-			gobin := internal.NewGobin(binaryManager, nil, &stdErr, nil, nil)
+			gobin := internal.NewGobin(binaryManager, nil, &stdErr, nil, nil, workspace)
 			err := gobin.UpgradeBinaries(
 				context.Background(),
 				tc.majorUpgrade,

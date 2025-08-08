@@ -5,6 +5,7 @@ import (
 	"debug/buildinfo"
 	"errors"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,10 +20,6 @@ const (
 	// GOOSEnvVar is the environment variable for the Go runtime operating
 	// system.
 	GOOSEnvVar = "GOOS"
-)
-
-var (
-	ErrInvalidPackageVersion = errors.New("invalid package version")
 )
 
 // BinaryInfo represents the information for a binary.
@@ -98,8 +95,6 @@ type BinaryManager interface {
 	GetBinaryRepository(ctx context.Context, binary string) (string, error)
 	// GetBinaryUpgradeInfo gets the upgrade information for a given binary.
 	GetBinaryUpgradeInfo(ctx context.Context, info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, error)
-	// GetBinFullPath gets the full path to the Go binary directory.
-	GetBinFullPath() (string, error)
 	// InstallPackage installs a package.
 	InstallPackage(ctx context.Context, pkgVersion string) error
 	// ListBinariesFullPaths lists all binary full paths in the Go binary directory.
@@ -112,16 +107,19 @@ type BinaryManager interface {
 type GoBinaryManager struct {
 	system    System
 	toolchain Toolchain
+	workspace Workspace
 }
 
 // NewGoBinaryManager creates a new GoBinaryManager.
 func NewGoBinaryManager(
 	system System,
 	toolchain Toolchain,
+	workspace Workspace,
 ) *GoBinaryManager {
 	return &GoBinaryManager{
 		system:    system,
 		toolchain: toolchain,
+		workspace: workspace,
 	}
 }
 
@@ -186,12 +184,7 @@ func (m *GoBinaryManager) DiagnoseBinary(
 // returns a list of binary infos, or an error if the binary directory cannot be
 // determined or listed. It skips silently failures to get the binary info.
 func (m *GoBinaryManager) GetAllBinaryInfos() ([]BinaryInfo, error) {
-	binFullPath, err := m.GetBinFullPath()
-	if err != nil {
-		return nil, err
-	}
-
-	bins, err := m.ListBinariesFullPaths(binFullPath)
+	bins, err := m.ListBinariesFullPaths(m.workspace.GetGoBinPath())
 	if err != nil {
 		return nil, err
 	}
@@ -257,12 +250,7 @@ func (m *GoBinaryManager) GetBinaryRepository(
 	ctx context.Context,
 	binary string,
 ) (string, error) {
-	binPath, err := m.GetBinFullPath()
-	if err != nil {
-		return "", err
-	}
-
-	binInfo, err := m.GetBinaryInfo(filepath.Join(binPath, binary))
+	binInfo, err := m.GetBinaryInfo(filepath.Join(m.workspace.GetGoBinPath(), binary))
 	if err != nil {
 		return "", err
 	}
@@ -324,31 +312,6 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 	return binUpInfo, nil
 }
 
-// GetBinFullPath gets the full path to the Go binary directory. It determines
-// the full path to the Go binary directory by the following order:
-//  1. $GOBIN
-//  2. $GOPATH/bin
-//  3. $HOME/go/bin
-//
-// It returns an error if the user's home directory cannot be determined.
-func (m *GoBinaryManager) GetBinFullPath() (string, error) {
-	if gobin, ok := m.system.GetEnvVar("GOBIN"); ok {
-		return gobin, nil
-	}
-
-	if gopath, ok := m.system.GetEnvVar("GOPATH"); ok {
-		return filepath.Join(gopath, "bin"), nil
-	}
-
-	home, err := m.system.UserHomeDir()
-	if err != nil {
-		slog.Default().Error("error getting user home directory", "err", err)
-		return "", err
-	}
-
-	return filepath.Join(home, "go", "bin"), nil
-}
-
 // InstallPackage installs a package leveraging the toolchain. If version is
 // not provided, it installs the latest version.
 func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkgVersion string) error {
@@ -361,7 +324,7 @@ func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkgVersion string)
 		version = parts[1]
 	}
 
-	return m.toolchain.Install(ctx, pkg, version)
+	return m.installBinary(ctx, pkg, version)
 }
 
 // ListBinariesFullPaths lists all binaries in a directory. It returns the list
@@ -406,7 +369,8 @@ func (m *GoBinaryManager) UpgradeBinary(
 	}
 
 	if binUpInfo.IsUpgradeAvailable || rebuild {
-		return m.installBinary(ctx, binUpInfo)
+		pkg, version := getBinaryUpgradePackageVersion(binUpInfo)
+		return m.installBinary(ctx, pkg, version)
 	}
 
 	return nil
@@ -501,19 +465,94 @@ func (m *GoBinaryManager) diagnoseGoModFile(
 // installBinary installs a binary leveraging the toolchain. If the latest
 // version is a major version v2 or higher, it adjusts the package path
 // to include the major version, following the Go module versioning rules.
-func (m *GoBinaryManager) installBinary(
-	ctx context.Context,
-	info BinaryUpgradeInfo,
-) error {
-	baseModule := stripVersionSuffix(info.LatestModulePath)
-	packageSuffix := strings.TrimPrefix(info.PackagePath, info.ModulePath)
+func (m *GoBinaryManager) installBinary(ctx context.Context, pkg, version string) error {
+	logger := slog.Default().With("pkg", pkg, "version", version)
 
-	pkg := baseModule + packageSuffix
-	if major := semver.Major(info.LatestVersion); major != "v0" && major != "v1" {
-		pkg = baseModule + "/" + major + packageSuffix
+	tempDir := m.workspace.GetInternalTempPath()
+	parts := strings.Split(pkg, "/")
+	binName := parts[len(parts)-1]
+	if semver.Major(binName) != "" {
+		binName = parts[len(parts)-2]
 	}
 
-	return m.toolchain.Install(ctx, pkg, info.LatestVersion)
+	logger.InfoContext(ctx, "creating internal binary temp directory")
+
+	binTempDir, err := m.system.MkdirTemp(tempDir, binName+"-*")
+	if err != nil {
+		logger.ErrorContext(
+			ctx, "error while creating internal binary temp directory",
+			"err", err, "temp_dir", tempDir,
+		)
+		return err
+	}
+	defer func() {
+		logger.Info("removing internal binary temp directory")
+
+		if err = m.system.RemoveAll(binTempDir); err != nil {
+			logger.ErrorContext(
+				ctx, "error while removing internal binary temp directory",
+				"err", err, "temp_dir", binTempDir,
+			)
+		}
+	}()
+
+	if err = m.toolchain.Install(ctx, binTempDir, pkg, version); err != nil {
+		return err
+	}
+
+	tempBinPath := filepath.Join(binTempDir, binName)
+	buildInfo, err := m.toolchain.GetBuildInfo(tempBinPath)
+	if err != nil {
+		logger.ErrorContext(
+			ctx, "error while getting build info for internal binary",
+			"err", err, "temp_bin_path", tempBinPath,
+		)
+		return err
+	}
+
+	binDir := m.workspace.GetInternalBinPath()
+	binPath := filepath.Join(binDir, binName+"@"+buildInfo.Main.Version)
+
+	logger.InfoContext(
+		ctx, "moving binary from temp path to bin path",
+		"temp_path", tempBinPath, "bin_path", binPath,
+	)
+
+	if err = m.system.Rename(tempBinPath, binPath); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"error while renaming internal binary",
+			"err", err,
+			"source", tempBinPath,
+			"destination", binPath,
+		)
+		return err
+	}
+
+	goBinPath := filepath.Join(m.workspace.GetGoBinPath(), binName)
+
+	logger.InfoContext(
+		ctx, "creating symlink for binary",
+		"bin_path", binPath, "go_bin_path", goBinPath,
+	)
+
+	if err = m.system.Remove(goBinPath); err != nil && !os.IsNotExist(err) {
+		logger.ErrorContext(
+			ctx, "error while removing existing symlink for binary",
+			"err", err, "path", goBinPath,
+		)
+		return err
+	}
+
+	if err = m.system.Symlink(binPath, goBinPath); err != nil {
+		logger.ErrorContext(
+			ctx, "error while creating symlink for binary",
+			"err", err, "source", binPath, "destination", goBinPath,
+		)
+		return err
+	}
+
+	return nil
 }
 
 // isBinary checks if a path is a binary file. It returns true if the path is a
@@ -524,11 +563,27 @@ func (m *GoBinaryManager) isBinary(path string) bool {
 		return false
 	}
 
-	if m.system.RuntimeOS() == "windows" {
+	if m.system.RuntimeOS() == windowsOS {
 		return strings.EqualFold(filepath.Ext(info.Name()), ".exe")
 	}
 
 	return info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
+}
+
+// getBinaryUpgradePackageVersion returns the package and version for a binary
+// upgrade. If the latest version is a major version v2 or higher, it adjusts
+// the package path to include the major version, following the Go module
+// versioning rules.
+func getBinaryUpgradePackageVersion(info BinaryUpgradeInfo) (string, string) {
+	baseModule := stripVersionSuffix(info.LatestModulePath)
+	packageSuffix := strings.TrimPrefix(info.PackagePath, info.ModulePath)
+
+	pkg := baseModule + packageSuffix
+	if major := semver.Major(info.LatestVersion); major != "v0" && major != "v1" {
+		pkg = baseModule + "/" + major + packageSuffix
+	}
+
+	return pkg, info.LatestVersion
 }
 
 // getBinaryPlatform returns the platform of a binary based on the build info.
