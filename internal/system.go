@@ -13,6 +13,8 @@ type System interface {
 	GetEnvVar(key string) (string, bool)
 	// LookPath returns the path to an executable file in the PATH environment variable.
 	LookPath(file string) (string, error)
+	// LStat returns the FileInfo structure describing the named file.
+	LStat(name string) (os.FileInfo, error)
 	// MkdirAll creates a directory named path, along with any necessary parents,
 	// with mode perm.
 	MkdirAll(path string, perm os.FileMode) error
@@ -25,6 +27,8 @@ type System interface {
 	// ReadDir reads the directory named by dirname and returns a list of
 	// directory entries.
 	ReadDir(dirname string) ([]os.DirEntry, error)
+	// Readlink returns the target of a symbolic link.
+	Readlink(name string) (string, error)
 	// Remove removes the named file or (empty) directory.
 	Remove(name string) error
 	// RemoveAll removes path and any children it contains.
@@ -63,6 +67,11 @@ func (s *defaultSystem) LookPath(file string) (string, error) {
 	return exec.LookPath(file)
 }
 
+// LStat returns the FileInfo structure describing the named file.
+func (s *defaultSystem) LStat(name string) (os.FileInfo, error) {
+	return os.Lstat(name)
+}
+
 // MkdirAll creates a directory named path, along with any necessary parents,
 // with mode perm.
 func (s *defaultSystem) MkdirAll(path string, perm os.FileMode) error {
@@ -89,6 +98,11 @@ func (s *defaultSystem) ReadBuildInfo(path string) (*buildinfo.BuildInfo, error)
 // ReadDir reads the directory named by dirname and returns a list of directory entries.
 func (s *defaultSystem) ReadDir(dirname string) ([]os.DirEntry, error) {
 	return os.ReadDir(dirname)
+}
+
+// Readlink returns the target of a symbolic link.
+func (s *defaultSystem) Readlink(name string) (string, error) {
+	return os.Readlink(name)
 }
 
 // Remove removes the named file or (empty) directory.

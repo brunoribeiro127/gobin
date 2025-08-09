@@ -20,7 +20,6 @@ const (
 	// doctorTemplate is the template for the doctor command.
 	doctorTemplate = `{{- range .DiagsWithIssues -}}
 🛠️  {{ .Name }}
-{{- if .HasIssues }}
     {{- if .NotInPath }}
     ❗ not in PATH
     {{- end }}
@@ -30,11 +29,8 @@ const (
         • {{ . }}
         {{- end }}
     {{- end }}
-    {{- if ne .GoVersion.Actual .GoVersion.Expected }}
-    ❗ go version mismatch: expected {{ .GoVersion.Expected }}, actual {{ .GoVersion.Actual }}
-    {{- end }}
-    {{- if ne .Platform.Actual .Platform.Expected }}
-    ❗ platform mismatch: expected {{ .Platform.Expected }}, actual {{ .Platform.Actual }}
+	{{- if .IsNotManaged }}
+    ❗ not managed by gobin
     {{- end }}
     {{- if .IsPseudoVersion }}
     ❗ pseudo-version
@@ -44,6 +40,12 @@ const (
     {{- end }}
     {{- if .IsOrphaned }}
     ❗ orphaned: unknown source, likely built locally
+    {{- end }}
+	{{- if ne .GoVersion.Actual .GoVersion.Expected }}
+    ❗ go version mismatch: expected {{ .GoVersion.Expected }}, actual {{ .GoVersion.Actual }}
+    {{- end }}
+    {{- if ne .Platform.Actual .Platform.Expected }}
+    ❗ platform mismatch: expected {{ .Platform.Expected }}, actual {{ .Platform.Actual }}
     {{- end }}
     {{- if .Retracted }}
     ❗ retracted module version: {{ .Retracted }}
@@ -57,9 +59,6 @@ const (
         • {{ .ID }} ({{ .URL }})
         {{- end }}
     {{- end }}
-{{- else }}
-    ✅ no issues
-{{- end }}
 {{end -}}
 {{- if gt .WithIssues 0 }}
 {{""}}

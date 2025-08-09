@@ -106,31 +106,39 @@ type mockStatInfoCall struct {
 //nolint:gocognit
 func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 	cases := map[string]struct {
-		path                  string
-		mockGetBuildInfo      *buildinfo.BuildInfo
-		mockGetBuildInfoErr   error
-		callRuntimeOSTimes    int
-		mockRuntimeOS         string
-		callRuntimeARCH       bool
-		mockRuntimeARCH       string
-		callGetEnvVar         bool
-		mockGetEnvVarValue    string
-		callPathListSeparator bool
-		mockPathListSeparator rune
-		mockStatInfoCalls     []mockStatInfoCall
-		callRuntimeVersion    bool
-		mockRuntimeVersion    string
-		callLookPath          bool
-		mockLookPathErr       error
-		callGetModuleFile     bool
-		mockGetModuleFile     *modfile.File
-		mockGetModuleFileErr  error
-		callVulnCheck         bool
-		mockVulnCheckVulns    []internal.Vulnerability
-		mockVulnCheckErr      error
-		expectedDiagnostic    internal.BinaryDiagnostic
-		expectedHasIssues     bool
-		expectedErr           error
+		path                   string
+		mockGetBuildInfo       *buildinfo.BuildInfo
+		mockGetBuildInfoErr    error
+		callRuntimeOSTimes     int
+		mockRuntimeOS          string
+		callRuntimeARCH        bool
+		mockRuntimeARCH        string
+		callGetEnvVar          bool
+		mockGetEnvVarValue     string
+		callPathListSeparator  bool
+		mockPathListSeparator  rune
+		mockStatInfoCalls      []mockStatInfoCall
+		callRuntimeVersion     bool
+		mockRuntimeVersion     string
+		callGetInternalBinPath bool
+		mockGetInternalBinPath string
+		callLStat              bool
+		mockLStatInfo          os.FileInfo
+		mockLStatErr           error
+		callReadlink           bool
+		mockReadlink           string
+		mockReadlinkErr        error
+		callLookPath           bool
+		mockLookPathErr        error
+		callGetModuleFile      bool
+		mockGetModuleFile      *modfile.File
+		mockGetModuleFileErr   error
+		callVulnCheck          bool
+		mockVulnCheckVulns     []internal.Vulnerability
+		mockVulnCheckErr       error
+		expectedDiagnostic     internal.BinaryDiagnostic
+		expectedHasIssues      bool
+		expectedErr            error
 	}{
 		"success-has-issues": {
 			path:                  "/home/user/go/bin/mockproj",
@@ -153,11 +161,17 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					info: NewMockFileInfo("mockproj", os.FileMode(0755), false),
 				},
 			},
-			callRuntimeVersion: true,
-			mockRuntimeVersion: "go1.23.11",
-			callLookPath:       true,
-			mockLookPathErr:    os.ErrNotExist,
-			callGetModuleFile:  true,
+			callRuntimeVersion:     true,
+			mockRuntimeVersion:     "go1.23.11",
+			callGetInternalBinPath: true,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			callLStat:              true,
+			mockLStatInfo:          NewMockFileInfo("mockproj", os.ModeSymlink, false),
+			callReadlink:           true,
+			mockReadlink:           "/usr/local/bin/mockproj",
+			callLookPath:           true,
+			mockLookPathErr:        os.ErrNotExist,
+			callGetModuleFile:      true,
 			mockGetModuleFile: &modfile.File{
 				Module: &modfile.Module{
 					Deprecated: "mock deprecated",
@@ -197,6 +211,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					Actual:   "darwin/arm64",
 					Expected: "linux/amd64",
 				},
+				IsNotManaged:          true,
 				IsPseudoVersion:       true,
 				NotBuiltWithGoModules: false,
 				IsOrphaned:            false,
@@ -233,17 +248,20 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					info: NewMockFileInfo("mockproj", os.FileMode(0755), false),
 				},
 			},
-			callRuntimeVersion: true,
-			mockRuntimeVersion: "go1.23.11",
-			callLookPath:       true,
-			mockLookPathErr:    os.ErrNotExist,
-			callVulnCheck:      true,
+			callRuntimeVersion:     true,
+			mockRuntimeVersion:     "go1.23.11",
+			callGetInternalBinPath: true,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			callLStat:              true,
+			mockLStatInfo:          NewMockFileInfo("mockproj", os.FileMode(0755), false),
+			callLookPath:           true,
+			callVulnCheck:          true,
 			mockVulnCheckVulns: []internal.Vulnerability{
 				{ID: "GO-2025-3770", URL: "https://pkg.go.dev/vuln/GO-2025-3770"},
 			},
 			expectedDiagnostic: internal.BinaryDiagnostic{
 				Name:      "mockproj",
-				NotInPath: true,
+				NotInPath: false,
 				DuplicatesInPath: []string{
 					"/home/user/go/bin/mockproj",
 					"/usr/local/bin/mockproj",
@@ -262,6 +280,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					Actual:   "darwin/arm64",
 					Expected: "linux/amd64",
 				},
+				IsNotManaged:          true,
 				IsPseudoVersion:       true,
 				NotBuiltWithGoModules: false,
 				IsOrphaned:            true,
@@ -294,6 +313,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					Actual:   "",
 					Expected: "",
 				},
+				IsNotManaged:          false,
 				IsPseudoVersion:       false,
 				NotBuiltWithGoModules: true,
 				IsOrphaned:            false,
@@ -324,10 +344,16 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					err:  os.ErrNotExist,
 				},
 			},
-			callRuntimeVersion: true,
-			mockRuntimeVersion: "go1.24.5",
-			callLookPath:       true,
-			callGetModuleFile:  true,
+			callRuntimeVersion:     true,
+			mockRuntimeVersion:     "go1.24.5",
+			callGetInternalBinPath: true,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			callLStat:              true,
+			mockLStatInfo:          NewMockFileInfo("mockproj", os.ModeSymlink, false),
+			callReadlink:           true,
+			mockReadlink:           "/home/user/.gobin/bin/mockproj@v0.1.0",
+			callLookPath:           true,
+			callGetModuleFile:      true,
 			mockGetModuleFile: &modfile.File{
 				Module: &modfile.Module{},
 			},
@@ -351,6 +377,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					Actual:   "darwin/arm64",
 					Expected: "darwin/arm64",
 				},
+				IsNotManaged:          false,
 				IsPseudoVersion:       false,
 				NotBuiltWithGoModules: false,
 				IsOrphaned:            false,
@@ -385,13 +412,19 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					info: NewMockFileInfo("mockproj", os.FileMode(0755), false),
 				},
 			},
-			callRuntimeVersion:   true,
-			mockRuntimeVersion:   "go1.23.11",
-			callLookPath:         true,
-			mockLookPathErr:      os.ErrNotExist,
-			callGetModuleFile:    true,
-			mockGetModuleFileErr: errors.New("unexpected error"),
-			expectedErr:          errors.New("unexpected error"),
+			callRuntimeVersion:     true,
+			mockRuntimeVersion:     "go1.23.11",
+			callGetInternalBinPath: true,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			callLStat:              true,
+			mockLStatInfo:          NewMockFileInfo("mockproj", os.ModeSymlink, false),
+			callReadlink:           true,
+			mockReadlinkErr:        os.ErrNotExist,
+			callLookPath:           true,
+			mockLookPathErr:        os.ErrNotExist,
+			callGetModuleFile:      true,
+			mockGetModuleFileErr:   errors.New("unexpected error"),
+			expectedErr:            errors.New("unexpected error"),
 		},
 		"error-vuln-check": {
 			path:                  "/home/user/go/bin/mockproj",
@@ -414,11 +447,15 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					info: NewMockFileInfo("mockproj", os.FileMode(0755), false),
 				},
 			},
-			callRuntimeVersion: true,
-			mockRuntimeVersion: "go1.23.11",
-			callLookPath:       true,
-			mockLookPathErr:    os.ErrNotExist,
-			callGetModuleFile:  true,
+			callRuntimeVersion:     true,
+			mockRuntimeVersion:     "go1.23.11",
+			callGetInternalBinPath: true,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			callLStat:              true,
+			mockLStatErr:           os.ErrNotExist,
+			callLookPath:           true,
+			mockLookPathErr:        os.ErrNotExist,
+			callGetModuleFile:      true,
 			mockGetModuleFile: &modfile.File{
 				Module: &modfile.Module{
 					Deprecated: "mock deprecated",
@@ -441,6 +478,14 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			workspace := mocks.NewWorkspace(t)
+
+			if tc.callGetInternalBinPath {
+				workspace.EXPECT().GetInternalBinPath().
+					Return(tc.mockGetInternalBinPath).
+					Once()
+			}
+
 			system := mocks.NewSystem(t)
 
 			if tc.callRuntimeOSTimes > 0 {
@@ -479,6 +524,18 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					Once()
 			}
 
+			if tc.callLStat {
+				system.EXPECT().LStat(tc.path).
+					Return(tc.mockLStatInfo, tc.mockLStatErr).
+					Once()
+			}
+
+			if tc.callReadlink {
+				system.EXPECT().Readlink(tc.path).
+					Return(tc.mockReadlink, tc.mockReadlinkErr).
+					Once()
+			}
+
 			if tc.callLookPath {
 				system.EXPECT().LookPath(filepath.Base(tc.path)).
 					Return("", tc.mockLookPathErr).
@@ -505,7 +562,7 @@ func TestGoBinaryManager_DiagnoseBinary(t *testing.T) {
 					Once()
 			}
 
-			binaryManager := internal.NewGoBinaryManager(system, toolchain, nil)
+			binaryManager := internal.NewGoBinaryManager(system, toolchain, workspace)
 			diagnostic, err := binaryManager.DiagnoseBinary(context.Background(), tc.path)
 			assert.Equal(t, tc.expectedDiagnostic, diagnostic)
 			assert.Equal(t, tc.expectedHasIssues, diagnostic.HasIssues())

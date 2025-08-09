@@ -150,11 +150,12 @@ func newDoctorCmd(gobin *internal.Gobin) *cobra.Command {
 
 Checks for:
   • Binaries not in PATH
-  • Duplicate binaries in PATH  
-  • Go version mismatches
-  • Platform mismatches (OS/architecture)
+  • Duplicate binaries in PATH
+  • Binaries not managed by gobin
   • Pseudo-versions and orphaned binaries
   • Binaries built without Go modules
+  • Go version mismatches
+  • Platform mismatches (OS/architecture)
   • Retracted or deprecated modules
   • Known security vulnerabilities
 
