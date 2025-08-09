@@ -90,6 +90,11 @@ type mockMigrateBinaryCall struct {
 	err  error
 }
 
+type mockUninstallBinaryCall struct {
+	bin string
+	err error
+}
+
 type mockUpgradeBinaryCall struct {
 	bin string
 	err error
@@ -1306,57 +1311,57 @@ func TestGobin_ShowBinaryRepository(t *testing.T) {
 	}
 }
 
-func TestGobin_UninstallBinary(t *testing.T) {
+func TestGobin_UninstallBinaries(t *testing.T) {
 	cases := map[string]struct {
-		binary           string
-		mockGetGoBinPath string
-		callRemove       bool
-		mockRemoveErr    error
-		expectedErr      error
-		expectedStdErr   string
+		bins                     []string
+		mockUninstallBinaryCalls []mockUninstallBinaryCall
+		expectedErr              error
+		expectedStdErr           string
 	}{
-		"success": {
-			binary:           "mockproj1",
-			mockGetGoBinPath: "/home/user/go/bin",
-			callRemove:       true,
+		"success-no-binaries": {
+			bins: []string{},
+		},
+		"success-single-binary": {
+			bins:                     []string{"mockproj1"},
+			mockUninstallBinaryCalls: []mockUninstallBinaryCall{{bin: "mockproj1"}},
+		},
+		"success-multiple-binaries": {
+			bins: []string{"mockproj1", "mockproj2"},
+			mockUninstallBinaryCalls: []mockUninstallBinaryCall{
+				{bin: "mockproj1"},
+				{bin: "mockproj2"},
+			},
 		},
 		"error-binary-not-found": {
-			binary:           "mockproj1",
-			mockGetGoBinPath: "/home/user/go/bin",
-			callRemove:       true,
-			mockRemoveErr:    os.ErrNotExist,
-			expectedErr:      os.ErrNotExist,
-			expectedStdErr:   "❌ binary \"mockproj1\" not found\n",
+			bins: []string{"mockproj1"},
+			mockUninstallBinaryCalls: []mockUninstallBinaryCall{
+				{bin: "mockproj1", err: os.ErrNotExist},
+			},
+			expectedErr:    os.ErrNotExist,
+			expectedStdErr: "❌ binary \"mockproj1\" not found\n",
 		},
 		"error-remove-binary": {
-			binary:           "mockproj1",
-			mockGetGoBinPath: "/home/user/go/bin",
-			callRemove:       true,
-			mockRemoveErr:    errors.New("unexpected error"),
-			expectedErr:      errors.New("unexpected error"),
+			bins: []string{"mockproj1"},
+			mockUninstallBinaryCalls: []mockUninstallBinaryCall{
+				{bin: "mockproj1", err: errors.New("unexpected error")},
+			},
+			expectedErr: errors.New("unexpected error"),
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			var stdErr bytes.Buffer
+			binaryManager := mocks.NewBinaryManager(t)
 
-			workspace := mocks.NewWorkspace(t)
-
-			workspace.EXPECT().GetGoBinPath().
-				Return(tc.mockGetGoBinPath).
-				Once()
-
-			system := mocks.NewSystem(t)
-
-			if tc.callRemove {
-				system.EXPECT().Remove(filepath.Join(tc.mockGetGoBinPath, tc.binary)).
-					Return(tc.mockRemoveErr).
+			for _, call := range tc.mockUninstallBinaryCalls {
+				binaryManager.EXPECT().UninstallBinary(call.bin).
+					Return(call.err).
 					Once()
 			}
 
-			gobin := internal.NewGobin(nil, nil, &stdErr, nil, system, workspace)
-			err := gobin.UninstallBinary(tc.binary)
+			gobin := internal.NewGobin(binaryManager, nil, &stdErr, nil, nil, nil)
+			err := gobin.UninstallBinaries(tc.bins...)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 			assert.Equal(t, tc.expectedErr, err)
 		})

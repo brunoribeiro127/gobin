@@ -1807,6 +1807,55 @@ func TestGoBinaryManager_MigrateBinary(t *testing.T) {
 	}
 }
 
+func TestGoBinaryManager_UninstallBinary(t *testing.T) {
+	cases := map[string]struct {
+		bin              string
+		mockGetGoBinPath string
+		mockRemoveErr    error
+		expectedErr      error
+	}{
+		"success-unmanaged-binary": {
+			bin:              "mockproj",
+			mockGetGoBinPath: "/home/user/.gobin/bin",
+		},
+		"success-managed-binary": {
+			bin:              "mockproj",
+			mockGetGoBinPath: "/home/user/.gobin/bin",
+		},
+		"error-binary-not-found": {
+			bin:              "mockproj",
+			mockGetGoBinPath: "/home/user/.gobin/bin",
+			mockRemoveErr:    os.ErrNotExist,
+			expectedErr:      os.ErrNotExist,
+		},
+		"error-remove-binary": {
+			bin:              "mockproj",
+			mockGetGoBinPath: "/home/user/.gobin/bin",
+			mockRemoveErr:    errors.New("unexpected error"),
+			expectedErr:      errors.New("unexpected error"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			system := mocks.NewSystem(t)
+			workspace := mocks.NewWorkspace(t)
+
+			system.EXPECT().Remove(filepath.Join(tc.mockGetGoBinPath, tc.bin)).
+				Return(tc.mockRemoveErr).
+				Once()
+
+			workspace.EXPECT().GetGoBinPath().
+				Return(tc.mockGetGoBinPath).
+				Once()
+
+			binaryManager := internal.NewGoBinaryManager(system, nil, workspace)
+			err := binaryManager.UninstallBinary(tc.bin)
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+}
+
 //nolint:gocognit
 func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 	cases := map[string]struct {

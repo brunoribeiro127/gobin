@@ -375,14 +375,14 @@ falling back to constructing the URL from the module path.`,
 // newUninstallCmd creates a uninstall command to uninstall a binary.
 func newUninstallCmd(gobin *internal.Gobin) *cobra.Command {
 	return &cobra.Command{
-		Use:           "uninstall [binary]",
-		Short:         "Uninstall a binary",
-		Args:          cobra.ExactArgs(1),
+		Use:           "uninstall [binaries]",
+		Short:         "Uninstall binaries",
+		Args:          cobra.MinimumNArgs(1),
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.UninstallBinary(args[0])
+			return gobin.UninstallBinaries(args...)
 		},
 	}
 }

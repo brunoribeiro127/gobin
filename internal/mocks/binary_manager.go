@@ -534,6 +534,57 @@ func (_c *BinaryManager_MigrateBinary_Call) RunAndReturn(run func(path string) e
 	return _c
 }
 
+// UninstallBinary provides a mock function for the type BinaryManager
+func (_mock *BinaryManager) UninstallBinary(bin string) error {
+	ret := _mock.Called(bin)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UninstallBinary")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(bin)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// BinaryManager_UninstallBinary_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UninstallBinary'
+type BinaryManager_UninstallBinary_Call struct {
+	*mock.Call
+}
+
+// UninstallBinary is a helper method to define mock.On call
+//   - bin string
+func (_e *BinaryManager_Expecter) UninstallBinary(bin interface{}) *BinaryManager_UninstallBinary_Call {
+	return &BinaryManager_UninstallBinary_Call{Call: _e.mock.On("UninstallBinary", bin)}
+}
+
+func (_c *BinaryManager_UninstallBinary_Call) Run(run func(bin string)) *BinaryManager_UninstallBinary_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *BinaryManager_UninstallBinary_Call) Return(err error) *BinaryManager_UninstallBinary_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *BinaryManager_UninstallBinary_Call) RunAndReturn(run func(bin string) error) *BinaryManager_UninstallBinary_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpgradeBinary provides a mock function for the type BinaryManager
 func (_mock *BinaryManager) UpgradeBinary(ctx context.Context, binFullPath string, majorUpgrade bool, rebuild bool) error {
 	ret := _mock.Called(ctx, binFullPath, majorUpgrade, rebuild)

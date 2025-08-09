@@ -111,6 +111,8 @@ type BinaryManager interface {
 	ListBinariesFullPaths(dir string) ([]string, error)
 	// MigrateBinary migrates a binary to be managed internally.
 	MigrateBinary(path string) error
+	// UninstallBinary uninstalls a binary.
+	UninstallBinary(bin string) error
 	// UpgradeBinary upgrades a binary.
 	UpgradeBinary(ctx context.Context, binFullPath string, majorUpgrade bool, rebuild bool) error
 }
@@ -422,6 +424,23 @@ func (m *GoBinaryManager) MigrateBinary(path string) error {
 	}
 
 	return nil
+}
+
+// UninstallBinary uninstalls a binary by removing the binary file. It removes
+// the binary from the go bin path for unmanaged binaries, or removes the
+// symlink for managed binaries. It returns an error if the binary cannot be
+// found or removed.
+func (m *GoBinaryManager) UninstallBinary(bin string) error {
+	logger := slog.Default().With("bin", bin)
+
+	err := m.system.Remove(filepath.Join(m.workspace.GetGoBinPath(), bin))
+	if errors.Is(err, os.ErrNotExist) {
+		logger.Warn("binary not found")
+	} else if err != nil {
+		logger.Error("failed to remove binary", "err", err)
+	}
+
+	return err
 }
 
 // UpgradeBinary upgrades a binary leveraging the toolchain. It gets the binary
