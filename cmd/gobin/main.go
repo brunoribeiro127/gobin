@@ -127,6 +127,7 @@ func run(ctx context.Context) int {
 	cmd.AddCommand(newInfoCmd(gobin))
 	cmd.AddCommand(newInstallCmd(gobin))
 	cmd.AddCommand(newListCmd(gobin))
+	cmd.AddCommand(newMigrateCmd(gobin))
 	cmd.AddCommand(newOutdatedCmd(gobin))
 	cmd.AddCommand(newRepoCmd(gobin))
 	cmd.AddCommand(newUninstallCmd(gobin))
@@ -226,6 +227,56 @@ func newListCmd(gobin *internal.Gobin) *cobra.Command {
 			return gobin.ListInstalledBinaries()
 		},
 	}
+}
+
+// newMigrateCmd creates a migrate command to migrate binaries to be managed
+// internally.
+func newMigrateCmd(gobin *internal.Gobin) *cobra.Command {
+	var migrateAll bool
+
+	cmd := &cobra.Command{
+		Use:   "migrate [binaries]",
+		Short: "Migrate specific binaries or all with --all",
+		Long: `Migrate binaries to be managed internally. You can migrate specific binaries or all binaries.
+
+Examples:
+  gobin migrate dlv                        # Migrate specific binary
+  gobin migrate dlv golangci-lint mockery  # Migrate multiple binaries  
+  gobin migrate --all                 	   # Migrate all binaries`,
+		Args:          cobra.ArbitraryArgs,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
+			switch {
+			case migrateAll && len(args) > 0:
+				err := errors.New("cannot use --all with specific binaries")
+				fmt.Fprintln(os.Stderr, err.Error())
+				return err
+
+			case migrateAll:
+				return gobin.MigrateBinaries()
+
+			case len(args) == 0:
+				err := errors.New("no binaries specified (use --all to migrate all)")
+				fmt.Fprintln(os.Stderr, err.Error())
+				return err
+
+			default:
+				return gobin.MigrateBinaries(args...)
+			}
+		},
+	}
+
+	cmd.Flags().BoolVarP(
+		&migrateAll,
+		"all",
+		"a",
+		false,
+		"migrates all binaries",
+	)
+
+	return cmd
 }
 
 // newOutdatedCmd creates a outdated command to list outdated binaries.

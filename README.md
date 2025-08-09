@@ -23,6 +23,7 @@
 - Upgrade individual or all outdated binaries
 - Install and uninstall binaries
 - Diagnose and troubleshoot issues with installed binaries
+- Migrate binaries to be managed internally
 
 ## Installation
 
@@ -70,11 +71,12 @@ task install
 | `doctor`             | Diagnose issues for binaries                |                                                                                                   |
 | `info [binary]`      | Show info about a binary                    |                                                                                                   |
 | `list`               | List installed binaries                     |                                                                                                   |
+| `migrate [binaries]` | Migrate binaries to be managed internally   | `-a`, `--all` – migrate all binaries in the Go binary path                                        |
 | `install [packages]` | Install packages                            |                                                                                                   |
 | `outdated`           | List outdated binaries                      | `-m`, `--major` – include major version updates                                                   |
 | `repo [binary]`      | Show binary repository                      | `-o`, `--open` – open repository URL in the default browser                                       |
 | `uninstall [binary]` | Uninstall a binary                          |                                                                                                   |
-| `upgrade [binaries]` | Upgrade specific binaries or all with --all | `-m`, `--major` – allow major version upgrade<br>`-a`, `--all` – upgrade all outdated binaries<br>`-r`, `--rebuild` – force binary rebuild |
+| `upgrade [binaries]` | Upgrade specific binaries or all with --all | `-a`, `--all` – upgrade all outdated binaries<br>`-m`, `--major` – allow major version upgrade<br>`-r`, `--rebuild` – force binary rebuild |
 | `version`            | Show version info                           | `-s`, `--short` – print short version                                                             |
 
 ### Global Flags
