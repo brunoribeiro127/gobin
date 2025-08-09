@@ -50,10 +50,14 @@ type BinaryUpgradeInfo struct {
 
 // BinaryDiagnostic represents the diagnostic results for a binary.
 type BinaryDiagnostic struct {
-	Name             string
-	NotInPath        bool
-	DuplicatesInPath []string
-	GoVersion        struct {
+	Name                  string
+	NotInPath             bool
+	DuplicatesInPath      []string
+	IsNotManaged          bool
+	IsPseudoVersion       bool
+	NotBuiltWithGoModules bool
+	IsOrphaned            bool
+	GoVersion             struct {
 		Actual   string
 		Expected string
 	}
@@ -61,23 +65,21 @@ type BinaryDiagnostic struct {
 		Actual   string
 		Expected string
 	}
-	IsPseudoVersion       bool
-	NotBuiltWithGoModules bool
-	IsOrphaned            bool
-	Retracted             string
-	Deprecated            string
-	Vulnerabilities       []Vulnerability
+	Retracted       string
+	Deprecated      string
+	Vulnerabilities []Vulnerability
 }
 
 // HasIssues returns whether the binary has any issues.
 func (d BinaryDiagnostic) HasIssues() bool {
 	return d.NotInPath ||
 		len(d.DuplicatesInPath) > 0 ||
-		d.GoVersion.Actual != d.GoVersion.Expected ||
-		d.Platform.Actual != d.Platform.Expected ||
+		d.IsNotManaged ||
 		d.IsPseudoVersion ||
 		d.NotBuiltWithGoModules ||
 		d.IsOrphaned ||
+		d.GoVersion.Actual != d.GoVersion.Expected ||
+		d.Platform.Actual != d.Platform.Expected ||
 		d.Retracted != "" ||
 		d.Deprecated != "" ||
 		len(d.Vulnerabilities) > 0
@@ -148,7 +150,6 @@ func (m *GoBinaryManager) DiagnoseBinary(
 
 	binPlatform := getBinaryPlatform(buildInfo)
 	runtimePlatform := m.system.RuntimeOS() + "/" + m.system.RuntimeARCH()
-
 	diagnostic.DuplicatesInPath = m.checkBinaryDuplicatesInPath(binaryName)
 	diagnostic.IsPseudoVersion = module.IsPseudoVersion(buildInfo.Main.Version)
 	diagnostic.IsOrphaned = buildInfo.Main.Sum == ""
@@ -156,6 +157,9 @@ func (m *GoBinaryManager) DiagnoseBinary(
 	diagnostic.GoVersion.Expected = m.system.RuntimeVersion()
 	diagnostic.Platform.Actual = binPlatform
 	diagnostic.Platform.Expected = runtimePlatform
+
+	isSymlinkToDir, _ := m.isSymlinkToDir(path, m.workspace.GetInternalBinPath())
+	diagnostic.IsNotManaged = !isSymlinkToDir
 
 	_, err = m.system.LookPath(binaryName)
 	diagnostic.NotInPath = err != nil
@@ -568,6 +572,25 @@ func (m *GoBinaryManager) isBinary(path string) bool {
 	}
 
 	return info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
+}
+
+// isSymlinkToDir checks if a path is a symlink to another directory.
+func (m *GoBinaryManager) isSymlinkToDir(path string, baseDir string) (bool, error) {
+	info, err := m.system.LStat(path)
+	if err != nil {
+		return false, err
+	}
+
+	if info.Mode()&os.ModeSymlink == 0 {
+		return false, nil
+	}
+
+	target, err := m.system.Readlink(path)
+	if err != nil {
+		return false, err
+	}
+
+	return strings.HasPrefix(target, baseDir+string(os.PathSeparator)), nil
 }
 
 // getBinaryUpgradePackageVersion returns the package and version for a binary

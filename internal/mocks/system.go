@@ -98,6 +98,68 @@ func (_c *System_GetEnvVar_Call) RunAndReturn(run func(key string) (string, bool
 	return _c
 }
 
+// LStat provides a mock function for the type System
+func (_mock *System) LStat(name string) (os.FileInfo, error) {
+	ret := _mock.Called(name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LStat")
+	}
+
+	var r0 os.FileInfo
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (os.FileInfo, error)); ok {
+		return returnFunc(name)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) os.FileInfo); ok {
+		r0 = returnFunc(name)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(os.FileInfo)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(name)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// System_LStat_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LStat'
+type System_LStat_Call struct {
+	*mock.Call
+}
+
+// LStat is a helper method to define mock.On call
+//   - name string
+func (_e *System_Expecter) LStat(name interface{}) *System_LStat_Call {
+	return &System_LStat_Call{Call: _e.mock.On("LStat", name)}
+}
+
+func (_c *System_LStat_Call) Run(run func(name string)) *System_LStat_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *System_LStat_Call) Return(v os.FileInfo, err error) *System_LStat_Call {
+	_c.Call.Return(v, err)
+	return _c
+}
+
+func (_c *System_LStat_Call) RunAndReturn(run func(name string) (os.FileInfo, error)) *System_LStat_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // LookPath provides a mock function for the type System
 func (_mock *System) LookPath(file string) (string, error) {
 	ret := _mock.Called(file)
@@ -445,6 +507,66 @@ func (_c *System_ReadDir_Call) Return(vs []os.DirEntry, err error) *System_ReadD
 }
 
 func (_c *System_ReadDir_Call) RunAndReturn(run func(dirname string) ([]os.DirEntry, error)) *System_ReadDir_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Readlink provides a mock function for the type System
+func (_mock *System) Readlink(name string) (string, error) {
+	ret := _mock.Called(name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Readlink")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (string, error)); ok {
+		return returnFunc(name)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) string); ok {
+		r0 = returnFunc(name)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(name)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// System_Readlink_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Readlink'
+type System_Readlink_Call struct {
+	*mock.Call
+}
+
+// Readlink is a helper method to define mock.On call
+//   - name string
+func (_e *System_Expecter) Readlink(name interface{}) *System_Readlink_Call {
+	return &System_Readlink_Call{Call: _e.mock.On("Readlink", name)}
+}
+
+func (_c *System_Readlink_Call) Run(run func(name string)) *System_Readlink_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *System_Readlink_Call) Return(s string, err error) *System_Readlink_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *System_Readlink_Call) RunAndReturn(run func(name string) (string, error)) *System_Readlink_Call {
 	_c.Call.Return(run)
 	return _c
 }

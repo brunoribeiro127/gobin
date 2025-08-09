@@ -112,6 +112,7 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 			Actual:   "darwin/arm64",
 			Expected: "linux/amd64",
 		},
+		IsNotManaged:          true,
 		IsPseudoVersion:       true,
 		NotBuiltWithGoModules: false,
 		IsOrphaned:            false,
@@ -210,9 +211,10 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
     ❗ duplicated in PATH:
         • /home/user/go/bin/mockproj1
         • /usr/local/bin/mockproj1
+    ❗ not managed by gobin
+    ❗ pseudo-version
     ❗ go version mismatch: expected go1.23.11, actual go1.24.5
     ❗ platform mismatch: expected linux/amd64, actual darwin/arm64
-    ❗ pseudo-version
     ❗ retracted module version: mock rationale
     ❗ deprecated module: mock deprecated
     ❗ found 1 vulnerability:
@@ -222,10 +224,10 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
     ❗ duplicated in PATH:
         • /home/user/go/bin/mockproj2
         • /usr/local/bin/mockproj2
-    ❗ go version mismatch: expected go1.23.11, actual go1.24.5
-    ❗ platform mismatch: expected linux/amd64, actual darwin/arm64
     ❗ pseudo-version
     ❗ orphaned: unknown source, likely built locally
+    ❗ go version mismatch: expected go1.23.11, actual go1.24.5
+    ❗ platform mismatch: expected linux/amd64, actual darwin/arm64
     ❗ found 1 vulnerability:
         • GO-2025-3770 (https://pkg.go.dev/vuln/GO-2025-3770)
 🛠️  mockproj3
@@ -254,9 +256,10 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
     ❗ duplicated in PATH:
         • /home/user/go/bin/mockproj1
         • /usr/local/bin/mockproj1
+    ❗ not managed by gobin
+    ❗ pseudo-version
     ❗ go version mismatch: expected go1.23.11, actual go1.24.5
     ❗ platform mismatch: expected linux/amd64, actual darwin/arm64
-    ❗ pseudo-version
     ❗ retracted module version: mock rationale
     ❗ deprecated module: mock deprecated
     ❗ found 1 vulnerability:
@@ -266,10 +269,10 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
     ❗ duplicated in PATH:
         • /home/user/go/bin/mockproj2
         • /usr/local/bin/mockproj2
-    ❗ go version mismatch: expected go1.23.11, actual go1.24.5
-    ❗ platform mismatch: expected linux/amd64, actual darwin/arm64
     ❗ pseudo-version
     ❗ orphaned: unknown source, likely built locally
+    ❗ go version mismatch: expected go1.23.11, actual go1.24.5
+    ❗ platform mismatch: expected linux/amd64, actual darwin/arm64
     ❗ found 1 vulnerability:
         • GO-2025-3770 (https://pkg.go.dev/vuln/GO-2025-3770)
 🛠️  mockproj3
@@ -299,9 +302,10 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
     ❗ duplicated in PATH:
         • /home/user/go/bin/mockproj1
         • /usr/local/bin/mockproj1
+    ❗ not managed by gobin
+    ❗ pseudo-version
     ❗ go version mismatch: expected go1.23.11, actual go1.24.5
     ❗ platform mismatch: expected linux/amd64, actual darwin/arm64
-    ❗ pseudo-version
     ❗ retracted module version: mock rationale
     ❗ deprecated module: mock deprecated
     ❗ found 1 vulnerability:
@@ -311,6 +315,23 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 
 2 binaries checked, 2 with issues
 `,
+		},
+		"success-no-issues": {
+			stdOut:                    &bytes.Buffer{},
+			parallelism:               1,
+			mockGetGoBinPath:          "/home/user/go/bin",
+			callListBinariesFullPaths: true,
+			mockListBinariesFullPaths: []string{
+				"/home/user/go/bin/mockproj1",
+				"/home/user/go/bin/mockproj2",
+				"/home/user/go/bin/mockproj3",
+			},
+			mockDiagnoseBinaryCalls: []mockDiagnoseBinaryCall{
+				{bin: "/home/user/go/bin/mockproj1", info: internal.BinaryDiagnostic{}},
+				{bin: "/home/user/go/bin/mockproj2", info: internal.BinaryDiagnostic{}},
+				{bin: "/home/user/go/bin/mockproj3", info: internal.BinaryDiagnostic{}},
+			},
+			expectedStdOut: "3 binaries checked, 0 with issues\n",
 		},
 		"error-list-binaries-full-paths": {
 			stdOut:                       &bytes.Buffer{},
