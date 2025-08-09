@@ -387,19 +387,19 @@ func (g *Gobin) ShowBinaryRepository(ctx context.Context, binary string, open bo
 	return nil
 }
 
-// UninstallBinary uninstalls a given binary by removing the binary file. It
-// returns an error if the binary cannot be found or removed.
-func (g *Gobin) UninstallBinary(binary string) error {
-	err := g.system.Remove(filepath.Join(g.workspace.GetGoBinPath(), binary))
-	if errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
-		return err
-	} else if err != nil {
-		slog.Default().Error("failed to remove binary", "binary", binary, "err", err)
-		return err
+// UninstallBinaries uninstalls the given binaries by removing the binary files.
+// It returns an error if the binary cannot be found or removed.
+func (g *Gobin) UninstallBinaries(bins ...string) error {
+	var err error
+	for _, bin := range bins {
+		removeErr := g.binaryManager.UninstallBinary(bin)
+		if errors.Is(removeErr, os.ErrNotExist) {
+			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin)
+		}
+		err = removeErr
 	}
 
-	return nil
+	return err
 }
 
 // UpgradeBinaries upgrades the given binaries or all binaries in the Go binary
