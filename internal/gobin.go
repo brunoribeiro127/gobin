@@ -13,6 +13,7 @@ import (
 	"sync"
 	"text/template"
 
+	"golang.org/x/mod/semver"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -193,11 +194,17 @@ func (g *Gobin) InstallPackages(
 // ListInstalledBinaries lists all installed binaries in the Go binary directory.
 // It prints a template with the installed binaries to the standard output (or
 // another defined io.Writer), or an error if the binary directory cannot be
-// determined or listed.
-func (g *Gobin) ListInstalledBinaries() error {
-	binInfos, err := g.binaryManager.GetAllBinaryInfos()
+// determined or listed. If managed is true, it lists all managed binaries.
+func (g *Gobin) ListInstalledBinaries(managed bool) error {
+	binInfos, err := g.binaryManager.GetAllBinaryInfos(managed)
 	if err != nil {
 		return err
+	}
+
+	if managed {
+		for i := range binInfos {
+			binInfos[i].Name = strings.Split(binInfos[i].Name, "@")[0]
+		}
 	}
 
 	return g.printInstalledBinaries(binInfos)
@@ -213,7 +220,7 @@ func (g *Gobin) ListOutdatedBinaries(
 	checkMajor bool,
 	parallelism int,
 ) error {
-	binInfos, err := g.binaryManager.GetAllBinaryInfos()
+	binInfos, err := g.binaryManager.GetAllBinaryInfos(false)
 	if err != nil {
 		return err
 	}
@@ -509,6 +516,13 @@ func (g *Gobin) printBinaryDiagnostics(diags []BinaryDiagnostic) error {
 // printInstalledBinaries prints the installed binaries to the standard output
 // (or another defined io.Writer).
 func (g *Gobin) printInstalledBinaries(binInfos []BinaryInfo) error {
+	sort.Slice(binInfos, func(i, j int) bool {
+		if binInfos[i].Name == binInfos[j].Name {
+			return semver.Compare(binInfos[i].ModuleVersion, binInfos[j].ModuleVersion) > 0
+		}
+		return binInfos[i].Name < binInfos[j].Name
+	})
+
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,

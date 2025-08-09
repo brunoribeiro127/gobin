@@ -439,28 +439,51 @@ func TestGobin_InstallPackages(t *testing.T) {
 func TestGobin_ListInstalledBinaries(t *testing.T) {
 	cases := map[string]struct {
 		stdOut                   io.ReadWriter
+		managed                  bool
 		mockGetAllBinaryInfos    []internal.BinaryInfo
 		mockGetAllBinaryInfosErr error
 		expectedErr              error
 		expectedStdOut           string
 	}{
-		"success-no-outdated-binaries": {
-			stdOut:                &bytes.Buffer{},
-			mockGetAllBinaryInfos: []internal.BinaryInfo{binInfo1, binInfo2, binInfo3},
-			expectedStdOut: `Name      → Module                           @ Version
-------------------------------------------------------
-mockproj1 → example.com/mockorg/mockproj1    @ v0.1.0 
-mockproj2 → example.com/mockorg/mockproj2    @ v1.1.0 
-mockproj3 → example.com/mockorg/mockproj3/v2 @ v2.1.0 
+		"success-go-bin-path-binaries": {
+			stdOut:  &bytes.Buffer{},
+			managed: false,
+			mockGetAllBinaryInfos: []internal.BinaryInfo{
+				getBinaryInfo("mockproj1", "v0.1.0", false, false),
+				getBinaryInfo("mockproj2", "v1.1.0", false, false),
+				getBinaryInfo("mockproj3", "v2.1.0", false, true),
+			},
+			expectedStdOut: `Name      → Module                          @ Version
+-----------------------------------------------------
+mockproj1 → example.com/mockorg/mockproj    @ v0.1.0 
+mockproj2 → example.com/mockorg/mockproj    @ v1.1.0 
+mockproj3 → example.com/mockorg/mockproj/v2 @ v2.1.0 
+`,
+		},
+		"success-internal-bin-path-binaries": {
+			stdOut:  &bytes.Buffer{},
+			managed: true,
+			mockGetAllBinaryInfos: []internal.BinaryInfo{
+				getBinaryInfo("mockproj", "v0.1.0", true, true),
+				getBinaryInfo("mockproj", "v1.1.0", true, true),
+				getBinaryInfo("mockproj", "v2.1.0", true, true),
+			},
+			expectedStdOut: `Name     → Module                          @ Version
+----------------------------------------------------
+mockproj → example.com/mockorg/mockproj/v2 @ v2.1.0 
+mockproj → example.com/mockorg/mockproj    @ v1.1.0 
+mockproj → example.com/mockorg/mockproj    @ v0.1.0 
 `,
 		},
 		"error-get-all-binary-infos": {
 			stdOut:                   &bytes.Buffer{},
+			managed:                  false,
 			mockGetAllBinaryInfosErr: errors.New("unexpected error"),
 			expectedErr:              errors.New("unexpected error"),
 		},
 		"error-write-error": {
 			stdOut:                &errorWriter{},
+			managed:               false,
 			mockGetAllBinaryInfos: []internal.BinaryInfo{binInfo1, binInfo2, binInfo3},
 			expectedErr:           errMockWriteError,
 		},
@@ -470,12 +493,12 @@ mockproj3 → example.com/mockorg/mockproj3/v2 @ v2.1.0
 		t.Run(name, func(t *testing.T) {
 			binaryManager := mocks.NewBinaryManager(t)
 
-			binaryManager.EXPECT().GetAllBinaryInfos().
+			binaryManager.EXPECT().GetAllBinaryInfos(tc.managed).
 				Return(tc.mockGetAllBinaryInfos, tc.mockGetAllBinaryInfosErr).
 				Once()
 
 			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil, nil)
-			err := gobin.ListInstalledBinaries()
+			err := gobin.ListInstalledBinaries(tc.managed)
 			assert.Equal(t, tc.expectedErr, err)
 
 			bytes, err := io.ReadAll(tc.stdOut)
@@ -798,7 +821,7 @@ mockproj2 → example.com/mockorg/mockproj2 @ ` + "\033[31m" + `v1.1.0 ` + "\033
 		t.Run(name, func(t *testing.T) {
 			binaryManager := mocks.NewBinaryManager(t)
 
-			binaryManager.EXPECT().GetAllBinaryInfos().
+			binaryManager.EXPECT().GetAllBinaryInfos(false).
 				Return(tc.mockGetAllBinaryInfos, tc.mockGetAllBinaryInfosErr).
 				Once()
 
