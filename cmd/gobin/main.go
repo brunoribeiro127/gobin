@@ -216,17 +216,37 @@ The GOFLAGS environment variable can be used to define build flags.`,
 
 // newListCmd creates a list command to list installed binaries.
 func newListCmd(gobin *internal.Gobin) *cobra.Command {
-	return &cobra.Command{
-		Use:           "list",
-		Short:         "List installed binaries",
+	var managed bool
+
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List installed binaries",
+		Long: `List installed binaries.
+
+Examples:
+  gobin list                   # List binaries in the Go binary path
+  gobin list --managed         # List all managed binaries
+
+By default, only binaries in the GO bin path are shown. Use -m to list all
+managed binaries.`,
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.ListInstalledBinaries()
+			return gobin.ListInstalledBinaries(managed)
 		},
 	}
+
+	cmd.Flags().BoolVarP(
+		&managed,
+		"managed",
+		"m",
+		false,
+		"list all managed binaries",
+	)
+
+	return cmd
 }
 
 // newMigrateCmd creates a migrate command to migrate binaries to be managed

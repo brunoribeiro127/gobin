@@ -98,7 +98,7 @@ type BinaryManager interface {
 	// DiagnoseBinary diagnoses issues in a binary.
 	DiagnoseBinary(ctx context.Context, path string) (BinaryDiagnostic, error)
 	// GetAllBinaryInfos gets all binary infos.
-	GetAllBinaryInfos() ([]BinaryInfo, error)
+	GetAllBinaryInfos(managed bool) ([]BinaryInfo, error)
 	// GetBinaryInfo gets the binary info for a given path.
 	GetBinaryInfo(path string) (BinaryInfo, error)
 	// GetBinaryRepository gets the repository URL for a given binary.
@@ -194,11 +194,17 @@ func (m *GoBinaryManager) DiagnoseBinary(
 	return diagnostic, nil
 }
 
-// GetAllBinaryInfos gets all binary infos in the Go binary directory. It
-// returns a list of binary infos, or an error if the binary directory cannot be
-// determined or listed. It skips silently failures to get the binary info.
-func (m *GoBinaryManager) GetAllBinaryInfos() ([]BinaryInfo, error) {
-	bins, err := m.ListBinariesFullPaths(m.workspace.GetGoBinPath())
+// GetAllBinaryInfos gets all binary infos in the Go binary directory or managed
+// binaries only if managed is true. It returns a list of binary infos, or an
+// error if the binary directory cannot be determined or listed. It skips
+// silently failures to get the binary info.
+func (m *GoBinaryManager) GetAllBinaryInfos(managed bool) ([]BinaryInfo, error) {
+	path := m.workspace.GetGoBinPath()
+	if managed {
+		path = m.workspace.GetInternalBinPath()
+	}
+
+	bins, err := m.ListBinariesFullPaths(path)
 	if err != nil {
 		return nil, err
 	}

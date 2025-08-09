@@ -70,7 +70,7 @@ task install
 | `completion [shell]` | Generate shell completion scripts           |                                                                                                   |
 | `doctor`             | Diagnose issues for binaries                |                                                                                                   |
 | `info [binary]`      | Show info about a binary                    |                                                                                                   |
-| `list`               | List installed binaries                     |                                                                                                   |
+| `list`               | List installed binaries                     | `-m`, `--managed` – list all managed binaries                                                                                                   |
 | `migrate [binaries]` | Migrate binaries to be managed internally   | `-a`, `--all` – migrate all binaries in the Go binary path                                        |
 | `install [packages]` | Install packages                            |                                                                                                   |
 | `outdated`           | List outdated binaries                      | `-m`, `--major` – include major version updates                                                   |

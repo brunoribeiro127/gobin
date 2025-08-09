@@ -105,8 +105,8 @@ func (_c *BinaryManager_DiagnoseBinary_Call) RunAndReturn(run func(ctx context.C
 }
 
 // GetAllBinaryInfos provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) GetAllBinaryInfos() ([]internal.BinaryInfo, error) {
-	ret := _mock.Called()
+func (_mock *BinaryManager) GetAllBinaryInfos(managed bool) ([]internal.BinaryInfo, error) {
+	ret := _mock.Called(managed)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetAllBinaryInfos")
@@ -114,18 +114,18 @@ func (_mock *BinaryManager) GetAllBinaryInfos() ([]internal.BinaryInfo, error) {
 
 	var r0 []internal.BinaryInfo
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func() ([]internal.BinaryInfo, error)); ok {
-		return returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(bool) ([]internal.BinaryInfo, error)); ok {
+		return returnFunc(managed)
 	}
-	if returnFunc, ok := ret.Get(0).(func() []internal.BinaryInfo); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(bool) []internal.BinaryInfo); ok {
+		r0 = returnFunc(managed)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]internal.BinaryInfo)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
+	if returnFunc, ok := ret.Get(1).(func(bool) error); ok {
+		r1 = returnFunc(managed)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -138,13 +138,20 @@ type BinaryManager_GetAllBinaryInfos_Call struct {
 }
 
 // GetAllBinaryInfos is a helper method to define mock.On call
-func (_e *BinaryManager_Expecter) GetAllBinaryInfos() *BinaryManager_GetAllBinaryInfos_Call {
-	return &BinaryManager_GetAllBinaryInfos_Call{Call: _e.mock.On("GetAllBinaryInfos")}
+//   - managed bool
+func (_e *BinaryManager_Expecter) GetAllBinaryInfos(managed interface{}) *BinaryManager_GetAllBinaryInfos_Call {
+	return &BinaryManager_GetAllBinaryInfos_Call{Call: _e.mock.On("GetAllBinaryInfos", managed)}
 }
 
-func (_c *BinaryManager_GetAllBinaryInfos_Call) Run(run func()) *BinaryManager_GetAllBinaryInfos_Call {
+func (_c *BinaryManager_GetAllBinaryInfos_Call) Run(run func(managed bool)) *BinaryManager_GetAllBinaryInfos_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 bool
+		if args[0] != nil {
+			arg0 = args[0].(bool)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -154,7 +161,7 @@ func (_c *BinaryManager_GetAllBinaryInfos_Call) Return(binaryInfos []internal.Bi
 	return _c
 }
 
-func (_c *BinaryManager_GetAllBinaryInfos_Call) RunAndReturn(run func() ([]internal.BinaryInfo, error)) *BinaryManager_GetAllBinaryInfos_Call {
+func (_c *BinaryManager_GetAllBinaryInfos_Call) RunAndReturn(run func(managed bool) ([]internal.BinaryInfo, error)) *BinaryManager_GetAllBinaryInfos_Call {
 	_c.Call.Return(run)
 	return _c
 }
