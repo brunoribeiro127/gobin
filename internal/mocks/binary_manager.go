@@ -476,6 +476,57 @@ func (_c *BinaryManager_ListBinariesFullPaths_Call) RunAndReturn(run func(dir st
 	return _c
 }
 
+// MigrateBinary provides a mock function for the type BinaryManager
+func (_mock *BinaryManager) MigrateBinary(path string) error {
+	ret := _mock.Called(path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MigrateBinary")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(path)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// BinaryManager_MigrateBinary_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MigrateBinary'
+type BinaryManager_MigrateBinary_Call struct {
+	*mock.Call
+}
+
+// MigrateBinary is a helper method to define mock.On call
+//   - path string
+func (_e *BinaryManager_Expecter) MigrateBinary(path interface{}) *BinaryManager_MigrateBinary_Call {
+	return &BinaryManager_MigrateBinary_Call{Call: _e.mock.On("MigrateBinary", path)}
+}
+
+func (_c *BinaryManager_MigrateBinary_Call) Run(run func(path string)) *BinaryManager_MigrateBinary_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *BinaryManager_MigrateBinary_Call) Return(err error) *BinaryManager_MigrateBinary_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *BinaryManager_MigrateBinary_Call) RunAndReturn(run func(path string) error) *BinaryManager_MigrateBinary_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpgradeBinary provides a mock function for the type BinaryManager
 func (_mock *BinaryManager) UpgradeBinary(ctx context.Context, binFullPath string, majorUpgrade bool, rebuild bool) error {
 	ret := _mock.Called(ctx, binFullPath, majorUpgrade, rebuild)

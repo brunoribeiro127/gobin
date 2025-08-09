@@ -22,6 +22,11 @@ const (
 	GOOSEnvVar = "GOOS"
 )
 
+var (
+	// ErrBinaryAlreadyManaged is returned when a binary is already managed.
+	ErrBinaryAlreadyManaged = errors.New("binary already managed")
+)
+
 // BinaryInfo represents the information for a binary.
 type BinaryInfo struct {
 	Name           string
@@ -38,6 +43,8 @@ type BinaryInfo struct {
 	Arch           string
 	Feature        string
 	EnvVars        []string
+
+	IsManaged bool
 }
 
 // BinaryUpgradeInfo represents the upgrade information for a binary.
@@ -102,6 +109,8 @@ type BinaryManager interface {
 	InstallPackage(ctx context.Context, pkgVersion string) error
 	// ListBinariesFullPaths lists all binary full paths in the Go binary directory.
 	ListBinariesFullPaths(dir string) ([]string, error)
+	// MigrateBinary migrates a binary to be managed internally.
+	MigrateBinary(path string) error
 	// UpgradeBinary upgrades a binary.
 	UpgradeBinary(ctx context.Context, binFullPath string, majorUpgrade bool, rebuild bool) error
 }
@@ -222,7 +231,7 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
 	}
 
 	binInfo := BinaryInfo{
-		Name:          filepath.Base(path),
+		Name:          strings.Split(filepath.Base(path), "@")[0],
 		FullPath:      path,
 		InstallPath:   installPath,
 		PackagePath:   info.Path,
@@ -230,6 +239,7 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
 		ModuleVersion: info.Main.Version,
 		ModuleSum:     info.Main.Sum,
 		GoVersion:     info.GoVersion,
+		IsManaged:     strings.HasPrefix(installPath, m.workspace.GetInternalBinPath()),
 	}
 
 	for _, s := range info.Settings {
@@ -327,13 +337,11 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 // InstallPackage installs a package leveraging the toolchain. If version is
 // not provided, it installs the latest version.
 func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkgVersion string) error {
-	pkg := pkgVersion
-	version := "latest"
+	pkg, version := pkgVersion, "latest"
 
 	//nolint:mnd // expected package version format: package@version
 	if parts := strings.Split(pkgVersion, "@"); len(parts) == 2 {
-		pkg = parts[0]
-		version = parts[1]
+		pkg, version = parts[0], parts[1]
 	}
 
 	return m.installBinary(ctx, pkg, version)
@@ -359,6 +367,55 @@ func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
 	}
 
 	return binaries, nil
+}
+
+// MigrateBinary migrates a binary to be managed internally. It gets the binary
+// info, moves the binary from the go bin path to the internal bin path, and
+// creates a symlink to the go bin path.
+func (m *GoBinaryManager) MigrateBinary(path string) error {
+	logger := slog.Default()
+
+	info, err := m.GetBinaryInfo(path)
+	if err != nil {
+		return err
+	}
+
+	if info.IsManaged {
+		return ErrBinaryAlreadyManaged
+	}
+
+	internalBinPath := filepath.Join(
+		m.workspace.GetInternalBinPath(),
+		info.Name+"@"+info.ModuleVersion,
+	)
+
+	logger.Info(
+		"moving binary from go bin path to internal bin path",
+		"go_bin_path", path, "internal_bin_path", internalBinPath,
+	)
+
+	if err = m.system.Rename(path, internalBinPath); err != nil {
+		logger.Error(
+			"error while moving binary from go bin path to internal bin path",
+			"err", err, "source", path, "destination", internalBinPath,
+		)
+		return err
+	}
+
+	logger.Info(
+		"creating symlink for binary",
+		"internal_bin_path", internalBinPath, "go_bin_path", path,
+	)
+
+	if err = m.system.Symlink(internalBinPath, path); err != nil {
+		logger.Error(
+			"error while creating symlink for binary",
+			"err", err, "source", internalBinPath, "destination", path,
+		)
+		return err
+	}
+
+	return nil
 }
 
 // UpgradeBinary upgrades a binary leveraging the toolchain. It gets the binary
@@ -533,7 +590,7 @@ func (m *GoBinaryManager) installBinary(ctx context.Context, pkg, version string
 	if err = m.system.Rename(tempBinPath, binPath); err != nil {
 		logger.ErrorContext(
 			ctx,
-			"error while renaming internal binary",
+			"error while moving binary from temp path to bin path",
 			"err", err,
 			"source", tempBinPath,
 			"destination", binPath,
@@ -548,6 +605,11 @@ func (m *GoBinaryManager) installBinary(ctx context.Context, pkg, version string
 		"bin_path", binPath, "go_bin_path", goBinPath,
 	)
 
+	logger.InfoContext(
+		ctx, "removing existing symlink for binary",
+		"go_bin_path", goBinPath,
+	)
+
 	if err = m.system.Remove(goBinPath); err != nil && !os.IsNotExist(err) {
 		logger.ErrorContext(
 			ctx, "error while removing existing symlink for binary",
@@ -555,6 +617,11 @@ func (m *GoBinaryManager) installBinary(ctx context.Context, pkg, version string
 		)
 		return err
 	}
+
+	logger.InfoContext(
+		ctx, "creating symlink for binary",
+		"bin_path", binPath, "go_bin_path", goBinPath,
+	)
 
 	if err = m.system.Symlink(binPath, goBinPath); err != nil {
 		logger.ErrorContext(

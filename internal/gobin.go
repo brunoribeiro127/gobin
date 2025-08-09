@@ -265,6 +265,40 @@ func (g *Gobin) ListOutdatedBinaries(
 	return waitErr
 }
 
+// MigrateBinaries migrates the given binaries to be managed internally.
+func (g *Gobin) MigrateBinaries(bins ...string) error {
+	goBinPath := g.workspace.GetGoBinPath()
+
+	var binPaths []string
+	if len(bins) == 0 {
+		var err error
+		binPaths, err = g.binaryManager.ListBinariesFullPaths(goBinPath)
+		if err != nil {
+			return err
+		}
+	} else {
+		for _, bin := range bins {
+			binPaths = append(binPaths, filepath.Join(goBinPath, bin))
+		}
+	}
+
+	var err error
+	for _, path := range binPaths {
+		if migrateErr := g.binaryManager.MigrateBinary(path); migrateErr != nil {
+			if errors.Is(migrateErr, ErrBinaryAlreadyManaged) {
+				fmt.Fprintf(g.stdErr, "❌ binary %q already managed\n", filepath.Base(path))
+			} else if errors.Is(migrateErr, ErrBinaryNotFound) {
+				fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", filepath.Base(path))
+			}
+
+			err = migrateErr
+			continue
+		}
+	}
+
+	return err
+}
+
 // PrintBinaryInfo prints the binary info for a given binary. It prints a
 // template with the binary info to the standard output (or another defined
 // io.Writer), or an error if the binary cannot be found.

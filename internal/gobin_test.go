@@ -85,6 +85,11 @@ type mockDiagnoseBinaryCall struct {
 	err  error
 }
 
+type mockMigrateBinaryCall struct {
+	path string
+	err  error
+}
+
 type mockUpgradeBinaryCall struct {
 	bin string
 	err error
@@ -812,6 +817,137 @@ mockproj2 → example.com/mockorg/mockproj2 @ ` + "\033[31m" + `v1.1.0 ` + "\033
 			bytes, err := io.ReadAll(tc.stdOut)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedStdOut, string(bytes))
+		})
+	}
+}
+
+func TestGobin_MigrateBinaries(t *testing.T) {
+	cases := map[string]struct {
+		bins                         []string
+		mockGetGoBinPath             string
+		callListBinariesFullPaths    bool
+		mockListBinariesFullPaths    []string
+		mockListBinariesFullPathsErr error
+		mockMigrateBinaryCalls       []mockMigrateBinaryCall
+		expectedErr                  error
+		expectedStdErr               string
+	}{
+		"success-single-binary": {
+			bins:             []string{"mockproj1"},
+			mockGetGoBinPath: "/home/user/go/bin",
+			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
+				{
+					path: "/home/user/go/bin/mockproj1",
+				},
+			},
+		},
+		"success-multiple-binaries": {
+			bins:             []string{"mockproj1", "mockproj2", "mockproj3"},
+			mockGetGoBinPath: "/home/user/go/bin",
+			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
+				{
+					path: "/home/user/go/bin/mockproj1",
+				},
+				{
+					path: "/home/user/go/bin/mockproj2",
+				},
+				{
+					path: "/home/user/go/bin/mockproj3",
+				},
+			},
+		},
+		"success-all-binaries": {
+			mockGetGoBinPath:          "/home/user/go/bin",
+			callListBinariesFullPaths: true,
+			mockListBinariesFullPaths: []string{
+				"/home/user/go/bin/mockproj1",
+				"/home/user/go/bin/mockproj2",
+				"/home/user/go/bin/mockproj3",
+			},
+			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
+				{
+					path: "/home/user/go/bin/mockproj1",
+				},
+				{
+					path: "/home/user/go/bin/mockproj2",
+				},
+				{
+					path: "/home/user/go/bin/mockproj3",
+				},
+			},
+		},
+		"success-skip-binary-already-managed": {
+			bins:             []string{"mockproj1"},
+			mockGetGoBinPath: "/home/user/go/bin",
+			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
+				{
+					path: "/home/user/go/bin/mockproj1",
+					err:  internal.ErrBinaryAlreadyManaged,
+				},
+			},
+			expectedErr:    internal.ErrBinaryAlreadyManaged,
+			expectedStdErr: "❌ binary \"mockproj1\" already managed\n",
+		},
+		"partial-success-skip-binary-not-found": {
+			bins:             []string{"mockproj1"},
+			mockGetGoBinPath: "/home/user/go/bin",
+			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
+				{
+					path: "/home/user/go/bin/mockproj1",
+					err:  internal.ErrBinaryNotFound,
+				},
+			},
+			expectedErr:    internal.ErrBinaryNotFound,
+			expectedStdErr: "❌ binary \"mockproj1\" not found\n",
+		},
+		"error-list-binaries-full-paths": {
+			mockGetGoBinPath:             "/home/user/go/bin",
+			callListBinariesFullPaths:    true,
+			mockListBinariesFullPathsErr: errors.New("unexpected error"),
+			expectedErr:                  errors.New("unexpected error"),
+		},
+		"error-migrate-binary": {
+			mockGetGoBinPath:          "/home/user/go/bin",
+			callListBinariesFullPaths: true,
+			mockListBinariesFullPaths: []string{"/home/user/go/bin/mockproj1"},
+			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
+				{
+					path: "/home/user/go/bin/mockproj1",
+					err:  errors.New("unexpected error"),
+				},
+			},
+			expectedErr: errors.New("unexpected error"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var stdErr bytes.Buffer
+
+			binaryManager := mocks.NewBinaryManager(t)
+
+			if tc.callListBinariesFullPaths {
+				binaryManager.EXPECT().ListBinariesFullPaths(tc.mockGetGoBinPath).
+					Return(tc.mockListBinariesFullPaths, tc.mockListBinariesFullPathsErr).
+					Once()
+			}
+
+			for _, call := range tc.mockMigrateBinaryCalls {
+				binaryManager.EXPECT().MigrateBinary(call.path).
+					Return(call.err).
+					Once()
+			}
+
+			workspace := mocks.NewWorkspace(t)
+
+			workspace.EXPECT().GetGoBinPath().
+				Return(tc.mockGetGoBinPath).
+				Once()
+
+			gobin := internal.NewGobin(binaryManager, nil, &stdErr, nil, nil, workspace)
+			err := gobin.MigrateBinaries(tc.bins...)
+			assert.Equal(t, tc.expectedErr, err)
+			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 		})
 	}
 }
