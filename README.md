@@ -65,19 +65,19 @@ task install
 
 ## Usage
 
-| Command              | Description                                 | Flags                                                                                             |
-|----------------------|---------------------------------------------|---------------------------------------------------------------------------------------------------|
-| `completion [shell]` | Generate shell completion scripts           |                                                                                                   |
-| `doctor`             | Diagnose issues for binaries                |                                                                                                   |
-| `info [binary]`      | Show info about a binary                    |                                                                                                   |
-| `list`               | List installed binaries                     | `-m`, `--managed` – list all managed binaries                                                                                                   |
-| `migrate [binaries]` | Migrate binaries to be managed internally   | `-a`, `--all` – migrate all binaries in the Go binary path                                        |
-| `install [packages]` | Install packages                            |                                                                                                   |
-| `outdated`           | List outdated binaries                      | `-m`, `--major` – include major version updates                                                   |
-| `repo [binary]`      | Show binary repository                      | `-o`, `--open` – open repository URL in the default browser                                       |
-| `uninstall [binary]` | Uninstall a binary                          |                                                                                                   |
-| `upgrade [binaries]` | Upgrade specific binaries or all with --all | `-a`, `--all` – upgrade all outdated binaries<br>`-m`, `--major` – allow major version upgrade<br>`-r`, `--rebuild` – force binary rebuild |
-| `version`            | Show version info                           | `-s`, `--short` – print short version                                                             |
+| Command                | Description                                 | Flags                                                                                             |
+|------------------------|---------------------------------------------|---------------------------------------------------------------------------------------------------|
+| `completion [shell]`   | Generate shell completion scripts           |                                                                                                   |
+| `doctor`               | Diagnose issues for binaries                |                                                                                                   |
+| `info [binary]`        | Show info about a binary                    |                                                                                                   |
+| `list`                 | List installed binaries                     | `-m`, `--managed` – list all managed binaries                                                                                                   |
+| `migrate [binaries]`   | Migrate binaries to be managed internally   | `-a`, `--all` – migrate all binaries in the Go binary path                                        |
+| `install [packages]`   | Install packages                            |                                                                                                   |
+| `outdated`             | List outdated binaries                      | `-m`, `--major` – include major version updates                                                   |
+| `repo [binary]`        | Show binary repository                      | `-o`, `--open` – open repository URL in the default browser                                       |
+| `uninstall [binaries]` | Uninstall binaries                          |                                                                                                   |
+| `upgrade [binaries]`   | Upgrade specific binaries or all with --all | `-a`, `--all` – upgrade all outdated binaries<br>`-m`, `--major` – allow major version upgrade<br>`-r`, `--rebuild` – force binary rebuild |
+| `version`              | Show version info                           | `-s`, `--short` – print short version                                                             |
 
 ### Global Flags
 
