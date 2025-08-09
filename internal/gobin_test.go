@@ -836,6 +836,7 @@ func TestGobin_PrintBinaryInfo(t *testing.T) {
 			mockGetBinaryInfo: internal.BinaryInfo{
 				Name:          "mockproj",
 				FullPath:      "/home/user/go/bin/mockproj",
+				InstallPath:   "/home/user/.gobin/bin/mockproj@v0.1.0",
 				PackagePath:   "example.com/mockorg/mockproj/cmd/mockproj",
 				ModulePath:    "example.com/mockorg/mockproj",
 				ModuleVersion: "v0.1.0",
@@ -847,6 +848,7 @@ func TestGobin_PrintBinaryInfo(t *testing.T) {
 				EnvVars:       []string{"CGO_ENABLED=1"},
 			},
 			expectedStdOut: `Path          /home/user/go/bin/mockproj
+Location      /home/user/.gobin/bin/mockproj@v0.1.0
 Package       example.com/mockorg/mockproj/cmd/mockproj
 Module        example.com/mockorg/mockproj@v0.1.0
 Module Sum    h1:Zn6y0QZqqixH1kGqbYWR/Ce4eG9FD4xZ8buAi7rStQc=
@@ -863,6 +865,7 @@ Env Vars      CGO_ENABLED=1
 			mockGetBinaryInfo: internal.BinaryInfo{
 				Name:           "mockproj",
 				FullPath:       "/home/user/go/bin/mockproj",
+				InstallPath:    "/home/user/go/bin/mockproj",
 				PackagePath:    "example.com/mockorg/mockproj/cmd/mockproj",
 				ModulePath:     "example.com/mockorg/mockproj",
 				ModuleVersion:  "v0.1.2-0.20250729191454-dac745d99aac",
@@ -875,6 +878,7 @@ Env Vars      CGO_ENABLED=1
 				EnvVars:        []string{"CGO_ENABLED=1"},
 			},
 			expectedStdOut: `Path          /home/user/go/bin/mockproj
+Location      <unmanaged>
 Package       example.com/mockorg/mockproj/cmd/mockproj
 Module        example.com/mockorg/mockproj@v0.1.2-0.20250729191454-dac745d99aac
 Module Sum    <none>

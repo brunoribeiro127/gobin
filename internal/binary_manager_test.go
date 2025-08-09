@@ -97,6 +97,12 @@ type mockGetLatestModuleVersionCall struct {
 	err           error
 }
 
+type mockReadlinkCall struct {
+	path string
+	link string
+	err  error
+}
+
 type mockStatInfoCall struct {
 	path string
 	info os.FileInfo
@@ -580,6 +586,7 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 		mockRuntimeOS         string
 		mockRuntimeOSTimes    int
 		mockGetBuildInfoCalls []mockGetBuildInfoCall
+		mockReadlinkCalls     []mockReadlinkCall
 		expectedInfos         []internal.BinaryInfo
 		expectedErr           error
 	}{
@@ -613,9 +620,13 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 					info: getBuildInfo("bin2", "v0.1.0"),
 				},
 			},
+			mockReadlinkCalls: []mockReadlinkCall{
+				{path: "/home/user/go/bin/bin1", link: "/home/user/.gobin/bin/bin1@v0.1.0"},
+				{path: "/home/user/go/bin/bin2", err: os.ErrInvalid},
+			},
 			expectedInfos: []internal.BinaryInfo{
-				getBinaryInfo("bin1", "v0.1.0"),
-				getBinaryInfo("bin2", "v0.1.0"),
+				getBinaryInfo("bin1", "v0.1.0", true),
+				getBinaryInfo("bin2", "v0.1.0", false),
 			},
 		},
 		"success-skip-get-binary-info-error": {
@@ -648,8 +659,11 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 					err:  internal.ErrBinaryBuiltWithoutGoModules,
 				},
 			},
+			mockReadlinkCalls: []mockReadlinkCall{
+				{path: "/home/user/go/bin/bin1", link: "/home/user/.gobin/bin/bin1@v0.1.0"},
+			},
 			expectedInfos: []internal.BinaryInfo{
-				getBinaryInfo("bin1", "v0.1.0"),
+				getBinaryInfo("bin1", "v0.1.0", true),
 			},
 		},
 		"error-list-binaries-full-paths": {
@@ -672,6 +686,12 @@ func TestGoBinaryManager_GetAllBinaryInfos(t *testing.T) {
 			system.EXPECT().ReadDir(tc.mockGetGoBinPath).
 				Return(tc.mockReadDirEntries, tc.mockReadDirErr).
 				Once()
+
+			for _, call := range tc.mockReadlinkCalls {
+				system.EXPECT().Readlink(call.path).
+					Return(call.link, call.err).
+					Once()
+			}
 
 			for _, call := range tc.mockStatInfoCalls {
 				system.EXPECT().Stat(call.path).
@@ -706,6 +726,9 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 		path                string
 		mockGetBuildInfo    *buildinfo.BuildInfo
 		mockGetBuildInfoErr error
+		callReadlink        bool
+		mockReadlink        string
+		mockReadlinkErr     error
 		expectedInfo        internal.BinaryInfo
 		expectedErr         error
 	}{
@@ -726,9 +749,12 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 					{Key: "CGO_ENABLED", Value: "1"},
 				},
 			},
+			callReadlink:    true,
+			mockReadlinkErr: os.ErrInvalid,
 			expectedInfo: internal.BinaryInfo{
 				Name:          "mockproj",
 				FullPath:      "/home/user/go/bin/mockproj",
+				InstallPath:   "/home/user/go/bin/mockproj",
 				PackagePath:   "example.com/mockorg/mockproj/cmd/mockproj",
 				ModulePath:    "example.com/mockorg/mockproj",
 				ModuleVersion: "v0.1.0",
@@ -758,9 +784,12 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 					{Key: "CGO_ENABLED", Value: "1"},
 				},
 			},
+			callReadlink: true,
+			mockReadlink: "/home/user/.gobin/bin/mockproj@v0.1.2-0.20250729191454-dac745d99aac",
 			expectedInfo: internal.BinaryInfo{
 				Name:           "mockproj",
 				FullPath:       "/home/user/go/bin/mockproj",
+				InstallPath:    "/home/user/.gobin/bin/mockproj@v0.1.2-0.20250729191454-dac745d99aac",
 				PackagePath:    "example.com/mockorg/mockproj/cmd/mockproj",
 				ModulePath:     "example.com/mockorg/mockproj",
 				ModuleVersion:  "v0.1.2-0.20250729191454-dac745d99aac",
@@ -782,11 +811,17 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			system := mocks.NewSystem(t)
+			if tc.callReadlink {
+				system.EXPECT().Readlink(tc.path).
+					Return(tc.mockReadlink, tc.mockReadlinkErr).Once()
+			}
+
 			toolchain := mocks.NewToolchain(t)
 			toolchain.EXPECT().GetBuildInfo(tc.path).
 				Return(tc.mockGetBuildInfo, tc.mockGetBuildInfoErr).Once()
 
-			binaryManager := internal.NewGoBinaryManager(nil, toolchain, nil)
+			binaryManager := internal.NewGoBinaryManager(system, toolchain, nil)
 			info, err := binaryManager.GetBinaryInfo(tc.path)
 			assert.Equal(t, tc.expectedInfo, info)
 			assert.Equal(t, tc.expectedErr, err)
@@ -800,6 +835,9 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 		mockGetGoBinPath       string
 		mockGetBuildInfo       *buildinfo.BuildInfo
 		mockGetBuildInfoErr    error
+		callReadlink           bool
+		mockReadlink           string
+		mockReadlinkErr        error
 		callGetModuleOrigin    bool
 		mockGetModuleOrigin    *internal.ModuleOrigin
 		mockGetModuleOriginErr error
@@ -810,6 +848,8 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			binary:              "mockproj",
 			mockGetGoBinPath:    "/home/user/go/bin",
 			mockGetBuildInfo:    getBuildInfo("mockproj", "v0.1.0"),
+			callReadlink:        true,
+			mockReadlink:        "/home/user/.gobin/bin/mockproj@v0.1.0",
 			callGetModuleOrigin: true,
 			mockGetModuleOrigin: &internal.ModuleOrigin{
 				URL: "https://github.com/mockorg/mockproj",
@@ -820,6 +860,8 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			binary:                 "mockproj",
 			mockGetGoBinPath:       "/home/user/go/bin",
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
+			callReadlink:           true,
+			mockReadlink:           "/home/user/.gobin/bin/mockproj@v0.1.0",
 			callGetModuleOrigin:    true,
 			mockGetModuleOriginErr: internal.ErrModuleOriginNotAvailable,
 			expectedRepository:     "https://example.com/mockorg/mockproj",
@@ -828,6 +870,8 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			binary:                 "mockproj",
 			mockGetGoBinPath:       "/home/user/go/bin",
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
+			callReadlink:           true,
+			mockReadlink:           "/home/user/.gobin/bin/mockproj@v0.1.0",
 			callGetModuleOrigin:    true,
 			mockGetModuleOriginErr: internal.ErrModuleNotFound,
 			expectedRepository:     "https://example.com/mockorg/mockproj",
@@ -842,6 +886,8 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			binary:                 "mockproj",
 			mockGetGoBinPath:       "/home/user/go/bin",
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
+			callReadlink:           true,
+			mockReadlink:           "/home/user/.gobin/bin/mockproj@v0.1.0",
 			callGetModuleOrigin:    true,
 			mockGetModuleOriginErr: errors.New("unexpected error"),
 			expectedErr:            errors.New("unexpected error"),
@@ -850,6 +896,14 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			system := mocks.NewSystem(t)
+
+			if tc.callReadlink {
+				system.EXPECT().Readlink(filepath.Join(tc.mockGetGoBinPath, tc.binary)).
+					Return(tc.mockReadlink, tc.mockReadlinkErr).
+					Once()
+			}
+
 			workspace := mocks.NewWorkspace(t)
 
 			workspace.EXPECT().GetGoBinPath().
@@ -871,7 +925,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 				).Return(tc.mockGetModuleOrigin, tc.mockGetModuleOriginErr).Once()
 			}
 
-			binaryManager := internal.NewGoBinaryManager(nil, toolchain, workspace)
+			binaryManager := internal.NewGoBinaryManager(system, toolchain, workspace)
 			repository, err := binaryManager.GetBinaryRepository(context.Background(), tc.binary)
 			assert.Equal(t, tc.expectedRepository, repository)
 			assert.Equal(t, tc.expectedErr, err)
@@ -888,7 +942,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 		expectedErr                     error
 	}{
 		"success-check-minor-no-upgrade-available": {
-			info:       getBinaryInfo("mockproj", "v0.1.0"),
+			info:       getBinaryInfo("mockproj", "v0.1.0", true),
 			checkMajor: false,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
@@ -898,14 +952,14 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 				},
 			},
 			expectedInfo: internal.BinaryUpgradeInfo{
-				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0"),
+				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0", true),
 				LatestModulePath:   "example.com/mockorg/mockproj",
 				LatestVersion:      "v0.1.0",
 				IsUpgradeAvailable: false,
 			},
 		},
 		"success-check-major-no-upgrade-available": {
-			info:       getBinaryInfo("mockproj", "v0.1.0"),
+			info:       getBinaryInfo("mockproj", "v0.1.0", true),
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
@@ -919,14 +973,14 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 				},
 			},
 			expectedInfo: internal.BinaryUpgradeInfo{
-				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0"),
+				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0", true),
 				LatestModulePath:   "example.com/mockorg/mockproj",
 				LatestVersion:      "v0.1.0",
 				IsUpgradeAvailable: false,
 			},
 		},
 		"success-check-major-no-upgrade-available-v2": {
-			info:       getBinaryInfo("mockproj", "v2.0.0"),
+			info:       getBinaryInfo("mockproj", "v2.0.0", true),
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
@@ -940,14 +994,14 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 				},
 			},
 			expectedInfo: internal.BinaryUpgradeInfo{
-				BinaryInfo:         getBinaryInfo("mockproj", "v2.0.0"),
+				BinaryInfo:         getBinaryInfo("mockproj", "v2.0.0", true),
 				LatestModulePath:   "example.com/mockorg/mockproj/v2",
 				LatestVersion:      "v2.0.0",
 				IsUpgradeAvailable: false,
 			},
 		},
 		"success-check-minor-upgrade-available": {
-			info:       getBinaryInfo("mockproj", "v0.1.0"),
+			info:       getBinaryInfo("mockproj", "v0.1.0", true),
 			checkMajor: false,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
@@ -957,14 +1011,14 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 				},
 			},
 			expectedInfo: internal.BinaryUpgradeInfo{
-				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0"),
+				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0", true),
 				LatestModulePath:   "example.com/mockorg/mockproj",
 				LatestVersion:      "v1.0.0",
 				IsUpgradeAvailable: true,
 			},
 		},
 		"success-check-major-upgrade-available": {
-			info:       getBinaryInfo("mockproj", "v0.1.0"),
+			info:       getBinaryInfo("mockproj", "v0.1.0", true),
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
@@ -983,14 +1037,14 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 				},
 			},
 			expectedInfo: internal.BinaryUpgradeInfo{
-				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0"),
+				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0", true),
 				LatestModulePath:   "example.com/mockorg/mockproj/v2",
 				LatestVersion:      "v2.0.0",
 				IsUpgradeAvailable: true,
 			},
 		},
 		"success-check-major-multiple-major-upgrades-available": {
-			info:       getBinaryInfo("mockproj", "v0.1.0"),
+			info:       getBinaryInfo("mockproj", "v0.1.0", true),
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
@@ -1014,14 +1068,14 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 				},
 			},
 			expectedInfo: internal.BinaryUpgradeInfo{
-				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0"),
+				BinaryInfo:         getBinaryInfo("mockproj", "v0.1.0", true),
 				LatestModulePath:   "example.com/mockorg/mockproj/v3",
 				LatestVersion:      "v3.0.0",
 				IsUpgradeAvailable: true,
 			},
 		},
 		"error-get-latest-module-minor-version": {
-			info:       getBinaryInfo("mockproj", "v0.1.0"),
+			info:       getBinaryInfo("mockproj", "v0.1.0", true),
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
@@ -1032,7 +1086,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 			expectedErr: internal.ErrModuleInfoNotAvailable,
 		},
 		"error-get-latest-module-major-version": {
-			info:       getBinaryInfo("mockproj", "v0.1.0"),
+			info:       getBinaryInfo("mockproj", "v0.1.0", true),
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
@@ -1522,6 +1576,9 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 		rebuild                         bool
 		mockGetBuildInfo                *buildinfo.BuildInfo
 		mockGetBuildInfoErr             error
+		callReadlink                    bool
+		mockReadlink                    string
+		mockReadlinkErr                 error
 		mockGetLatestModuleVersionCalls []mockGetLatestModuleVersionCall
 		callGetInternalTempPath         bool
 		mockInternalTempPath            string
@@ -1561,6 +1618,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v0.1.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1574,6 +1633,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     true,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v0.1.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1591,6 +1652,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          true,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v0.1.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1628,6 +1691,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1665,6 +1730,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     true,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v0.1.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1718,6 +1785,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v0.1.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module: "example.com/mockorg/mockproj",
@@ -1731,6 +1800,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1751,6 +1822,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1775,6 +1848,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1802,6 +1877,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1834,6 +1911,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1870,6 +1949,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1909,6 +1990,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			majorUpgrade:     false,
 			rebuild:          false,
 			mockGetBuildInfo: getBuildInfo("mockproj", "v1.0.0"),
+			callReadlink:     true,
+			mockReadlink:     "/home/user/.gobin/bin/mockproj@v0.1.0",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
 					module:        "example.com/mockorg/mockproj",
@@ -1967,6 +2050,12 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			}
 
 			system := mocks.NewSystem(t)
+
+			if tc.callReadlink {
+				system.EXPECT().Readlink(tc.binFullPath).
+					Return(tc.mockReadlink, tc.mockReadlinkErr).
+					Once()
+			}
 
 			if tc.callMkdirTemp {
 				system.EXPECT().MkdirTemp(tc.mockInternalTempPath, tc.mockMkdirTempPattern).
@@ -2032,7 +2121,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 	}
 }
 
-func getBinaryInfo(name, version string) internal.BinaryInfo {
+func getBinaryInfo(name, version string, managed bool) internal.BinaryInfo {
 	packagePath := "example.com/mockorg/mockproj/cmd/" + name
 	modulePath := "example.com/mockorg/mockproj"
 	if major := semver.Major(version); major != "v0" && major != "v1" {
@@ -2040,9 +2129,15 @@ func getBinaryInfo(name, version string) internal.BinaryInfo {
 		modulePath = modulePath + "/" + major
 	}
 
+	installPath := "/home/user/go/bin/" + name
+	if managed {
+		installPath = "/home/user/.gobin/bin/" + name + "@" + version
+	}
+
 	return internal.BinaryInfo{
 		Name:          name,
 		FullPath:      "/home/user/go/bin/" + name,
+		InstallPath:   installPath,
 		PackagePath:   packagePath,
 		ModulePath:    modulePath,
 		ModuleVersion: version,

@@ -68,6 +68,7 @@ const (
 
 	// infoTemplate is the template for the info command.
 	infoTemplate = `Path          {{.FullPath}}
+Location      {{if eq .FullPath .InstallPath}}<unmanaged>{{else}}{{.InstallPath}}{{end}}
 Package       {{.PackagePath}}
 Module        {{.ModulePath}}@{{.ModuleVersion}}
 Module Sum    {{if .ModuleSum}}{{.ModuleSum}}{{else}}<none>{{end}}

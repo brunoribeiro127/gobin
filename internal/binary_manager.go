@@ -26,6 +26,7 @@ const (
 type BinaryInfo struct {
 	Name           string
 	FullPath       string
+	InstallPath    string
 	PackagePath    string
 	ModulePath     string
 	ModuleVersion  string
@@ -214,9 +215,16 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
 		return BinaryInfo{}, err
 	}
 
+	installPath := path
+	target, err := m.system.Readlink(path)
+	if err == nil {
+		installPath = target
+	}
+
 	binInfo := BinaryInfo{
 		Name:          filepath.Base(path),
 		FullPath:      path,
+		InstallPath:   installPath,
 		PackagePath:   info.Path,
 		ModulePath:    info.Main.Path,
 		ModuleVersion: info.Main.Version,
