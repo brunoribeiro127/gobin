@@ -21,7 +21,7 @@
 - Inspect binary information
 - List and show outdated binaries
 - Upgrade individual or all outdated binaries
-- Install and uninstall binaries
+- Install, uninstall and pin binaries
 - Diagnose and troubleshoot issues with installed binaries
 - Migrate binaries to be managed internally
 
@@ -70,10 +70,11 @@ task install
 | `completion [shell]`   | Generate shell completion scripts           |                                                                                                   |
 | `doctor`               | Diagnose issues for binaries                |                                                                                                   |
 | `info [binary]`        | Show info about a binary                    |                                                                                                   |
+| `install [packages]`   | Install packages                            |                                                                                                   |
 | `list`                 | List installed binaries                     | `-m`, `--managed` – list all managed binaries                                                                                                   |
 | `migrate [binaries]`   | Migrate binaries to be managed internally   | `-a`, `--all` – migrate all binaries in the Go binary path                                        |
-| `install [packages]`   | Install packages                            |                                                                                                   |
 | `outdated`             | List outdated binaries                      | `-m`, `--major` – include major version updates                                                   |
+| `pin [binaries]`       | Pin binaries to the Go binary path          | `-k`, `--kind` – pin kind: [latest (default), major, minor]                                       |
 | `repo [binary]`        | Show binary repository                      | `-o`, `--open` – open repository URL in the default browser                                       |
 | `uninstall [binaries]` | Uninstall binaries                          |                                                                                                   |
 | `upgrade [binaries]`   | Upgrade specific binaries or all with --all | `-a`, `--all` – upgrade all outdated binaries<br>`-m`, `--major` – allow major version upgrade<br>`-r`, `--rebuild` – force binary rebuild |

@@ -129,6 +129,7 @@ func run(ctx context.Context) int {
 	cmd.AddCommand(newListCmd(gobin))
 	cmd.AddCommand(newMigrateCmd(gobin))
 	cmd.AddCommand(newOutdatedCmd(gobin))
+	cmd.AddCommand(newPinCmd(gobin))
 	cmd.AddCommand(newRepoCmd(gobin))
 	cmd.AddCommand(newUninstallCmd(gobin))
 	cmd.AddCommand(newUpgradeCmd(gobin))
@@ -166,7 +167,7 @@ Run this command regularly to make sure everything is ok with your installed bin
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			parallelism, _ := cmd.Flags().GetInt("parallelism")
+			parallelism := internal.Must(cmd.Flags().GetInt("parallelism"))
 
 			return gobin.DiagnoseBinaries(cmd.Context(), parallelism)
 		},
@@ -196,9 +197,11 @@ func newInstallCmd(gobin *internal.Gobin) *cobra.Command {
 		Long: `Install compiles and installs the packages named by the import paths.
 
 Examples:
-  gobin install github.com/go-delve/delve/cmd/dlv@v1.15.1  # Install specific version
   gobin install github.com/go-delve/delve/cmd/dlv          # Install latest version
   gobin install github.com/go-delve/delve/cmd/dlv@latest   # Install latest version
+  gobin install github.com/go-delve/delve/cmd/dlv@v1       # Install latest v1 minor version
+  gobin install github.com/go-delve/delve/cmd/dlv@v1.25    # Install latest v1.25 patch version
+  gobin install github.com/go-delve/delve/cmd/dlv@v1.25.1  # Install specific version
 
 The package version is optional, defaulting to "latest".
 The GOFLAGS environment variable can be used to define build flags.`,
@@ -207,7 +210,7 @@ The GOFLAGS environment variable can be used to define build flags.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			parallelism, _ := cmd.Flags().GetInt("parallelism")
+			parallelism := internal.Must(cmd.Flags().GetInt("parallelism"))
 
 			return gobin.InstallPackages(cmd.Context(), parallelism, args...)
 		},
@@ -319,7 +322,7 @@ potentially breaking major version upgrades.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			parallelism, _ := cmd.Flags().GetInt("parallelism")
+			parallelism := internal.Must(cmd.Flags().GetInt("parallelism"))
 
 			return gobin.ListOutdatedBinaries(cmd.Context(), checkMajor, parallelism)
 		},
@@ -331,6 +334,42 @@ potentially breaking major version upgrades.`,
 		"m",
 		false,
 		"checks for major versions",
+	)
+
+	return cmd
+}
+
+// newPinCmd creates a pin command to pin managed binaries.
+func newPinCmd(gobin *internal.Gobin) *cobra.Command {
+	kind := internal.KindLatest
+
+	cmd := &cobra.Command{
+		Use:   "pin [binaries]",
+		Short: "Pin binaries to the Go binary path",
+		Long: `Pin managed binaries to the Go binary path.
+
+Examples:
+  gobin pin dlv                              # Pin latest version (dlv)
+  gobin pin dlv@v1                           # Pin latest v1 minor version (dlv)
+  gobin pin dlv@v1.25                        # Pin latest v1.25 patch version (dlv)
+  gobin pin dlv@v1.25.1                      # Pin specific version (dlv)
+  gobin pin dlv mockery@3.5                  # Pin multiple binaries to latest version (dlv, mockery)
+  gobin pin dlv@v1 --kind major              # Pin latest v1 minor version (dlv-v1)
+  gobin pin dlv@v1.25 --kind minor           # Pin latest v1.25 patch version (dlv-v1.25)`,
+		Args:          cobra.MinimumNArgs(1),
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
+			return gobin.PinBinaries(kind, args...)
+		},
+	}
+
+	cmd.Flags().VarP(
+		&kind,
+		"kind",
+		"k",
+		"pin kind [latest (default), major, minor]",
 	)
 
 	return cmd
@@ -412,7 +451,7 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			parallelism, _ := cmd.Flags().GetInt("parallelism")
+			parallelism := internal.Must(cmd.Flags().GetInt("parallelism"))
 
 			switch {
 			case upgradeAll && len(args) > 0:
