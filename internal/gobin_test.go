@@ -206,6 +206,7 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 		mockDiagnoseBinaryCalls      []mockDiagnoseBinaryCall
 		expectedErr                  error
 		expectedStdOut               string
+		expectedStdErr               string
 	}{
 		"success": {
 			stdOut:                    &bytes.Buffer{},
@@ -312,7 +313,8 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 				{bin: "/home/user/go/bin/mockproj2", err: errors.New("unexpected error")},
 				{bin: "/home/user/go/bin/mockproj3", info: mockproj3Diagnostic},
 			},
-			expectedErr: errors.New("unexpected error"),
+			expectedErr:    errors.New("unexpected error"),
+			expectedStdErr: "❌ error diagnosing binary \"mockproj2\"\n",
 			expectedStdOut: `🛠️  mockproj1
     ❗ not in PATH
     ❗ duplicated in PATH:
@@ -375,13 +377,13 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			var stdErr bytes.Buffer
+			binaryManager := mocks.NewBinaryManager(t)
 			workspace := mocks.NewWorkspace(t)
 
 			workspace.EXPECT().GetGoBinPath().
 				Return(tc.mockGetGoBinPath).
 				Once()
-
-			binaryManager := mocks.NewBinaryManager(t)
 
 			if tc.callListBinariesFullPaths {
 				binaryManager.EXPECT().ListBinariesFullPaths(tc.mockGetGoBinPath).
@@ -395,9 +397,10 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 					Once()
 			}
 
-			gobin := internal.NewGobin(binaryManager, nil, nil, tc.stdOut, nil, workspace)
+			gobin := internal.NewGobin(binaryManager, nil, &stdErr, tc.stdOut, nil, workspace)
 			err := gobin.DiagnoseBinaries(context.Background(), tc.parallelism)
 			assert.Equal(t, tc.expectedErr, err)
+			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 
 			bytes, err := io.ReadAll(tc.stdOut)
 			require.NoError(t, err)
@@ -950,7 +953,8 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 					err:  errors.New("unexpected error"),
 				},
 			},
-			expectedErr: errors.New("unexpected error"),
+			expectedErr:    errors.New("unexpected error"),
+			expectedStdErr: "❌ error migrating binary \"mockproj1\"\n",
 		},
 	}
 
@@ -1043,7 +1047,8 @@ func TestGobin_PinBinaries(t *testing.T) {
 			mockPinBinaryCalls: []mockPinBinaryCall{
 				{bin: "mockproj1", kind: internal.KindLatest, err: errors.New("unexpected error")},
 			},
-			expectedErr: errors.New("unexpected error"),
+			expectedErr:    errors.New("unexpected error"),
+			expectedStdErr: "❌ error pinning binary \"mockproj1\"\n",
 		},
 	}
 
@@ -1061,6 +1066,7 @@ func TestGobin_PinBinaries(t *testing.T) {
 			gobin := internal.NewGobin(binaryManager, nil, &stdErr, nil, nil, nil)
 			err := gobin.PinBinaries(tc.kind, tc.bins...)
 			assert.Equal(t, tc.expectedErr, err)
+			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 		})
 	}
 }
@@ -1137,7 +1143,7 @@ Platform      darwin/arm64/v8.0
 Env Vars      CGO_ENABLED=1
 `,
 		},
-		"error-get-binary-info": {
+		"error-binary-not-found": {
 			stdOut:               &bytes.Buffer{},
 			binary:               "mockproj1",
 			mockGetGoBinPath:     "/home/user/go/bin",
@@ -1145,6 +1151,15 @@ Env Vars      CGO_ENABLED=1
 			mockGetBinaryInfoErr: internal.ErrBinaryNotFound,
 			expectedErr:          internal.ErrBinaryNotFound,
 			expectedStdErr:       "❌ binary \"mockproj1\" not found\n",
+		},
+		"error-get-binary-info": {
+			stdOut:               &bytes.Buffer{},
+			binary:               "mockproj1",
+			mockGetGoBinPath:     "/home/user/go/bin",
+			callGetBinaryInfo:    true,
+			mockGetBinaryInfoErr: errors.New("unexpected error"),
+			expectedErr:          errors.New("unexpected error"),
+			expectedStdErr:       "❌ error getting info for binary \"mockproj1\"\n",
 		},
 		"error-write-error": {
 			stdOut:            &errorWriter{},
@@ -1321,6 +1336,13 @@ func TestGobin_ShowBinaryRepository(t *testing.T) {
 			expectedErr:                internal.ErrBinaryNotFound,
 			expectedStdErr:             "❌ binary \"mockproj1\" not found\n",
 		},
+		"error-get-binary-repository": {
+			binary:                     "mockproj1",
+			open:                       true,
+			mockGetBinaryRepositoryErr: errors.New("unexpected error"),
+			expectedErr:                errors.New("unexpected error"),
+			expectedStdErr:             "❌ error getting repository for binary \"mockproj1\"\n",
+		},
 		"error-unsupported-platform": {
 			binary:                  "mockproj1",
 			open:                    true,
@@ -1430,7 +1452,8 @@ func TestGobin_UninstallBinaries(t *testing.T) {
 			mockUninstallBinaryCalls: []mockUninstallBinaryCall{
 				{bin: "mockproj1", err: errors.New("unexpected error")},
 			},
-			expectedErr: errors.New("unexpected error"),
+			expectedErr:    errors.New("unexpected error"),
+			expectedStdErr: "❌ error uninstalling binary \"mockproj1\"\n",
 		},
 	}
 
@@ -1516,7 +1539,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 			mockListBinariesFullPathsErr: errors.New("unexpected error"),
 			expectedErr:                  errors.New("unexpected error"),
 		},
-		"error-upgrade-binary": {
+		"error-binary-not-found": {
 			parallelism:      1,
 			bins:             []string{"mockproj1"},
 			mockGetGoBinPath: "/home/user/go/bin",
@@ -1525,6 +1548,16 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 			},
 			expectedErr:    internal.ErrBinaryNotFound,
 			expectedStdErr: "❌ binary \"mockproj1\" not found\n",
+		},
+		"error-upgrade-binary": {
+			parallelism:      1,
+			bins:             []string{"mockproj1"},
+			mockGetGoBinPath: "/home/user/go/bin",
+			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
+				{bin: "/home/user/go/bin/mockproj1", err: errors.New("unexpected error")},
+			},
+			expectedErr:    errors.New("unexpected error"),
+			expectedStdErr: "❌ error upgrading binary \"mockproj1\"\n",
 		},
 	}
 
