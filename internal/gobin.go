@@ -272,7 +272,9 @@ func (g *Gobin) ListOutdatedBinaries(
 	return waitErr
 }
 
-// MigrateBinaries migrates the given binaries to be managed internally.
+// MigrateBinaries migrates the given binaries to be managed internally. It
+// returns an error if any of the binaries cannot be migrated due to the binary
+// being not found or the binary being already managed or any other error.
 func (g *Gobin) MigrateBinaries(bins ...string) error {
 	goBinPath := g.workspace.GetGoBinPath()
 
@@ -301,6 +303,24 @@ func (g *Gobin) MigrateBinaries(bins ...string) error {
 			err = migrateErr
 			continue
 		}
+	}
+
+	return err
+}
+
+// PinBinaries pins the given binaries to the Go binary directory. It returns an
+// error if any of the binaries cannot be pinned.
+func (g *Gobin) PinBinaries(kind Kind, bins ...string) error {
+	var err error
+	for _, bin := range bins {
+		pinErr := g.binaryManager.PinBinary(bin, kind)
+		if errors.Is(pinErr, ErrBinaryNotFound) {
+			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin)
+		} else if pinErr != nil {
+			fmt.Fprintf(g.stdErr, "❌ error pinning binary %q: %v\n", bin, pinErr)
+		}
+
+		err = pinErr
 	}
 
 	return err

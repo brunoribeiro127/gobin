@@ -90,6 +90,12 @@ type mockMigrateBinaryCall struct {
 	err  error
 }
 
+type mockPinBinaryCall struct {
+	bin  string
+	kind internal.Kind
+	err  error
+}
+
 type mockUninstallBinaryCall struct {
 	bin string
 	err error
@@ -976,6 +982,85 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 			err := gobin.MigrateBinaries(tc.bins...)
 			assert.Equal(t, tc.expectedErr, err)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
+		})
+	}
+}
+
+func TestGobin_PinBinaries(t *testing.T) {
+	cases := map[string]struct {
+		kind               internal.Kind
+		bins               []string
+		mockPinBinaryCalls []mockPinBinaryCall
+		expectedErr        error
+		expectedStdErr     string
+	}{
+		"success-single-binary-with-latest-kind": {
+			kind: internal.KindLatest,
+			bins: []string{"mockproj1"},
+			mockPinBinaryCalls: []mockPinBinaryCall{
+				{bin: "mockproj1", kind: internal.KindLatest},
+			},
+		},
+		"success-multiple-binaries-with-versions-and-latest-kind": {
+			kind: internal.KindLatest,
+			bins: []string{"mockproj1", "mockproj2@v1", "mockproj3@v2.1"},
+			mockPinBinaryCalls: []mockPinBinaryCall{
+				{bin: "mockproj1", kind: internal.KindLatest},
+				{bin: "mockproj2@v1", kind: internal.KindLatest},
+				{bin: "mockproj3@v2.1", kind: internal.KindLatest},
+			},
+		},
+		"success-multiple-binaries-with-versions-and-major-kind": {
+			kind: internal.KindMajor,
+			bins: []string{"mockproj1", "mockproj2@v1", "mockproj3@v2.1"},
+			mockPinBinaryCalls: []mockPinBinaryCall{
+				{bin: "mockproj1", kind: internal.KindMajor},
+				{bin: "mockproj2@v1", kind: internal.KindMajor},
+				{bin: "mockproj3@v2.1", kind: internal.KindMajor},
+			},
+		},
+		"success-multiple-binaries-with-versions-and-minor-kind": {
+			kind: internal.KindMinor,
+			bins: []string{"mockproj1", "mockproj2@v1", "mockproj3@v2.1"},
+			mockPinBinaryCalls: []mockPinBinaryCall{
+				{bin: "mockproj1", kind: internal.KindMinor},
+				{bin: "mockproj2@v1", kind: internal.KindMinor},
+				{bin: "mockproj3@v2.1", kind: internal.KindMinor},
+			},
+		},
+		"error-pin-binary-not-found": {
+			kind: internal.KindLatest,
+			bins: []string{"mockproj1"},
+			mockPinBinaryCalls: []mockPinBinaryCall{
+				{bin: "mockproj1", kind: internal.KindLatest, err: internal.ErrBinaryNotFound},
+			},
+			expectedErr:    internal.ErrBinaryNotFound,
+			expectedStdErr: "❌ binary \"mockproj1\" not found\n",
+		},
+		"error-pin-binary-unexpected-error": {
+			kind: internal.KindLatest,
+			bins: []string{"mockproj1"},
+			mockPinBinaryCalls: []mockPinBinaryCall{
+				{bin: "mockproj1", kind: internal.KindLatest, err: errors.New("unexpected error")},
+			},
+			expectedErr: errors.New("unexpected error"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var stdErr bytes.Buffer
+			binaryManager := mocks.NewBinaryManager(t)
+
+			for _, call := range tc.mockPinBinaryCalls {
+				binaryManager.EXPECT().PinBinary(call.bin, tc.kind).
+					Return(call.err).
+					Once()
+			}
+
+			gobin := internal.NewGobin(binaryManager, nil, &stdErr, nil, nil, nil)
+			err := gobin.PinBinaries(tc.kind, tc.bins...)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }

@@ -1807,6 +1807,461 @@ func TestGoBinaryManager_MigrateBinary(t *testing.T) {
 	}
 }
 
+func TestGoBinaryManager_PinBinary(t *testing.T) {
+	cases := map[string]struct {
+		bin                    string
+		kind                   internal.Kind
+		mockGetInternalBinPath string
+		mockReadDirEntries     []os.DirEntry
+		mockReadDirErr         error
+		mockStatInfoCalls      []mockStatInfoCall
+		mockRuntimeOS          string
+		mockRuntimeOSTimes     int
+		callGetGoBinPath       bool
+		mockGetGoBinPath       string
+		mockBinPath            string
+		callRemove             bool
+		mockRemoveErr          error
+		callSymlink            bool
+		mockSymlinkSrc         string
+		mockSymlinkErr         error
+		expectedErr            error
+	}{
+		"success-version-latest-kind-latest": {
+			bin:                    "mockproj2",
+			kind:                   internal.KindLatest,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirEntries: []os.DirEntry{
+				NewMockDirEntry("mockproj1@v0.3.0"),
+				NewMockDirEntry("mockproj2@v0.4.0"),
+				NewMockDirEntry("mockproj2@v1.2.0"),
+				NewMockDirEntry("mockproj2@v1.3.0"),
+				NewMockDirEntry("mockproj2@v1.3.1"),
+				NewMockDirEntry("mockproj3@v2.1.0"),
+				NewMockDirEntry("mockproj2@v2.2.0"),
+			},
+			mockStatInfoCalls: []mockStatInfoCall{
+				{
+					path: "/home/user/.gobin/bin/mockproj1@v0.3.0",
+					info: NewMockFileInfo("mockproj1@v0.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v0.4.0",
+					info: NewMockFileInfo("mockproj2@v0.4.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.2.0",
+					info: NewMockFileInfo("mockproj2@v1.2.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.0",
+					info: NewMockFileInfo("mockproj2@v1.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.1",
+					info: NewMockFileInfo("mockproj2@v1.3.1", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj3@v2.1.0",
+					info: NewMockFileInfo("mockproj3@v2.1.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v2.2.0",
+					info: NewMockFileInfo("mockproj2@v2.2.0", os.FileMode(0755), false),
+				},
+			},
+			mockRuntimeOS:      "unix",
+			mockRuntimeOSTimes: 7,
+			callGetGoBinPath:   true,
+			mockGetGoBinPath:   "/home/user/go/bin",
+			mockBinPath:        "/home/user/go/bin/mockproj2",
+			callRemove:         true,
+			callSymlink:        true,
+			mockSymlinkSrc:     "/home/user/.gobin/bin/mockproj2@v2.2.0",
+		},
+		"success-version-latest-kind-major": {
+			bin:                    "mockproj2",
+			kind:                   internal.KindMajor,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirEntries: []os.DirEntry{
+				NewMockDirEntry("mockproj1@v0.3.0"),
+				NewMockDirEntry("mockproj2@v0.4.0"),
+				NewMockDirEntry("mockproj2@v1.2.0"),
+				NewMockDirEntry("mockproj2@v1.3.0"),
+				NewMockDirEntry("mockproj2@v1.3.1"),
+				NewMockDirEntry("mockproj3@v2.1.0"),
+				NewMockDirEntry("mockproj2@v2.2.0"),
+			},
+			mockStatInfoCalls: []mockStatInfoCall{
+				{
+					path: "/home/user/.gobin/bin/mockproj1@v0.3.0",
+					info: NewMockFileInfo("mockproj1@v0.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v0.4.0",
+					info: NewMockFileInfo("mockproj2@v0.4.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.2.0",
+					info: NewMockFileInfo("mockproj2@v1.2.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.0",
+					info: NewMockFileInfo("mockproj2@v1.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.1",
+					info: NewMockFileInfo("mockproj2@v1.3.1", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj3@v2.1.0",
+					info: NewMockFileInfo("mockproj3@v2.1.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v2.2.0",
+					info: NewMockFileInfo("mockproj2@v2.2.0", os.FileMode(0755), false),
+				},
+			},
+			mockRuntimeOS:      "unix",
+			mockRuntimeOSTimes: 7,
+			callGetGoBinPath:   true,
+			mockGetGoBinPath:   "/home/user/go/bin",
+			mockBinPath:        "/home/user/go/bin/mockproj2-v2",
+			callRemove:         true,
+			callSymlink:        true,
+			mockSymlinkSrc:     "/home/user/.gobin/bin/mockproj2@v2.2.0",
+		},
+		"success-version-latest-kind-minor": {
+			bin:                    "mockproj2",
+			kind:                   internal.KindMinor,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirEntries: []os.DirEntry{
+				NewMockDirEntry("mockproj1@v0.3.0"),
+				NewMockDirEntry("mockproj2@v0.4.0"),
+				NewMockDirEntry("mockproj2@v1.2.0"),
+				NewMockDirEntry("mockproj2@v1.3.0"),
+				NewMockDirEntry("mockproj2@v1.3.1"),
+				NewMockDirEntry("mockproj3@v2.1.0"),
+				NewMockDirEntry("mockproj2@v2.2.0"),
+			},
+			mockStatInfoCalls: []mockStatInfoCall{
+				{
+					path: "/home/user/.gobin/bin/mockproj1@v0.3.0",
+					info: NewMockFileInfo("mockproj1@v0.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v0.4.0",
+					info: NewMockFileInfo("mockproj2@v0.4.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.2.0",
+					info: NewMockFileInfo("mockproj2@v1.2.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.0",
+					info: NewMockFileInfo("mockproj2@v1.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.1",
+					info: NewMockFileInfo("mockproj2@v1.3.1", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj3@v2.1.0",
+					info: NewMockFileInfo("mockproj3@v2.1.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v2.2.0",
+					info: NewMockFileInfo("mockproj2@v2.2.0", os.FileMode(0755), false),
+				},
+			},
+			mockRuntimeOS:      "unix",
+			mockRuntimeOSTimes: 7,
+			callGetGoBinPath:   true,
+			mockGetGoBinPath:   "/home/user/go/bin",
+			mockBinPath:        "/home/user/go/bin/mockproj2-v2.2",
+			callRemove:         true,
+			callSymlink:        true,
+			mockSymlinkSrc:     "/home/user/.gobin/bin/mockproj2@v2.2.0",
+		},
+		"success-version-v1-kind-latest": {
+			bin:                    "mockproj2@v1",
+			kind:                   internal.KindLatest,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirEntries: []os.DirEntry{
+				NewMockDirEntry("mockproj1@v0.3.0"),
+				NewMockDirEntry("mockproj2@v0.4.0"),
+				NewMockDirEntry("mockproj2@v1.2.0"),
+				NewMockDirEntry("mockproj2@v1.3.0"),
+				NewMockDirEntry("mockproj2@v1.3.1"),
+				NewMockDirEntry("mockproj3@v2.1.0"),
+				NewMockDirEntry("mockproj2@v2.2.0"),
+			},
+			mockStatInfoCalls: []mockStatInfoCall{
+				{
+					path: "/home/user/.gobin/bin/mockproj1@v0.3.0",
+					info: NewMockFileInfo("mockproj1@v0.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v0.4.0",
+					info: NewMockFileInfo("mockproj2@v0.4.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.2.0",
+					info: NewMockFileInfo("mockproj2@v1.2.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.0",
+					info: NewMockFileInfo("mockproj2@v1.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.1",
+					info: NewMockFileInfo("mockproj2@v1.3.1", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj3@v2.1.0",
+					info: NewMockFileInfo("mockproj3@v2.1.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v2.2.0",
+					info: NewMockFileInfo("mockproj2@v2.2.0", os.FileMode(0755), false),
+				},
+			},
+			mockRuntimeOS:      "unix",
+			mockRuntimeOSTimes: 7,
+			callGetGoBinPath:   true,
+			mockGetGoBinPath:   "/home/user/go/bin",
+			mockBinPath:        "/home/user/go/bin/mockproj2",
+			callRemove:         true,
+			callSymlink:        true,
+			mockSymlinkSrc:     "/home/user/.gobin/bin/mockproj2@v1.3.1",
+		},
+		"success-version-v1.2-kind-latest": {
+			bin:                    "mockproj2@v1.2",
+			kind:                   internal.KindLatest,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirEntries: []os.DirEntry{
+				NewMockDirEntry("mockproj1@v0.3.0"),
+				NewMockDirEntry("mockproj2@v0.4.0"),
+				NewMockDirEntry("mockproj2@v1.2.0"),
+				NewMockDirEntry("mockproj2@v1.3.0"),
+				NewMockDirEntry("mockproj2@v1.3.1"),
+				NewMockDirEntry("mockproj3@v2.1.0"),
+				NewMockDirEntry("mockproj2@v2.2.0"),
+			},
+			mockStatInfoCalls: []mockStatInfoCall{
+				{
+					path: "/home/user/.gobin/bin/mockproj1@v0.3.0",
+					info: NewMockFileInfo("mockproj1@v0.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v0.4.0",
+					info: NewMockFileInfo("mockproj2@v0.4.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.2.0",
+					info: NewMockFileInfo("mockproj2@v1.2.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.0",
+					info: NewMockFileInfo("mockproj2@v1.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.1",
+					info: NewMockFileInfo("mockproj2@v1.3.1", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj3@v2.1.0",
+					info: NewMockFileInfo("mockproj3@v2.1.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v2.2.0",
+					info: NewMockFileInfo("mockproj2@v2.2.0", os.FileMode(0755), false),
+				},
+			},
+			mockRuntimeOS:      "unix",
+			mockRuntimeOSTimes: 7,
+			callGetGoBinPath:   true,
+			mockGetGoBinPath:   "/home/user/go/bin",
+			mockBinPath:        "/home/user/go/bin/mockproj2",
+			callRemove:         true,
+			callSymlink:        true,
+			mockSymlinkSrc:     "/home/user/.gobin/bin/mockproj2@v1.2.0",
+		},
+		"success-version-v1.3.0-kind-latest": {
+			bin:                    "mockproj2@v1.3.0",
+			kind:                   internal.KindLatest,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirEntries: []os.DirEntry{
+				NewMockDirEntry("mockproj1@v0.3.0"),
+				NewMockDirEntry("mockproj2@v0.4.0"),
+				NewMockDirEntry("mockproj2@v1.2.0"),
+				NewMockDirEntry("mockproj2@v1.3.0"),
+				NewMockDirEntry("mockproj2@v1.3.1"),
+				NewMockDirEntry("mockproj3@v2.1.0"),
+				NewMockDirEntry("mockproj2@v2.2.0"),
+			},
+			mockStatInfoCalls: []mockStatInfoCall{
+				{
+					path: "/home/user/.gobin/bin/mockproj1@v0.3.0",
+					info: NewMockFileInfo("mockproj1@v0.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v0.4.0",
+					info: NewMockFileInfo("mockproj2@v0.4.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.2.0",
+					info: NewMockFileInfo("mockproj2@v1.2.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.0",
+					info: NewMockFileInfo("mockproj2@v1.3.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v1.3.1",
+					info: NewMockFileInfo("mockproj2@v1.3.1", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj3@v2.1.0",
+					info: NewMockFileInfo("mockproj3@v2.1.0", os.FileMode(0755), false),
+				},
+				{
+					path: "/home/user/.gobin/bin/mockproj2@v2.2.0",
+					info: NewMockFileInfo("mockproj2@v2.2.0", os.FileMode(0755), false),
+				},
+			},
+			mockRuntimeOS:      "unix",
+			mockRuntimeOSTimes: 7,
+			callGetGoBinPath:   true,
+			mockGetGoBinPath:   "/home/user/go/bin",
+			mockBinPath:        "/home/user/go/bin/mockproj2",
+			callRemove:         true,
+			callSymlink:        true,
+			mockSymlinkSrc:     "/home/user/.gobin/bin/mockproj2@v1.3.0",
+		},
+		"error-read-dir": {
+			bin:                    "mockproj1",
+			kind:                   internal.KindLatest,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirErr:         os.ErrNotExist,
+			expectedErr:            os.ErrNotExist,
+		},
+		"error-binary-not-found": {
+			bin:                    "mockproj1@v0.4",
+			kind:                   internal.KindLatest,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirEntries: []os.DirEntry{
+				NewMockDirEntry("mockproj1@v0.3.0"),
+			},
+			mockStatInfoCalls: []mockStatInfoCall{
+				{
+					path: "/home/user/.gobin/bin/mockproj1@v0.3.0",
+					info: NewMockFileInfo("mockproj1@v0.3.0", os.FileMode(0755), false),
+				},
+			},
+			mockRuntimeOS:      "unix",
+			mockRuntimeOSTimes: 1,
+			expectedErr:        internal.ErrBinaryNotFound,
+		},
+		"error-remove": {
+			bin:                    "mockproj1",
+			kind:                   internal.KindLatest,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirEntries: []os.DirEntry{
+				NewMockDirEntry("mockproj1@v0.3.0"),
+			},
+			mockStatInfoCalls: []mockStatInfoCall{
+				{
+					path: "/home/user/.gobin/bin/mockproj1@v0.3.0",
+					info: NewMockFileInfo("mockproj1@v0.3.0", os.FileMode(0755), false),
+				},
+			},
+			mockRuntimeOS:      "unix",
+			mockRuntimeOSTimes: 1,
+			callGetGoBinPath:   true,
+			mockGetGoBinPath:   "/home/user/go/bin",
+			mockBinPath:        "/home/user/go/bin/mockproj1",
+			callRemove:         true,
+			mockRemoveErr:      errors.New("unexpected error"),
+			expectedErr:        errors.New("unexpected error"),
+		},
+		"error-symlink": {
+			bin:                    "mockproj1",
+			kind:                   internal.KindLatest,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			mockReadDirEntries: []os.DirEntry{
+				NewMockDirEntry("mockproj1@v0.3.0"),
+			},
+			mockStatInfoCalls: []mockStatInfoCall{
+				{
+					path: "/home/user/.gobin/bin/mockproj1@v0.3.0",
+					info: NewMockFileInfo("mockproj1@v0.3.0", os.FileMode(0755), false),
+				},
+			},
+			mockRuntimeOS:      "unix",
+			mockRuntimeOSTimes: 1,
+			callGetGoBinPath:   true,
+			mockGetGoBinPath:   "/home/user/go/bin",
+			mockBinPath:        "/home/user/go/bin/mockproj1",
+			callRemove:         true,
+			callSymlink:        true,
+			mockSymlinkSrc:     "/home/user/.gobin/bin/mockproj1@v0.3.0",
+			mockSymlinkErr:     errors.New("unexpected error"),
+			expectedErr:        errors.New("unexpected error"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			system := mocks.NewSystem(t)
+			toolchain := mocks.NewToolchain(t)
+			workspace := mocks.NewWorkspace(t)
+
+			workspace.EXPECT().GetInternalBinPath().
+				Return(tc.mockGetInternalBinPath).
+				Once()
+
+			system.EXPECT().ReadDir(tc.mockGetInternalBinPath).
+				Return(tc.mockReadDirEntries, tc.mockReadDirErr).
+				Once()
+
+			for _, call := range tc.mockStatInfoCalls {
+				system.EXPECT().Stat(call.path).
+					Return(call.info, call.err).
+					Once()
+			}
+
+			if tc.mockRuntimeOSTimes > 0 {
+				system.EXPECT().RuntimeOS().
+					Return(tc.mockRuntimeOS).
+					Times(tc.mockRuntimeOSTimes)
+			}
+
+			if tc.callGetGoBinPath {
+				workspace.EXPECT().GetGoBinPath().
+					Return(tc.mockGetGoBinPath).
+					Once()
+			}
+
+			if tc.callRemove {
+				system.EXPECT().Remove(tc.mockBinPath).
+					Return(tc.mockRemoveErr).
+					Once()
+			}
+
+			if tc.callSymlink {
+				system.EXPECT().Symlink(tc.mockSymlinkSrc, tc.mockBinPath).
+					Return(tc.mockSymlinkErr).
+					Once()
+			}
+
+			binaryManager := internal.NewGoBinaryManager(system, toolchain, workspace)
+			err := binaryManager.PinBinary(tc.bin, tc.kind)
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+}
+
 func TestGoBinaryManager_UninstallBinary(t *testing.T) {
 	cases := map[string]struct {
 		bin              string

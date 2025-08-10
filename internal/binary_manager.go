@@ -4,6 +4,7 @@ import (
 	"context"
 	"debug/buildinfo"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -111,6 +112,8 @@ type BinaryManager interface {
 	ListBinariesFullPaths(dir string) ([]string, error)
 	// MigrateBinary migrates a binary to be managed internally.
 	MigrateBinary(path string) error
+	// PinBinary pins a binary to the Go binary directory with the given kind.
+	PinBinary(bin string, kind Kind) error
 	// UninstallBinary uninstalls a binary.
 	UninstallBinary(bin string) error
 	// UpgradeBinary upgrades a binary.
@@ -345,7 +348,7 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 // InstallPackage installs a package leveraging the toolchain. If version is
 // not provided, it installs the latest version.
 func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkgVersion string) error {
-	pkg, version := pkgVersion, "latest"
+	pkg, version := pkgVersion, latest
 
 	//nolint:mnd // expected package version format: package@version
 	if parts := strings.Split(pkgVersion, "@"); len(parts) == 2 {
@@ -405,7 +408,7 @@ func (m *GoBinaryManager) MigrateBinary(path string) error {
 	if err = m.system.Rename(path, internalBinPath); err != nil {
 		logger.Error(
 			"error while moving binary from go bin path to internal bin path",
-			"err", err, "source", path, "destination", internalBinPath,
+			"err", err, "src", path, "dst", internalBinPath,
 		)
 		return err
 	}
@@ -418,7 +421,88 @@ func (m *GoBinaryManager) MigrateBinary(path string) error {
 	if err = m.system.Symlink(internalBinPath, path); err != nil {
 		logger.Error(
 			"error while creating symlink for binary",
-			"err", err, "source", internalBinPath, "destination", path,
+			"err", err, "src", internalBinPath, "dst", path,
+		)
+		return err
+	}
+
+	return nil
+}
+
+// PinBinary pins a binary to the Go binary directory with the given kind. It
+// creates a symlink to the binary in the Go binary directory with names binary,
+// binary-major, or binary-major.minor if kind is latest, major, or minor
+// respectively.
+func (m *GoBinaryManager) PinBinary(bin string, kind Kind) error {
+	logger := slog.Default().With("bin", bin, "kind", kind.String())
+
+	parts := strings.Split(bin, "@")
+	reqName, reqVersion := parts[0], latest
+	//nolint:mnd // expected binary format: name@version
+	if len(parts) == 2 {
+		reqVersion = parts[1]
+	}
+
+	binPaths, err := m.ListBinariesFullPaths(m.workspace.GetInternalBinPath())
+	if err != nil {
+		return err
+	}
+
+	var matchPath, matchVersion string
+	for _, binPath := range binPaths {
+		parts = strings.Split(filepath.Base(binPath), "@")
+		intName, intVersion := parts[0], parts[1]
+
+		if reqName != intName {
+			continue
+		}
+
+		if reqVersion == latest {
+			if matchPath == "" {
+				matchPath = binPath
+				matchVersion = intVersion
+				continue
+			}
+
+			if semver.Compare(intVersion, matchVersion) > 0 {
+				matchPath = binPath
+				matchVersion = intVersion
+			}
+			continue
+		}
+
+		if isVersionPartOf(intVersion, reqVersion) &&
+			semver.Compare(intVersion, matchVersion) > 0 {
+			matchPath = binPath
+			matchVersion = intVersion
+		}
+	}
+
+	if matchPath == "" {
+		logger.Warn("binary not found")
+		return ErrBinaryNotFound
+	}
+
+	logger.Info("found binary to pin", "path", matchPath)
+
+	targetPath := getTargetPath(m.workspace.GetGoBinPath(), reqName, matchVersion, kind)
+
+	logger.Info("removing existing symlink for binary", "path", targetPath)
+
+	if err = m.system.Remove(targetPath); err != nil && !os.IsNotExist(err) {
+		logger.Error(
+			"error while removing existing symlink for binary",
+			"err", err, "path", targetPath,
+		)
+		return err
+	}
+
+	logger.Info("creating symlink for binary", "src", matchPath, "dst", targetPath)
+
+	if err = m.system.Symlink(matchPath, targetPath); err != nil {
+		logger.Error(
+			"error while creating symlink",
+			"err", err, "src", matchPath, "dst", targetPath,
 		)
 		return err
 	}
@@ -535,7 +619,7 @@ func (m *GoBinaryManager) diagnoseGoModFile(
 	ctx context.Context,
 	module, version string,
 ) (string, string, error) {
-	modFile, err := m.toolchain.GetModuleFile(ctx, module, "latest")
+	modFile, err := m.toolchain.GetModuleFile(ctx, module, latest)
 	if err != nil {
 		return "", "", err
 	}
@@ -614,21 +698,13 @@ func (m *GoBinaryManager) installBinary(ctx context.Context, pkg, version string
 
 	if err = m.system.Rename(tempBinPath, binPath); err != nil {
 		logger.ErrorContext(
-			ctx,
-			"error while moving binary from temp path to bin path",
-			"err", err,
-			"source", tempBinPath,
-			"destination", binPath,
+			ctx, "error while moving binary from temp path to bin path",
+			"err", err, "src", tempBinPath, "dst", binPath,
 		)
 		return err
 	}
 
 	goBinPath := filepath.Join(m.workspace.GetGoBinPath(), binName)
-
-	logger.InfoContext(
-		ctx, "creating symlink for binary",
-		"bin_path", binPath, "go_bin_path", goBinPath,
-	)
 
 	logger.InfoContext(
 		ctx, "removing existing symlink for binary",
@@ -651,7 +727,7 @@ func (m *GoBinaryManager) installBinary(ctx context.Context, pkg, version string
 	if err = m.system.Symlink(binPath, goBinPath); err != nil {
 		logger.ErrorContext(
 			ctx, "error while creating symlink for binary",
-			"err", err, "source", binPath, "destination", goBinPath,
+			"err", err, "src", binPath, "dst", goBinPath,
 		)
 		return err
 	}
@@ -724,6 +800,46 @@ func getBinaryPlatform(info *buildinfo.BuildInfo) string {
 	return goOS + "/" + goArch
 }
 
+// getTargetPath returns the target path for a binary based on the base path,
+// name, version, and kind.
+func getTargetPath(basePath, name, version string, kind Kind) string {
+	var targetPath string
+	switch kind {
+	case KindLatest:
+		targetPath = filepath.Join(basePath, name)
+	case KindMajor:
+		targetPath = filepath.Join(basePath, name+"-"+semver.Major(version))
+	case KindMinor:
+		targetPath = filepath.Join(basePath, name+"-"+semver.MajorMinor(version))
+	}
+
+	return targetPath
+}
+
+// isVersionPartOf checks if a full version is part of a base version. If base
+// version is a major or major.minor version, it checks if the full version is
+// greater than or equal to the base version and less than the next major or
+// major.minor version. Otherwise it performs a full version comparison.
+func isVersionPartOf(fullVersion, baseVersion string) bool {
+	parts := strings.Split(strings.TrimPrefix(baseVersion, "v"), ".")
+
+	switch len(parts) {
+	case 1:
+		lower := fmt.Sprintf("v%d.0.0", Must(strconv.Atoi(parts[0])))
+		upper := fmt.Sprintf("v%d.0.0", Must(strconv.Atoi(parts[0]))+1)
+		return semver.Compare(fullVersion, lower) >= 0 && semver.Compare(fullVersion, upper) < 0
+
+	case 2: //nolint:mnd // expected version format: major.minor
+		major := Must(strconv.Atoi(parts[0]))
+		minor := Must(strconv.Atoi(parts[1]))
+		lower := fmt.Sprintf("v%d.%d.0", major, minor)
+		upper := fmt.Sprintf("v%d.%d.0", major, minor+1)
+		return semver.Compare(fullVersion, lower) >= 0 && semver.Compare(fullVersion, upper) < 0
+	default:
+		return semver.Compare(fullVersion, baseVersion) == 0
+	}
+}
+
 // nextMajorVersion returns the next major version for a given version.
 func nextMajorVersion(version string) string {
 	major := semver.Major(version)
@@ -731,9 +847,7 @@ func nextMajorVersion(version string) string {
 		return "v2"
 	}
 
-	majorNumStr := strings.TrimPrefix(major, "v")
-	majorNum, _ := strconv.Atoi(majorNumStr)
-	return "v" + strconv.Itoa(majorNum+1)
+	return "v" + strconv.Itoa(Must(strconv.Atoi(strings.TrimPrefix(major, "v")))+1)
 }
 
 // stripVersionSuffix removes the version suffix from a module path, or returns
