@@ -151,6 +151,7 @@ func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
 		grp.Go(func() error {
 			diag, diagErr := g.binaryManager.DiagnoseBinary(ctx, bin)
 			if diagErr != nil {
+				fmt.Fprintf(g.stdErr, "❌ error diagnosing binary %q\n", filepath.Base(bin))
 				return diagErr
 			}
 
@@ -294,10 +295,13 @@ func (g *Gobin) MigrateBinaries(bins ...string) error {
 	var err error
 	for _, path := range binPaths {
 		if migrateErr := g.binaryManager.MigrateBinary(path); migrateErr != nil {
-			if errors.Is(migrateErr, ErrBinaryAlreadyManaged) {
+			switch {
+			case errors.Is(migrateErr, ErrBinaryAlreadyManaged):
 				fmt.Fprintf(g.stdErr, "❌ binary %q already managed\n", filepath.Base(path))
-			} else if errors.Is(migrateErr, ErrBinaryNotFound) {
+			case errors.Is(migrateErr, ErrBinaryNotFound):
 				fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", filepath.Base(path))
+			default:
+				fmt.Fprintf(g.stdErr, "❌ error migrating binary %q\n", filepath.Base(path))
 			}
 
 			err = migrateErr
@@ -317,7 +321,7 @@ func (g *Gobin) PinBinaries(kind Kind, bins ...string) error {
 		if errors.Is(pinErr, ErrBinaryNotFound) {
 			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin)
 		} else if pinErr != nil {
-			fmt.Fprintf(g.stdErr, "❌ error pinning binary %q: %v\n", bin, pinErr)
+			fmt.Fprintf(g.stdErr, "❌ error pinning binary %q\n", bin)
 		}
 
 		err = pinErr
@@ -336,6 +340,8 @@ func (g *Gobin) PrintBinaryInfo(binary string) error {
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
 			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
+		} else {
+			fmt.Fprintf(g.stdErr, "❌ error getting info for binary %q\n", binary)
 		}
 
 		return err
@@ -394,6 +400,8 @@ func (g *Gobin) ShowBinaryRepository(ctx context.Context, binary string, open bo
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
 			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
+		} else {
+			fmt.Fprintf(g.stdErr, "❌ error getting repository for binary %q\n", binary)
 		}
 
 		return err
@@ -415,7 +423,10 @@ func (g *Gobin) UninstallBinaries(bins ...string) error {
 		removeErr := g.binaryManager.UninstallBinary(bin)
 		if errors.Is(removeErr, os.ErrNotExist) {
 			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin)
+		} else if removeErr != nil {
+			fmt.Fprintf(g.stdErr, "❌ error uninstalling binary %q\n", bin)
 		}
+
 		err = removeErr
 	}
 
@@ -458,7 +469,10 @@ func (g *Gobin) UpgradeBinaries(
 			upErr := g.binaryManager.UpgradeBinary(ctx, bin, majorUpgrade, rebuild)
 			if errors.Is(upErr, ErrBinaryNotFound) {
 				fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", filepath.Base(bin))
+			} else if upErr != nil {
+				fmt.Fprintf(g.stdErr, "❌ error upgrading binary %q\n", filepath.Base(bin))
 			}
+
 			return upErr
 		})
 	}
