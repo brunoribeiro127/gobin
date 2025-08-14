@@ -5,10 +5,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/brunoribeiro127/gobin/internal"
-	"github.com/brunoribeiro127/gobin/internal/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/brunoribeiro127/gobin/internal"
+	"github.com/brunoribeiro127/gobin/internal/mocks"
 )
 
 type mockMkdirAllCall struct {

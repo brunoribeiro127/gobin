@@ -1,7 +1,8 @@
-package internal
+package model
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -25,6 +26,23 @@ var allowedKinds = []Kind{
 	KindLatest,
 	KindMajor,
 	KindMinor,
+}
+
+// GetTargetBinPath returns the target path for a binary based on the base path,
+// binary name, and version.
+func (k *Kind) GetTargetBinPath(basePath, name string, version Version) string {
+	var targetPath string
+
+	switch *k {
+	case KindLatest:
+		targetPath = filepath.Join(basePath, name)
+	case KindMajor:
+		targetPath = filepath.Join(basePath, name+"-"+version.Major())
+	case KindMinor:
+		targetPath = filepath.Join(basePath, name+"-"+version.MajorMinor())
+	}
+
+	return targetPath
 }
 
 // IsValid checks if the kind is valid.

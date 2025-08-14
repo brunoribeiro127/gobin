@@ -8,7 +8,7 @@ import (
 	"context"
 	"debug/buildinfo"
 
-	"github.com/brunoribeiro127/gobin/internal"
+	"github.com/brunoribeiro127/gobin/internal/model"
 	mock "github.com/stretchr/testify/mock"
 	"golang.org/x/mod/modfile"
 )
@@ -103,35 +103,29 @@ func (_c *Toolchain_GetBuildInfo_Call) RunAndReturn(run func(path string) (*buil
 }
 
 // GetLatestModuleVersion provides a mock function for the type Toolchain
-func (_mock *Toolchain) GetLatestModuleVersion(ctx context.Context, module string) (string, string, error) {
+func (_mock *Toolchain) GetLatestModuleVersion(ctx context.Context, module model.Module) (model.Module, error) {
 	ret := _mock.Called(ctx, module)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetLatestModuleVersion")
 	}
 
-	var r0 string
-	var r1 string
-	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, string, error)); ok {
+	var r0 model.Module
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Module) (model.Module, error)); ok {
 		return returnFunc(ctx, module)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Module) model.Module); ok {
 		r0 = returnFunc(ctx, module)
 	} else {
-		r0 = ret.Get(0).(string)
+		r0 = ret.Get(0).(model.Module)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) string); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, model.Module) error); ok {
 		r1 = returnFunc(ctx, module)
 	} else {
-		r1 = ret.Get(1).(string)
+		r1 = ret.Error(1)
 	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, string) error); ok {
-		r2 = returnFunc(ctx, module)
-	} else {
-		r2 = ret.Error(2)
-	}
-	return r0, r1, r2
+	return r0, r1
 }
 
 // Toolchain_GetLatestModuleVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetLatestModuleVersion'
@@ -141,20 +135,20 @@ type Toolchain_GetLatestModuleVersion_Call struct {
 
 // GetLatestModuleVersion is a helper method to define mock.On call
 //   - ctx context.Context
-//   - module string
+//   - module model.Module
 func (_e *Toolchain_Expecter) GetLatestModuleVersion(ctx interface{}, module interface{}) *Toolchain_GetLatestModuleVersion_Call {
 	return &Toolchain_GetLatestModuleVersion_Call{Call: _e.mock.On("GetLatestModuleVersion", ctx, module)}
 }
 
-func (_c *Toolchain_GetLatestModuleVersion_Call) Run(run func(ctx context.Context, module string)) *Toolchain_GetLatestModuleVersion_Call {
+func (_c *Toolchain_GetLatestModuleVersion_Call) Run(run func(ctx context.Context, module model.Module)) *Toolchain_GetLatestModuleVersion_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 model.Module
 		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg1 = args[1].(model.Module)
 		}
 		run(
 			arg0,
@@ -164,19 +158,19 @@ func (_c *Toolchain_GetLatestModuleVersion_Call) Run(run func(ctx context.Contex
 	return _c
 }
 
-func (_c *Toolchain_GetLatestModuleVersion_Call) Return(s string, s1 string, err error) *Toolchain_GetLatestModuleVersion_Call {
-	_c.Call.Return(s, s1, err)
+func (_c *Toolchain_GetLatestModuleVersion_Call) Return(module1 model.Module, err error) *Toolchain_GetLatestModuleVersion_Call {
+	_c.Call.Return(module1, err)
 	return _c
 }
 
-func (_c *Toolchain_GetLatestModuleVersion_Call) RunAndReturn(run func(ctx context.Context, module string) (string, string, error)) *Toolchain_GetLatestModuleVersion_Call {
+func (_c *Toolchain_GetLatestModuleVersion_Call) RunAndReturn(run func(ctx context.Context, module model.Module) (model.Module, error)) *Toolchain_GetLatestModuleVersion_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetModuleFile provides a mock function for the type Toolchain
-func (_mock *Toolchain) GetModuleFile(ctx context.Context, module string, version string) (*modfile.File, error) {
-	ret := _mock.Called(ctx, module, version)
+func (_mock *Toolchain) GetModuleFile(ctx context.Context, module model.Module) (*modfile.File, error) {
+	ret := _mock.Called(ctx, module)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetModuleFile")
@@ -184,18 +178,18 @@ func (_mock *Toolchain) GetModuleFile(ctx context.Context, module string, versio
 
 	var r0 *modfile.File
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*modfile.File, error)); ok {
-		return returnFunc(ctx, module, version)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Module) (*modfile.File, error)); ok {
+		return returnFunc(ctx, module)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *modfile.File); ok {
-		r0 = returnFunc(ctx, module, version)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Module) *modfile.File); ok {
+		r0 = returnFunc(ctx, module)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*modfile.File)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, module, version)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, model.Module) error); ok {
+		r1 = returnFunc(ctx, module)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -209,30 +203,24 @@ type Toolchain_GetModuleFile_Call struct {
 
 // GetModuleFile is a helper method to define mock.On call
 //   - ctx context.Context
-//   - module string
-//   - version string
-func (_e *Toolchain_Expecter) GetModuleFile(ctx interface{}, module interface{}, version interface{}) *Toolchain_GetModuleFile_Call {
-	return &Toolchain_GetModuleFile_Call{Call: _e.mock.On("GetModuleFile", ctx, module, version)}
+//   - module model.Module
+func (_e *Toolchain_Expecter) GetModuleFile(ctx interface{}, module interface{}) *Toolchain_GetModuleFile_Call {
+	return &Toolchain_GetModuleFile_Call{Call: _e.mock.On("GetModuleFile", ctx, module)}
 }
 
-func (_c *Toolchain_GetModuleFile_Call) Run(run func(ctx context.Context, module string, version string)) *Toolchain_GetModuleFile_Call {
+func (_c *Toolchain_GetModuleFile_Call) Run(run func(ctx context.Context, module model.Module)) *Toolchain_GetModuleFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 model.Module
 		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
+			arg1 = args[1].(model.Module)
 		}
 		run(
 			arg0,
 			arg1,
-			arg2,
 		)
 	})
 	return _c
@@ -243,33 +231,33 @@ func (_c *Toolchain_GetModuleFile_Call) Return(file *modfile.File, err error) *T
 	return _c
 }
 
-func (_c *Toolchain_GetModuleFile_Call) RunAndReturn(run func(ctx context.Context, module string, version string) (*modfile.File, error)) *Toolchain_GetModuleFile_Call {
+func (_c *Toolchain_GetModuleFile_Call) RunAndReturn(run func(ctx context.Context, module model.Module) (*modfile.File, error)) *Toolchain_GetModuleFile_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetModuleOrigin provides a mock function for the type Toolchain
-func (_mock *Toolchain) GetModuleOrigin(ctx context.Context, module string, version string) (*internal.ModuleOrigin, error) {
-	ret := _mock.Called(ctx, module, version)
+func (_mock *Toolchain) GetModuleOrigin(ctx context.Context, module model.Module) (*model.ModuleOrigin, error) {
+	ret := _mock.Called(ctx, module)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetModuleOrigin")
 	}
 
-	var r0 *internal.ModuleOrigin
+	var r0 *model.ModuleOrigin
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*internal.ModuleOrigin, error)); ok {
-		return returnFunc(ctx, module, version)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Module) (*model.ModuleOrigin, error)); ok {
+		return returnFunc(ctx, module)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *internal.ModuleOrigin); ok {
-		r0 = returnFunc(ctx, module, version)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Module) *model.ModuleOrigin); ok {
+		r0 = returnFunc(ctx, module)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*internal.ModuleOrigin)
+			r0 = ret.Get(0).(*model.ModuleOrigin)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, module, version)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, model.Module) error); ok {
+		r1 = returnFunc(ctx, module)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -283,56 +271,50 @@ type Toolchain_GetModuleOrigin_Call struct {
 
 // GetModuleOrigin is a helper method to define mock.On call
 //   - ctx context.Context
-//   - module string
-//   - version string
-func (_e *Toolchain_Expecter) GetModuleOrigin(ctx interface{}, module interface{}, version interface{}) *Toolchain_GetModuleOrigin_Call {
-	return &Toolchain_GetModuleOrigin_Call{Call: _e.mock.On("GetModuleOrigin", ctx, module, version)}
+//   - module model.Module
+func (_e *Toolchain_Expecter) GetModuleOrigin(ctx interface{}, module interface{}) *Toolchain_GetModuleOrigin_Call {
+	return &Toolchain_GetModuleOrigin_Call{Call: _e.mock.On("GetModuleOrigin", ctx, module)}
 }
 
-func (_c *Toolchain_GetModuleOrigin_Call) Run(run func(ctx context.Context, module string, version string)) *Toolchain_GetModuleOrigin_Call {
+func (_c *Toolchain_GetModuleOrigin_Call) Run(run func(ctx context.Context, module model.Module)) *Toolchain_GetModuleOrigin_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 model.Module
 		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
+			arg1 = args[1].(model.Module)
 		}
 		run(
 			arg0,
 			arg1,
-			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *Toolchain_GetModuleOrigin_Call) Return(moduleOrigin *internal.ModuleOrigin, err error) *Toolchain_GetModuleOrigin_Call {
+func (_c *Toolchain_GetModuleOrigin_Call) Return(moduleOrigin *model.ModuleOrigin, err error) *Toolchain_GetModuleOrigin_Call {
 	_c.Call.Return(moduleOrigin, err)
 	return _c
 }
 
-func (_c *Toolchain_GetModuleOrigin_Call) RunAndReturn(run func(ctx context.Context, module string, version string) (*internal.ModuleOrigin, error)) *Toolchain_GetModuleOrigin_Call {
+func (_c *Toolchain_GetModuleOrigin_Call) RunAndReturn(run func(ctx context.Context, module model.Module) (*model.ModuleOrigin, error)) *Toolchain_GetModuleOrigin_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Install provides a mock function for the type Toolchain
-func (_mock *Toolchain) Install(ctx context.Context, path string, pkg string, version string) error {
-	ret := _mock.Called(ctx, path, pkg, version)
+func (_mock *Toolchain) Install(ctx context.Context, path string, pkg model.Package) error {
+	ret := _mock.Called(ctx, path, pkg)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Install")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
-		r0 = returnFunc(ctx, path, pkg, version)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, model.Package) error); ok {
+		r0 = returnFunc(ctx, path, pkg)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -347,13 +329,12 @@ type Toolchain_Install_Call struct {
 // Install is a helper method to define mock.On call
 //   - ctx context.Context
 //   - path string
-//   - pkg string
-//   - version string
-func (_e *Toolchain_Expecter) Install(ctx interface{}, path interface{}, pkg interface{}, version interface{}) *Toolchain_Install_Call {
-	return &Toolchain_Install_Call{Call: _e.mock.On("Install", ctx, path, pkg, version)}
+//   - pkg model.Package
+func (_e *Toolchain_Expecter) Install(ctx interface{}, path interface{}, pkg interface{}) *Toolchain_Install_Call {
+	return &Toolchain_Install_Call{Call: _e.mock.On("Install", ctx, path, pkg)}
 }
 
-func (_c *Toolchain_Install_Call) Run(run func(ctx context.Context, path string, pkg string, version string)) *Toolchain_Install_Call {
+func (_c *Toolchain_Install_Call) Run(run func(ctx context.Context, path string, pkg model.Package)) *Toolchain_Install_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -363,19 +344,14 @@ func (_c *Toolchain_Install_Call) Run(run func(ctx context.Context, path string,
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
-		var arg2 string
+		var arg2 model.Package
 		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 string
-		if args[3] != nil {
-			arg3 = args[3].(string)
+			arg2 = args[2].(model.Package)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
-			arg3,
 		)
 	})
 	return _c
@@ -386,29 +362,29 @@ func (_c *Toolchain_Install_Call) Return(err error) *Toolchain_Install_Call {
 	return _c
 }
 
-func (_c *Toolchain_Install_Call) RunAndReturn(run func(ctx context.Context, path string, pkg string, version string) error) *Toolchain_Install_Call {
+func (_c *Toolchain_Install_Call) RunAndReturn(run func(ctx context.Context, path string, pkg model.Package) error) *Toolchain_Install_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // VulnCheck provides a mock function for the type Toolchain
-func (_mock *Toolchain) VulnCheck(ctx context.Context, path string) ([]internal.Vulnerability, error) {
+func (_mock *Toolchain) VulnCheck(ctx context.Context, path string) ([]model.Vulnerability, error) {
 	ret := _mock.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for VulnCheck")
 	}
 
-	var r0 []internal.Vulnerability
+	var r0 []model.Vulnerability
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]internal.Vulnerability, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]model.Vulnerability, error)); ok {
 		return returnFunc(ctx, path)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []internal.Vulnerability); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []model.Vulnerability); ok {
 		r0 = returnFunc(ctx, path)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]internal.Vulnerability)
+			r0 = ret.Get(0).([]model.Vulnerability)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
@@ -449,12 +425,12 @@ func (_c *Toolchain_VulnCheck_Call) Run(run func(ctx context.Context, path strin
 	return _c
 }
 
-func (_c *Toolchain_VulnCheck_Call) Return(vulnerabilitys []internal.Vulnerability, err error) *Toolchain_VulnCheck_Call {
+func (_c *Toolchain_VulnCheck_Call) Return(vulnerabilitys []model.Vulnerability, err error) *Toolchain_VulnCheck_Call {
 	_c.Call.Return(vulnerabilitys, err)
 	return _c
 }
 
-func (_c *Toolchain_VulnCheck_Call) RunAndReturn(run func(ctx context.Context, path string) ([]internal.Vulnerability, error)) *Toolchain_VulnCheck_Call {
+func (_c *Toolchain_VulnCheck_Call) RunAndReturn(run func(ctx context.Context, path string) ([]model.Vulnerability, error)) *Toolchain_VulnCheck_Call {
 	_c.Call.Return(run)
 	return _c
 }

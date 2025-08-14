@@ -7,7 +7,7 @@ package mocks
 import (
 	"context"
 
-	"github.com/brunoribeiro127/gobin/internal"
+	"github.com/brunoribeiro127/gobin/internal/model"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -39,22 +39,22 @@ func (_m *BinaryManager) EXPECT() *BinaryManager_Expecter {
 }
 
 // DiagnoseBinary provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) DiagnoseBinary(ctx context.Context, path string) (internal.BinaryDiagnostic, error) {
+func (_mock *BinaryManager) DiagnoseBinary(ctx context.Context, path string) (model.BinaryDiagnostic, error) {
 	ret := _mock.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DiagnoseBinary")
 	}
 
-	var r0 internal.BinaryDiagnostic
+	var r0 model.BinaryDiagnostic
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (internal.BinaryDiagnostic, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (model.BinaryDiagnostic, error)); ok {
 		return returnFunc(ctx, path)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) internal.BinaryDiagnostic); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) model.BinaryDiagnostic); ok {
 		r0 = returnFunc(ctx, path)
 	} else {
-		r0 = ret.Get(0).(internal.BinaryDiagnostic)
+		r0 = ret.Get(0).(model.BinaryDiagnostic)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
 		r1 = returnFunc(ctx, path)
@@ -94,34 +94,34 @@ func (_c *BinaryManager_DiagnoseBinary_Call) Run(run func(ctx context.Context, p
 	return _c
 }
 
-func (_c *BinaryManager_DiagnoseBinary_Call) Return(binaryDiagnostic internal.BinaryDiagnostic, err error) *BinaryManager_DiagnoseBinary_Call {
+func (_c *BinaryManager_DiagnoseBinary_Call) Return(binaryDiagnostic model.BinaryDiagnostic, err error) *BinaryManager_DiagnoseBinary_Call {
 	_c.Call.Return(binaryDiagnostic, err)
 	return _c
 }
 
-func (_c *BinaryManager_DiagnoseBinary_Call) RunAndReturn(run func(ctx context.Context, path string) (internal.BinaryDiagnostic, error)) *BinaryManager_DiagnoseBinary_Call {
+func (_c *BinaryManager_DiagnoseBinary_Call) RunAndReturn(run func(ctx context.Context, path string) (model.BinaryDiagnostic, error)) *BinaryManager_DiagnoseBinary_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetAllBinaryInfos provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) GetAllBinaryInfos(managed bool) ([]internal.BinaryInfo, error) {
+func (_mock *BinaryManager) GetAllBinaryInfos(managed bool) ([]model.BinaryInfo, error) {
 	ret := _mock.Called(managed)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetAllBinaryInfos")
 	}
 
-	var r0 []internal.BinaryInfo
+	var r0 []model.BinaryInfo
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(bool) ([]internal.BinaryInfo, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(bool) ([]model.BinaryInfo, error)); ok {
 		return returnFunc(managed)
 	}
-	if returnFunc, ok := ret.Get(0).(func(bool) []internal.BinaryInfo); ok {
+	if returnFunc, ok := ret.Get(0).(func(bool) []model.BinaryInfo); ok {
 		r0 = returnFunc(managed)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]internal.BinaryInfo)
+			r0 = ret.Get(0).([]model.BinaryInfo)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(bool) error); ok {
@@ -156,33 +156,33 @@ func (_c *BinaryManager_GetAllBinaryInfos_Call) Run(run func(managed bool)) *Bin
 	return _c
 }
 
-func (_c *BinaryManager_GetAllBinaryInfos_Call) Return(binaryInfos []internal.BinaryInfo, err error) *BinaryManager_GetAllBinaryInfos_Call {
+func (_c *BinaryManager_GetAllBinaryInfos_Call) Return(binaryInfos []model.BinaryInfo, err error) *BinaryManager_GetAllBinaryInfos_Call {
 	_c.Call.Return(binaryInfos, err)
 	return _c
 }
 
-func (_c *BinaryManager_GetAllBinaryInfos_Call) RunAndReturn(run func(managed bool) ([]internal.BinaryInfo, error)) *BinaryManager_GetAllBinaryInfos_Call {
+func (_c *BinaryManager_GetAllBinaryInfos_Call) RunAndReturn(run func(managed bool) ([]model.BinaryInfo, error)) *BinaryManager_GetAllBinaryInfos_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetBinaryInfo provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) GetBinaryInfo(path string) (internal.BinaryInfo, error) {
+func (_mock *BinaryManager) GetBinaryInfo(path string) (model.BinaryInfo, error) {
 	ret := _mock.Called(path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetBinaryInfo")
 	}
 
-	var r0 internal.BinaryInfo
+	var r0 model.BinaryInfo
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) (internal.BinaryInfo, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(string) (model.BinaryInfo, error)); ok {
 		return returnFunc(path)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string) internal.BinaryInfo); ok {
+	if returnFunc, ok := ret.Get(0).(func(string) model.BinaryInfo); ok {
 		r0 = returnFunc(path)
 	} else {
-		r0 = ret.Get(0).(internal.BinaryInfo)
+		r0 = ret.Get(0).(model.BinaryInfo)
 	}
 	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
 		r1 = returnFunc(path)
@@ -216,19 +216,19 @@ func (_c *BinaryManager_GetBinaryInfo_Call) Run(run func(path string)) *BinaryMa
 	return _c
 }
 
-func (_c *BinaryManager_GetBinaryInfo_Call) Return(binaryInfo internal.BinaryInfo, err error) *BinaryManager_GetBinaryInfo_Call {
+func (_c *BinaryManager_GetBinaryInfo_Call) Return(binaryInfo model.BinaryInfo, err error) *BinaryManager_GetBinaryInfo_Call {
 	_c.Call.Return(binaryInfo, err)
 	return _c
 }
 
-func (_c *BinaryManager_GetBinaryInfo_Call) RunAndReturn(run func(path string) (internal.BinaryInfo, error)) *BinaryManager_GetBinaryInfo_Call {
+func (_c *BinaryManager_GetBinaryInfo_Call) RunAndReturn(run func(path string) (model.BinaryInfo, error)) *BinaryManager_GetBinaryInfo_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetBinaryRepository provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) GetBinaryRepository(ctx context.Context, binary string) (string, error) {
-	ret := _mock.Called(ctx, binary)
+func (_mock *BinaryManager) GetBinaryRepository(ctx context.Context, bin model.Binary) (string, error) {
+	ret := _mock.Called(ctx, bin)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetBinaryRepository")
@@ -236,16 +236,16 @@ func (_mock *BinaryManager) GetBinaryRepository(ctx context.Context, binary stri
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
-		return returnFunc(ctx, binary)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Binary) (string, error)); ok {
+		return returnFunc(ctx, bin)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
-		r0 = returnFunc(ctx, binary)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Binary) string); ok {
+		r0 = returnFunc(ctx, bin)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, binary)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, model.Binary) error); ok {
+		r1 = returnFunc(ctx, bin)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -259,20 +259,20 @@ type BinaryManager_GetBinaryRepository_Call struct {
 
 // GetBinaryRepository is a helper method to define mock.On call
 //   - ctx context.Context
-//   - binary string
-func (_e *BinaryManager_Expecter) GetBinaryRepository(ctx interface{}, binary interface{}) *BinaryManager_GetBinaryRepository_Call {
-	return &BinaryManager_GetBinaryRepository_Call{Call: _e.mock.On("GetBinaryRepository", ctx, binary)}
+//   - bin model.Binary
+func (_e *BinaryManager_Expecter) GetBinaryRepository(ctx interface{}, bin interface{}) *BinaryManager_GetBinaryRepository_Call {
+	return &BinaryManager_GetBinaryRepository_Call{Call: _e.mock.On("GetBinaryRepository", ctx, bin)}
 }
 
-func (_c *BinaryManager_GetBinaryRepository_Call) Run(run func(ctx context.Context, binary string)) *BinaryManager_GetBinaryRepository_Call {
+func (_c *BinaryManager_GetBinaryRepository_Call) Run(run func(ctx context.Context, bin model.Binary)) *BinaryManager_GetBinaryRepository_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 model.Binary
 		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg1 = args[1].(model.Binary)
 		}
 		run(
 			arg0,
@@ -287,30 +287,30 @@ func (_c *BinaryManager_GetBinaryRepository_Call) Return(s string, err error) *B
 	return _c
 }
 
-func (_c *BinaryManager_GetBinaryRepository_Call) RunAndReturn(run func(ctx context.Context, binary string) (string, error)) *BinaryManager_GetBinaryRepository_Call {
+func (_c *BinaryManager_GetBinaryRepository_Call) RunAndReturn(run func(ctx context.Context, bin model.Binary) (string, error)) *BinaryManager_GetBinaryRepository_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetBinaryUpgradeInfo provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) GetBinaryUpgradeInfo(ctx context.Context, info internal.BinaryInfo, checkMajor bool) (internal.BinaryUpgradeInfo, error) {
+func (_mock *BinaryManager) GetBinaryUpgradeInfo(ctx context.Context, info model.BinaryInfo, checkMajor bool) (model.BinaryUpgradeInfo, error) {
 	ret := _mock.Called(ctx, info, checkMajor)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetBinaryUpgradeInfo")
 	}
 
-	var r0 internal.BinaryUpgradeInfo
+	var r0 model.BinaryUpgradeInfo
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, internal.BinaryInfo, bool) (internal.BinaryUpgradeInfo, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.BinaryInfo, bool) (model.BinaryUpgradeInfo, error)); ok {
 		return returnFunc(ctx, info, checkMajor)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, internal.BinaryInfo, bool) internal.BinaryUpgradeInfo); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.BinaryInfo, bool) model.BinaryUpgradeInfo); ok {
 		r0 = returnFunc(ctx, info, checkMajor)
 	} else {
-		r0 = ret.Get(0).(internal.BinaryUpgradeInfo)
+		r0 = ret.Get(0).(model.BinaryUpgradeInfo)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, internal.BinaryInfo, bool) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, model.BinaryInfo, bool) error); ok {
 		r1 = returnFunc(ctx, info, checkMajor)
 	} else {
 		r1 = ret.Error(1)
@@ -325,21 +325,21 @@ type BinaryManager_GetBinaryUpgradeInfo_Call struct {
 
 // GetBinaryUpgradeInfo is a helper method to define mock.On call
 //   - ctx context.Context
-//   - info internal.BinaryInfo
+//   - info model.BinaryInfo
 //   - checkMajor bool
 func (_e *BinaryManager_Expecter) GetBinaryUpgradeInfo(ctx interface{}, info interface{}, checkMajor interface{}) *BinaryManager_GetBinaryUpgradeInfo_Call {
 	return &BinaryManager_GetBinaryUpgradeInfo_Call{Call: _e.mock.On("GetBinaryUpgradeInfo", ctx, info, checkMajor)}
 }
 
-func (_c *BinaryManager_GetBinaryUpgradeInfo_Call) Run(run func(ctx context.Context, info internal.BinaryInfo, checkMajor bool)) *BinaryManager_GetBinaryUpgradeInfo_Call {
+func (_c *BinaryManager_GetBinaryUpgradeInfo_Call) Run(run func(ctx context.Context, info model.BinaryInfo, checkMajor bool)) *BinaryManager_GetBinaryUpgradeInfo_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 internal.BinaryInfo
+		var arg1 model.BinaryInfo
 		if args[1] != nil {
-			arg1 = args[1].(internal.BinaryInfo)
+			arg1 = args[1].(model.BinaryInfo)
 		}
 		var arg2 bool
 		if args[2] != nil {
@@ -354,27 +354,27 @@ func (_c *BinaryManager_GetBinaryUpgradeInfo_Call) Run(run func(ctx context.Cont
 	return _c
 }
 
-func (_c *BinaryManager_GetBinaryUpgradeInfo_Call) Return(binaryUpgradeInfo internal.BinaryUpgradeInfo, err error) *BinaryManager_GetBinaryUpgradeInfo_Call {
+func (_c *BinaryManager_GetBinaryUpgradeInfo_Call) Return(binaryUpgradeInfo model.BinaryUpgradeInfo, err error) *BinaryManager_GetBinaryUpgradeInfo_Call {
 	_c.Call.Return(binaryUpgradeInfo, err)
 	return _c
 }
 
-func (_c *BinaryManager_GetBinaryUpgradeInfo_Call) RunAndReturn(run func(ctx context.Context, info internal.BinaryInfo, checkMajor bool) (internal.BinaryUpgradeInfo, error)) *BinaryManager_GetBinaryUpgradeInfo_Call {
+func (_c *BinaryManager_GetBinaryUpgradeInfo_Call) RunAndReturn(run func(ctx context.Context, info model.BinaryInfo, checkMajor bool) (model.BinaryUpgradeInfo, error)) *BinaryManager_GetBinaryUpgradeInfo_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // InstallPackage provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) InstallPackage(ctx context.Context, pkgVersion string) error {
-	ret := _mock.Called(ctx, pkgVersion)
+func (_mock *BinaryManager) InstallPackage(ctx context.Context, pkg model.Package) error {
+	ret := _mock.Called(ctx, pkg)
 
 	if len(ret) == 0 {
 		panic("no return value specified for InstallPackage")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = returnFunc(ctx, pkgVersion)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Package) error); ok {
+		r0 = returnFunc(ctx, pkg)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -388,20 +388,20 @@ type BinaryManager_InstallPackage_Call struct {
 
 // InstallPackage is a helper method to define mock.On call
 //   - ctx context.Context
-//   - pkgVersion string
-func (_e *BinaryManager_Expecter) InstallPackage(ctx interface{}, pkgVersion interface{}) *BinaryManager_InstallPackage_Call {
-	return &BinaryManager_InstallPackage_Call{Call: _e.mock.On("InstallPackage", ctx, pkgVersion)}
+//   - pkg model.Package
+func (_e *BinaryManager_Expecter) InstallPackage(ctx interface{}, pkg interface{}) *BinaryManager_InstallPackage_Call {
+	return &BinaryManager_InstallPackage_Call{Call: _e.mock.On("InstallPackage", ctx, pkg)}
 }
 
-func (_c *BinaryManager_InstallPackage_Call) Run(run func(ctx context.Context, pkgVersion string)) *BinaryManager_InstallPackage_Call {
+func (_c *BinaryManager_InstallPackage_Call) Run(run func(ctx context.Context, pkg model.Package)) *BinaryManager_InstallPackage_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 model.Package
 		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg1 = args[1].(model.Package)
 		}
 		run(
 			arg0,
@@ -416,7 +416,7 @@ func (_c *BinaryManager_InstallPackage_Call) Return(err error) *BinaryManager_In
 	return _c
 }
 
-func (_c *BinaryManager_InstallPackage_Call) RunAndReturn(run func(ctx context.Context, pkgVersion string) error) *BinaryManager_InstallPackage_Call {
+func (_c *BinaryManager_InstallPackage_Call) RunAndReturn(run func(ctx context.Context, pkg model.Package) error) *BinaryManager_InstallPackage_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -535,7 +535,7 @@ func (_c *BinaryManager_MigrateBinary_Call) RunAndReturn(run func(path string) e
 }
 
 // PinBinary provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) PinBinary(bin string, kind internal.Kind) error {
+func (_mock *BinaryManager) PinBinary(bin model.Binary, kind model.Kind) error {
 	ret := _mock.Called(bin, kind)
 
 	if len(ret) == 0 {
@@ -543,7 +543,7 @@ func (_mock *BinaryManager) PinBinary(bin string, kind internal.Kind) error {
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, internal.Kind) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(model.Binary, model.Kind) error); ok {
 		r0 = returnFunc(bin, kind)
 	} else {
 		r0 = ret.Error(0)
@@ -557,21 +557,21 @@ type BinaryManager_PinBinary_Call struct {
 }
 
 // PinBinary is a helper method to define mock.On call
-//   - bin string
-//   - kind internal.Kind
+//   - bin model.Binary
+//   - kind model.Kind
 func (_e *BinaryManager_Expecter) PinBinary(bin interface{}, kind interface{}) *BinaryManager_PinBinary_Call {
 	return &BinaryManager_PinBinary_Call{Call: _e.mock.On("PinBinary", bin, kind)}
 }
 
-func (_c *BinaryManager_PinBinary_Call) Run(run func(bin string, kind internal.Kind)) *BinaryManager_PinBinary_Call {
+func (_c *BinaryManager_PinBinary_Call) Run(run func(bin model.Binary, kind model.Kind)) *BinaryManager_PinBinary_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 model.Binary
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(model.Binary)
 		}
-		var arg1 internal.Kind
+		var arg1 model.Kind
 		if args[1] != nil {
-			arg1 = args[1].(internal.Kind)
+			arg1 = args[1].(model.Kind)
 		}
 		run(
 			arg0,
@@ -586,13 +586,13 @@ func (_c *BinaryManager_PinBinary_Call) Return(err error) *BinaryManager_PinBina
 	return _c
 }
 
-func (_c *BinaryManager_PinBinary_Call) RunAndReturn(run func(bin string, kind internal.Kind) error) *BinaryManager_PinBinary_Call {
+func (_c *BinaryManager_PinBinary_Call) RunAndReturn(run func(bin model.Binary, kind model.Kind) error) *BinaryManager_PinBinary_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UninstallBinary provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) UninstallBinary(bin string) error {
+func (_mock *BinaryManager) UninstallBinary(bin model.Binary) error {
 	ret := _mock.Called(bin)
 
 	if len(ret) == 0 {
@@ -600,7 +600,7 @@ func (_mock *BinaryManager) UninstallBinary(bin string) error {
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(model.Binary) error); ok {
 		r0 = returnFunc(bin)
 	} else {
 		r0 = ret.Error(0)
@@ -614,16 +614,16 @@ type BinaryManager_UninstallBinary_Call struct {
 }
 
 // UninstallBinary is a helper method to define mock.On call
-//   - bin string
+//   - bin model.Binary
 func (_e *BinaryManager_Expecter) UninstallBinary(bin interface{}) *BinaryManager_UninstallBinary_Call {
 	return &BinaryManager_UninstallBinary_Call{Call: _e.mock.On("UninstallBinary", bin)}
 }
 
-func (_c *BinaryManager_UninstallBinary_Call) Run(run func(bin string)) *BinaryManager_UninstallBinary_Call {
+func (_c *BinaryManager_UninstallBinary_Call) Run(run func(bin model.Binary)) *BinaryManager_UninstallBinary_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 model.Binary
 		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(model.Binary)
 		}
 		run(
 			arg0,
@@ -637,7 +637,7 @@ func (_c *BinaryManager_UninstallBinary_Call) Return(err error) *BinaryManager_U
 	return _c
 }
 
-func (_c *BinaryManager_UninstallBinary_Call) RunAndReturn(run func(bin string) error) *BinaryManager_UninstallBinary_Call {
+func (_c *BinaryManager_UninstallBinary_Call) RunAndReturn(run func(bin model.Binary) error) *BinaryManager_UninstallBinary_Call {
 	_c.Call.Return(run)
 	return _c
 }
