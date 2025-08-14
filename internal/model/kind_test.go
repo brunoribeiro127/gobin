@@ -1,28 +1,68 @@
-package internal_test
+package model_test
 
 import (
 	"errors"
 	"testing"
 
-	"github.com/brunoribeiro127/gobin/internal"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/brunoribeiro127/gobin/internal/model"
 )
+
+func TestKind_GetTargetBinPath(t *testing.T) {
+	cases := map[string]struct {
+		kind     model.Kind
+		basePath string
+		name     string
+		version  model.Version
+		expected string
+	}{
+		"latest": {
+			kind:     model.KindLatest,
+			basePath: "/usr/local/bin",
+			name:     "mockproj",
+			version:  model.NewVersion("latest"),
+			expected: "/usr/local/bin/mockproj",
+		},
+		"major": {
+			kind:     model.KindMajor,
+			basePath: "/usr/local/bin",
+			name:     "mockproj",
+			version:  model.NewVersion("v1.2.3"),
+			expected: "/usr/local/bin/mockproj-v1",
+		},
+		"minor": {
+			kind:     model.KindMinor,
+			basePath: "/usr/local/bin",
+			name:     "mockproj",
+			version:  model.NewVersion("v1.2.3"),
+			expected: "/usr/local/bin/mockproj-v1.2",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			result := tc.kind.GetTargetBinPath(tc.basePath, tc.name, tc.version)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
 
 func TestKind_IsValid(t *testing.T) {
 	cases := map[string]struct {
-		kind     internal.Kind
+		kind     model.Kind
 		expected bool
 	}{
 		"latest": {
-			kind:     internal.KindLatest,
+			kind:     model.KindLatest,
 			expected: true,
 		},
 		"major": {
-			kind:     internal.KindMajor,
+			kind:     model.KindMajor,
 			expected: true,
 		},
 		"minor": {
-			kind:     internal.KindMinor,
+			kind:     model.KindMinor,
 			expected: true,
 		},
 		"invalid": {
@@ -40,19 +80,19 @@ func TestKind_IsValid(t *testing.T) {
 
 func TestKind_String(t *testing.T) {
 	cases := map[string]struct {
-		kind     internal.Kind
+		kind     model.Kind
 		expected string
 	}{
 		"latest": {
-			kind:     internal.KindLatest,
+			kind:     model.KindLatest,
 			expected: "latest",
 		},
 		"major": {
-			kind:     internal.KindMajor,
+			kind:     model.KindMajor,
 			expected: "major",
 		},
 		"minor": {
-			kind:     internal.KindMinor,
+			kind:     model.KindMinor,
 			expected: "minor",
 		},
 	}
@@ -67,20 +107,20 @@ func TestKind_String(t *testing.T) {
 func TestKind_Set(t *testing.T) {
 	cases := map[string]struct {
 		kind     string
-		expected internal.Kind
+		expected model.Kind
 		err      error
 	}{
 		"latest": {
 			kind:     "latest",
-			expected: internal.KindLatest,
+			expected: model.KindLatest,
 		},
 		"major": {
 			kind:     "major",
-			expected: internal.KindMajor,
+			expected: model.KindMajor,
 		},
 		"minor": {
 			kind:     "minor",
-			expected: internal.KindMinor,
+			expected: model.KindMinor,
 		},
 		"invalid": {
 			kind: "invalid",
@@ -90,7 +130,7 @@ func TestKind_Set(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			kind := internal.Kind("")
+			kind := model.Kind("")
 			err := kind.Set(tc.kind)
 			assert.Equal(t, tc.expected, kind)
 			assert.Equal(t, tc.err, err)
@@ -99,6 +139,6 @@ func TestKind_Set(t *testing.T) {
 }
 
 func TestKind_Type(t *testing.T) {
-	kind := internal.Kind("")
+	kind := model.Kind("")
 	assert.Equal(t, "kind", kind.Type())
 }

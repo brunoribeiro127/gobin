@@ -17,6 +17,7 @@ import (
 
 	"github.com/brunoribeiro127/gobin/internal"
 	"github.com/brunoribeiro127/gobin/internal/mocks"
+	"github.com/brunoribeiro127/gobin/internal/model"
 )
 
 func TestGoToolchain_GetBuildInfo(t *testing.T) {
@@ -82,27 +83,24 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		module             string
-		mockExecCmdOutput  []byte
-		mockExecCmdErr     error
-		expectedModulePath string
-		expectedVersion    string
-		expectedErr        error
+		module            model.Module
+		mockExecCmdOutput []byte
+		mockExecCmdErr    error
+		expectedModule    model.Module
+		expectedErr       error
 	}{
 		"success": {
-			module:             "example.com/mockorg/mockproj",
-			mockExecCmdOutput:  makeExecCmdOutput(t, "go.mod"),
-			expectedModulePath: "example.com/mockorg/mockproj",
-			expectedVersion:    "v0.1.0",
+			module:            model.NewLatestModule("example.com/mockorg/mockproj"),
+			mockExecCmdOutput: makeExecCmdOutput(t, "go.mod"),
+			expectedModule:    model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 		},
 		"sucess-module-path-update": {
-			module:             "example.com/mockorg/mockproj",
-			mockExecCmdOutput:  makeExecCmdOutput(t, "new.go.mod"),
-			expectedModulePath: "example.com/newmockorg/newmockproj",
-			expectedVersion:    "v0.1.0",
+			module:            model.NewLatestModule("example.com/mockorg/mockproj"),
+			mockExecCmdOutput: makeExecCmdOutput(t, "new.go.mod"),
+			expectedModule:    model.NewModule("example.com/newmockorg/newmockproj", model.NewVersion("v0.1.0")),
 		},
 		"error-module-not-found": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewLatestModule("example.com/mockorg/mockproj"),
 			mockExecCmdOutput: func() []byte {
 				return []byte(`no matching versions for query`)
 			}(),
@@ -110,7 +108,7 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 			expectedErr:    internal.ErrModuleNotFound,
 		},
 		"error-getting-latest-version": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewLatestModule("example.com/mockorg/mockproj"),
 			mockExecCmdOutput: func() []byte {
 				return []byte(`unexpected error	`)
 			}(),
@@ -118,33 +116,33 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 			expectedErr:    errors.New("exit status 1: unexpected error"),
 		},
 		"error-parsing-module-latest-version-response": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewLatestModule("example.com/mockorg/mockproj"),
 			mockExecCmdOutput: func() []byte {
 				return []byte(``)
 			}(),
 			expectedErr: errors.New("unexpected end of JSON input"),
 		},
 		"error-reading-go-mod-file": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewLatestModule("example.com/mockorg/mockproj"),
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"GoMod":"./go.mod","Version":"v0.1.0"}`)
 			}(),
 			expectedErr: errors.New("open ./go.mod: no such file or directory"),
 		},
 		"error-go-mod-file-not-available": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewLatestModule("example.com/mockorg/mockproj"),
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"Version":"v0.1.0"}`)
 			}(),
 			expectedErr: internal.ErrGoModFileNotAvailable,
 		},
 		"error-parsing-go-mod-file": {
-			module:            "example.com/mockorg/mockproj",
+			module:            model.NewLatestModule("example.com/mockorg/mockproj"),
 			mockExecCmdOutput: makeExecCmdOutput(t, "invalid.go.mod"),
 			expectedErr:       errors.New("go.mod:1: unknown directive: invalid"),
 		},
 		"error-module-info-not-available": {
-			module:            "example.com/mockorg/mockproj",
+			module:            model.NewLatestModule("example.com/mockorg/mockproj"),
 			mockExecCmdOutput: makeExecCmdOutput(t, "empty.go.mod"),
 			expectedErr:       internal.ErrModuleInfoNotAvailable,
 		},
@@ -159,14 +157,13 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 
 			execCmdFunc := func(_ context.Context, name string, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, "go", name)
-				assert.Equal(t, []string{"list", "-m", "-json", fmt.Sprintf("%s@latest", tc.module)}, args)
+				assert.Equal(t, []string{"list", "-m", "-json", tc.module.String()}, args)
 				return execCmd
 			}
 
 			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
-			modulePath, version, err := toolchain.GetLatestModuleVersion(context.Background(), tc.module)
-			assert.Equal(t, tc.expectedModulePath, modulePath)
-			assert.Equal(t, tc.expectedVersion, version)
+			module, err := toolchain.GetLatestModuleVersion(context.Background(), tc.module)
+			assert.Equal(t, tc.expectedModule, module)
 			if tc.expectedErr != nil {
 				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
@@ -185,15 +182,14 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		module            string
-		version           string
+		module            model.Module
 		mockExecCmdOutput []byte
 		mockExecCmdErr    error
 		expectedModFile   *modfile.File
 		expectedErr       error
 	}{
 		"success": {
-			module:            "example.com/mockorg/mockproj",
+			module:            model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: makeExecCmdOutput(t, "go.mod"),
 			expectedModFile: &modfile.File{
 				Module: &modfile.Module{
@@ -239,7 +235,7 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 			},
 		},
 		"error-downloading-module": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"Error":"unexpected error"}`)
 			}(),
@@ -247,21 +243,21 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 			expectedErr:    errors.New("unexpected error"),
 		},
 		"error-parsing-module-download-success-response": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: func() []byte {
 				return []byte(``)
 			}(),
 			expectedErr: errors.New("unexpected end of JSON input"),
 		},
 		"error-reading-go-mod-file": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"GoMod":"./go.mod"}`)
 			}(),
 			expectedErr: errors.New("open ./go.mod: no such file or directory"),
 		},
 		"error-parsing-go-mod-file": {
-			module:            "example.com/mockorg/mockproj",
+			module:            model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: makeExecCmdOutput(t, "invalid.go.mod"),
 			expectedErr:       errors.New("go.mod:1: unknown directive: invalid"),
 		},
@@ -276,12 +272,12 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 
 			execCmdFunc := func(_ context.Context, name string, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, "go", name)
-				assert.Equal(t, []string{"mod", "download", "-json", fmt.Sprintf("%s@%s", tc.module, tc.version)}, args)
+				assert.Equal(t, []string{"mod", "download", "-json", tc.module.String()}, args)
 				return execCmd
 			}
 
 			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
-			modFile, err := toolchain.GetModuleFile(context.Background(), tc.module, tc.version)
+			modFile, err := toolchain.GetModuleFile(context.Background(), tc.module)
 			assert.Equal(t, tc.expectedModFile, modFile)
 			if tc.expectedErr != nil {
 				assert.EqualError(t, err, tc.expectedErr.Error())
@@ -294,15 +290,14 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 
 func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 	cases := map[string]struct {
-		module            string
-		version           string
+		module            model.Module
 		mockExecCmdOutput []byte
 		mockExecCmdErr    error
-		expectedModOrigin *internal.ModuleOrigin
+		expectedModOrigin *model.ModuleOrigin
 		expectedErr       error
 	}{
 		"success": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: []byte(`{
 				"Origin":{
 					"VCS":"git",
@@ -311,7 +306,7 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 					"Ref":"refs/heads/v0.1.0"
 				}
 			}`),
-			expectedModOrigin: &internal.ModuleOrigin{
+			expectedModOrigin: &model.ModuleOrigin{
 				VCS:  "git",
 				URL:  "https://github.com/mockorg/mockproj",
 				Hash: "1234567890",
@@ -322,7 +317,7 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 			},
 		},
 		"error-module-not-found": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"Error":"not found"}`)
 			}(),
@@ -330,7 +325,7 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 			expectedErr:    internal.ErrModuleNotFound,
 		},
 		"error-downloading-module": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"Error":"unexpected error"}`)
 			}(),
@@ -338,14 +333,14 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 			expectedErr:    errors.New("unexpected error"),
 		},
 		"error-parsing-module-download-success-response": {
-			module: "example.com/mockorg/mockproj",
+			module: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: func() []byte {
 				return []byte(``)
 			}(),
 			expectedErr: errors.New("unexpected end of JSON input"),
 		},
 		"error-module-origin-not-available": {
-			module:            "example.com/mockorg/mockproj",
+			module:            model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 			mockExecCmdOutput: []byte(`{"Origin":null}`),
 			expectedErr:       internal.ErrModuleOriginNotAvailable,
 		},
@@ -360,12 +355,12 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 
 			execCmdFunc := func(_ context.Context, name string, args ...string) internal.ExecCombinedOutput {
 				assert.Equal(t, "go", name)
-				assert.Equal(t, []string{"mod", "download", "-json", fmt.Sprintf("%s@%s", tc.module, tc.version)}, args)
+				assert.Equal(t, []string{"mod", "download", "-json", tc.module.String()}, args)
 				return execCmd
 			}
 
 			toolchain := internal.NewGoToolchain(execCmdFunc, nil, nil, nil)
-			modOrigin, err := toolchain.GetModuleOrigin(context.Background(), tc.module, tc.version)
+			modOrigin, err := toolchain.GetModuleOrigin(context.Background(), tc.module)
 			assert.Equal(t, tc.expectedModOrigin, modOrigin)
 			if tc.expectedErr != nil {
 				assert.EqualError(t, err, tc.expectedErr.Error())
@@ -379,20 +374,23 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 func TestGoToolchain_Install(t *testing.T) {
 	cases := map[string]struct {
 		path           string
-		pkg            string
-		version        string
+		pkg            model.Package
 		mockExecCmdErr error
 		expectedErr    error
 	}{
 		"success": {
-			path:    "/home/user/.gobin/.tmp/mockproj-1234567890",
-			pkg:     "example.com/mockorg/mockproj/cmd/mockproj",
-			version: "v0.1.0",
+			path: "/home/user/.gobin/.tmp/mockproj-1234567890",
+			pkg: model.NewPackageWithVersion(
+				"example.com/mockorg/mockproj/cmd/mockproj",
+				model.NewVersion("v0.1.0"),
+			),
 		},
 		"error-installing-binary": {
-			path:           "/home/user/.gobin/.tmp/mockproj-1234567890",
-			pkg:            "example.com/mockorg/mockproj/cmd/mockproj",
-			version:        "v0.1.0",
+			path: "/home/user/.gobin/.tmp/mockproj-1234567890",
+			pkg: model.NewPackageWithVersion(
+				"example.com/mockorg/mockproj/cmd/mockproj",
+				model.NewVersion("v0.1.0"),
+			),
 			mockExecCmdErr: errors.New("unexpected error"),
 			expectedErr:    errors.New("unexpected error"),
 		},
@@ -406,12 +404,12 @@ func TestGoToolchain_Install(t *testing.T) {
 
 			execRunFunc := func(_ context.Context, name string, args ...string) internal.ExecRun {
 				assert.Equal(t, "go", name)
-				assert.Equal(t, []string{"install", "-a", fmt.Sprintf("%s@%s", tc.pkg, tc.version)}, args)
+				assert.Equal(t, []string{"install", "-a", tc.pkg.String()}, args)
 				return execRun
 			}
 
 			toolchain := internal.NewGoToolchain(nil, execRunFunc, nil, nil)
-			err := toolchain.Install(context.Background(), tc.path, tc.pkg, tc.version)
+			err := toolchain.Install(context.Background(), tc.path, tc.pkg)
 			if tc.expectedErr != nil {
 				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
@@ -426,7 +424,7 @@ func TestGoToolchain_VulnCheck(t *testing.T) {
 		path              string
 		mockExecCmdOutput []byte
 		mockExecCmdErr    error
-		expectedVulns     []internal.Vulnerability
+		expectedVulns     []model.Vulnerability
 		expectedErr       error
 	}{
 		"success-filter-vulns-by-affected-status": {
@@ -451,7 +449,7 @@ func TestGoToolchain_VulnCheck(t *testing.T) {
 					]
 				}`)
 			}(),
-			expectedVulns: []internal.Vulnerability{
+			expectedVulns: []model.Vulnerability{
 				{
 					ID:  "GO-2025-3754",
 					URL: "https://pkg.go.dev/vuln/GO-2025-3754",

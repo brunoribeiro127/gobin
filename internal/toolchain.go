@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"golang.org/x/mod/modfile"
+
+	"github.com/brunoribeiro127/gobin/internal/model"
 )
 
 var (
@@ -34,35 +36,38 @@ var (
 	ErrModuleOriginNotAvailable = errors.New("module origin not available")
 )
 
-// ModuleOrigin represents the origin of a module containing the version control
-// system, the URL, the hash and optionally the reference.
-type ModuleOrigin struct {
-	VCS  string  `json:"VCS"`
-	URL  string  `json:"URL"`
-	Hash string  `json:"Hash"`
-	Ref  *string `json:"Ref"`
-}
-
-// Vulnerability represents a vulnerability found in a binary.
-type Vulnerability struct {
-	ID  string
-	URL string
-}
-
 // Toolchain is an interface for a toolchain.
 type Toolchain interface {
 	// GetBuildInfo gets the build info for a binary.
-	GetBuildInfo(path string) (*buildinfo.BuildInfo, error)
+	GetBuildInfo(
+		path string,
+	) (*buildinfo.BuildInfo, error)
 	// GetLatestModuleVersion gets the latest module version for a given module.
-	GetLatestModuleVersion(ctx context.Context, module string) (string, string, error)
+	GetLatestModuleVersion(
+		ctx context.Context,
+		module model.Module,
+	) (model.Module, error)
 	// GetModuleFile gets the module file for a given module and version.
-	GetModuleFile(ctx context.Context, module, version string) (*modfile.File, error)
+	GetModuleFile(
+		ctx context.Context,
+		module model.Module,
+	) (*modfile.File, error)
 	// GetModuleOrigin gets the module origin for a given module and version.
-	GetModuleOrigin(ctx context.Context, module, version string) (*ModuleOrigin, error)
+	GetModuleOrigin(
+		ctx context.Context,
+		module model.Module,
+	) (*model.ModuleOrigin, error)
 	// Install installs a package in the target path.
-	Install(ctx context.Context, path, pkg, version string) error
+	Install(
+		ctx context.Context,
+		path string,
+		pkg model.Package,
+	) error
 	// VulnCheck checks for vulnerabilities in a binary.
-	VulnCheck(ctx context.Context, path string) ([]Vulnerability, error)
+	VulnCheck(
+		ctx context.Context,
+		path string,
+	) ([]model.Vulnerability, error)
 }
 
 // GoToolchain is a toolchain to interact with the Go toolchain.
@@ -120,12 +125,12 @@ func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
 // module information.
 func (t *GoToolchain) GetLatestModuleVersion(
 	ctx context.Context,
-	module string,
-) (string, string, error) {
-	logger := slog.Default().With("module", module)
+	module model.Module,
+) (model.Module, error) {
+	logger := slog.Default().With("module", module.Path)
 	logger.InfoContext(ctx, "getting latest module version")
 
-	modLatest := fmt.Sprintf("%s@latest", module)
+	modLatest := module.Path + "@latest"
 	cmd := t.execCombinedOutput(ctx, "go", "list", "-m", "-json", modLatest)
 
 	output, err := cmd.CombinedOutput()
@@ -137,11 +142,11 @@ func (t *GoToolchain) GetLatestModuleVersion(
 
 		if isModuleNotFound(err.Error()) {
 			logger.WarnContext(ctx, "module not found", "err", err)
-			return "", "", ErrModuleNotFound
+			return model.Module{}, ErrModuleNotFound
 		}
 
 		logger.ErrorContext(ctx, "error getting latest version for module", "err", err)
-		return "", "", err
+		return model.Module{}, err
 	}
 
 	var res struct {
@@ -151,13 +156,13 @@ func (t *GoToolchain) GetLatestModuleVersion(
 
 	if err = json.Unmarshal(output, &res); err != nil {
 		logger.ErrorContext(ctx, "error parsing module latest version response", "err", err)
-		return "", "", err
+		return model.Module{}, err
 	}
 
 	if res.GoMod == nil {
 		err = ErrGoModFileNotAvailable
 		logger.WarnContext(ctx, err.Error())
-		return "", "", err
+		return model.Module{}, err
 	}
 
 	logger = logger.With("go_mod_file", *res.GoMod, "go_mod_version", res.Version)
@@ -165,22 +170,22 @@ func (t *GoToolchain) GetLatestModuleVersion(
 	bytes, err := os.ReadFile(*res.GoMod)
 	if err != nil {
 		logger.ErrorContext(ctx, "error reading go mod file", "err", err)
-		return "", "", err
+		return model.Module{}, err
 	}
 
 	modFile, err := modfile.Parse("go.mod", bytes, nil)
 	if err != nil {
 		logger.ErrorContext(ctx, "error parsing go mod file", "err", err)
-		return "", "", err
+		return model.Module{}, err
 	}
 
 	if modFile.Module == nil {
 		err = ErrModuleInfoNotAvailable
 		logger.WarnContext(ctx, err.Error())
-		return "", "", err
+		return model.Module{}, err
 	}
 
-	return modFile.Module.Mod.Path, res.Version, nil
+	return model.NewModule(modFile.Module.Mod.Path, model.NewVersion(res.Version)), nil
 }
 
 // GetModuleFile returns the go.mod file for a module. It uses the go mod download
@@ -189,13 +194,12 @@ func (t *GoToolchain) GetLatestModuleVersion(
 // the module is not found or the go mod download command fails.
 func (t *GoToolchain) GetModuleFile(
 	ctx context.Context,
-	module, version string,
+	module model.Module,
 ) (*modfile.File, error) {
-	logger := slog.Default().With("module", module, "version", version)
+	logger := slog.Default().With("module", module.String())
 	logger.InfoContext(ctx, "getting module file")
 
-	modVersion := fmt.Sprintf("%s@%s", module, version)
-	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", modVersion)
+	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", module.String())
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -243,13 +247,12 @@ func (t *GoToolchain) GetModuleFile(
 // download command fails.
 func (t *GoToolchain) GetModuleOrigin(
 	ctx context.Context,
-	module, version string,
-) (*ModuleOrigin, error) {
-	logger := slog.Default().With("module", module, "version", version)
+	module model.Module,
+) (*model.ModuleOrigin, error) {
+	logger := slog.Default().With("module", module.String())
 	logger.InfoContext(ctx, "getting module origin")
 
-	modVersion := fmt.Sprintf("%s@%s", module, version)
-	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", modVersion)
+	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", module.String())
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -271,7 +274,7 @@ func (t *GoToolchain) GetModuleOrigin(
 	}
 
 	var res struct {
-		Origin *ModuleOrigin `json:"Origin"`
+		Origin *model.ModuleOrigin `json:"Origin"`
 	}
 
 	if err = json.Unmarshal(output, &res); err != nil {
@@ -294,13 +297,13 @@ func (t *GoToolchain) GetModuleOrigin(
 // up to date. It fails if the go install command fails.
 func (t *GoToolchain) Install(
 	ctx context.Context,
-	path, pkg, version string,
+	path string,
+	pkg model.Package,
 ) error {
-	logger := slog.Default().With("path", path, "package", pkg, "version", version)
+	logger := slog.Default().With("path", path, "package", pkg.String())
 	logger.InfoContext(ctx, "installing package")
 
-	pkgVersion := fmt.Sprintf("%s@%s", pkg, version)
-	cmd := t.execRun(ctx, "go", "install", "-a", pkgVersion)
+	cmd := t.execRun(ctx, "go", "install", "-a", pkg.String())
 	cmd.InjectEnv("GOBIN=" + path)
 
 	if err := cmd.Run(); err != nil {
@@ -318,7 +321,7 @@ func (t *GoToolchain) Install(
 func (t *GoToolchain) VulnCheck(
 	ctx context.Context,
 	path string,
-) ([]Vulnerability, error) {
+) ([]model.Vulnerability, error) {
 	logger := slog.Default().With("path", path)
 	logger.InfoContext(ctx, "running govulncheck")
 
@@ -350,10 +353,10 @@ func (t *GoToolchain) VulnCheck(
 		return nil, err
 	}
 
-	var vulns = make([]Vulnerability, 0, len(res.Statements))
+	var vulns = make([]model.Vulnerability, 0, len(res.Statements))
 	for _, stmt := range res.Statements {
 		if stmt.Status == "affected" {
-			vulns = append(vulns, Vulnerability{
+			vulns = append(vulns, model.Vulnerability{
 				ID:  stmt.Vulnerability.Name,
 				URL: stmt.Vulnerability.ID,
 			})

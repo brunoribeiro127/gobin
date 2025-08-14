@@ -4,15 +4,14 @@ import (
 	"context"
 	"debug/buildinfo"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"golang.org/x/mod/module"
-	"golang.org/x/mod/semver"
+
+	"github.com/brunoribeiro127/gobin/internal/model"
 )
 
 const (
@@ -28,96 +27,61 @@ var (
 	ErrBinaryAlreadyManaged = errors.New("binary already managed")
 )
 
-// BinaryInfo represents the information for a binary.
-type BinaryInfo struct {
-	Name           string
-	FullPath       string
-	InstallPath    string
-	PackagePath    string
-	ModulePath     string
-	ModuleVersion  string
-	ModuleSum      string
-	GoVersion      string
-	CommitRevision string
-	CommitTime     string
-	OS             string
-	Arch           string
-	Feature        string
-	EnvVars        []string
-
-	IsManaged bool
-}
-
-// BinaryUpgradeInfo represents the upgrade information for a binary.
-type BinaryUpgradeInfo struct {
-	BinaryInfo
-
-	LatestModulePath   string
-	LatestVersion      string
-	IsUpgradeAvailable bool
-}
-
-// BinaryDiagnostic represents the diagnostic results for a binary.
-type BinaryDiagnostic struct {
-	Name                  string
-	NotInPath             bool
-	DuplicatesInPath      []string
-	IsNotManaged          bool
-	IsPseudoVersion       bool
-	NotBuiltWithGoModules bool
-	IsOrphaned            bool
-	GoVersion             struct {
-		Actual   string
-		Expected string
-	}
-	Platform struct {
-		Actual   string
-		Expected string
-	}
-	Retracted       string
-	Deprecated      string
-	Vulnerabilities []Vulnerability
-}
-
-// HasIssues returns whether the binary has any issues.
-func (d BinaryDiagnostic) HasIssues() bool {
-	return d.NotInPath ||
-		len(d.DuplicatesInPath) > 0 ||
-		d.IsNotManaged ||
-		d.IsPseudoVersion ||
-		d.NotBuiltWithGoModules ||
-		d.IsOrphaned ||
-		d.GoVersion.Actual != d.GoVersion.Expected ||
-		d.Platform.Actual != d.Platform.Expected ||
-		d.Retracted != "" ||
-		d.Deprecated != "" ||
-		len(d.Vulnerabilities) > 0
-}
-
 // BinaryManager is an interface for a binary manager.
 type BinaryManager interface {
 	// DiagnoseBinary diagnoses issues in a binary.
-	DiagnoseBinary(ctx context.Context, path string) (BinaryDiagnostic, error)
+	DiagnoseBinary(
+		ctx context.Context,
+		path string,
+	) (model.BinaryDiagnostic, error)
 	// GetAllBinaryInfos gets all binary infos.
-	GetAllBinaryInfos(managed bool) ([]BinaryInfo, error)
+	GetAllBinaryInfos(
+		managed bool,
+	) ([]model.BinaryInfo, error)
 	// GetBinaryInfo gets the binary info for a given path.
-	GetBinaryInfo(path string) (BinaryInfo, error)
+	GetBinaryInfo(
+		path string,
+	) (model.BinaryInfo, error)
 	// GetBinaryRepository gets the repository URL for a given binary.
-	GetBinaryRepository(ctx context.Context, binary string) (string, error)
+	GetBinaryRepository(
+		ctx context.Context,
+		bin model.Binary,
+	) (string, error)
 	// GetBinaryUpgradeInfo gets the upgrade information for a given binary.
-	GetBinaryUpgradeInfo(ctx context.Context, info BinaryInfo, checkMajor bool) (BinaryUpgradeInfo, error)
+	GetBinaryUpgradeInfo(
+		ctx context.Context,
+		info model.BinaryInfo,
+		checkMajor bool,
+	) (model.BinaryUpgradeInfo, error)
 	// InstallPackage installs a package.
-	InstallPackage(ctx context.Context, pkgVersion string) error
+	InstallPackage(
+		ctx context.Context,
+		pkg model.Package,
+	) error
 	// ListBinariesFullPaths lists all binary full paths in the Go binary directory.
-	ListBinariesFullPaths(dir string) ([]string, error)
+	ListBinariesFullPaths(
+		dir string,
+	) ([]string, error)
 	// MigrateBinary migrates a binary to be managed internally.
-	MigrateBinary(path string) error
+	MigrateBinary(
+		path string,
+	) error
 	// PinBinary pins a binary to the Go binary directory with the given kind.
-	PinBinary(bin string, kind Kind) error
+	PinBinary(
+		bin model.Binary,
+		kind model.Kind,
+	) error
 	// UninstallBinary uninstalls a binary.
-	UninstallBinary(bin string) error
+	UninstallBinary(
+		bin model.Binary,
+	) error
 	// UpgradeBinary upgrades a binary.
-	UpgradeBinary(ctx context.Context, binFullPath string, majorUpgrade bool, rebuild bool) error
+	UpgradeBinary(
+		ctx context.Context,
+		binFullPath string,
+		majorUpgrade bool,
+		rebuild bool,
+	) error
 }
 
 // GoBinaryManager is a manager for Go binaries.
@@ -147,9 +111,9 @@ func NewGoBinaryManager(
 func (m *GoBinaryManager) DiagnoseBinary(
 	ctx context.Context,
 	path string,
-) (BinaryDiagnostic, error) {
+) (model.BinaryDiagnostic, error) {
 	binaryName := filepath.Base(path)
-	diagnostic := BinaryDiagnostic{
+	diagnostic := model.BinaryDiagnostic{
 		Name: binaryName,
 	}
 
@@ -160,7 +124,7 @@ func (m *GoBinaryManager) DiagnoseBinary(
 			return diagnostic, nil
 		}
 
-		return BinaryDiagnostic{}, err
+		return model.BinaryDiagnostic{}, err
 	}
 
 	binPlatform := getBinaryPlatform(buildInfo)
@@ -181,10 +145,10 @@ func (m *GoBinaryManager) DiagnoseBinary(
 
 	if buildInfo.Main.Sum != "" {
 		retracted, deprecated, modErr := m.diagnoseGoModFile(
-			ctx, buildInfo.Main.Path, buildInfo.Main.Version,
+			ctx, model.NewModule(buildInfo.Main.Path, model.NewVersion(buildInfo.Main.Version)),
 		)
 		if modErr != nil {
-			return BinaryDiagnostic{}, modErr
+			return model.BinaryDiagnostic{}, modErr
 		}
 
 		diagnostic.Retracted = retracted
@@ -193,7 +157,7 @@ func (m *GoBinaryManager) DiagnoseBinary(
 
 	diagnostic.Vulnerabilities, err = m.toolchain.VulnCheck(ctx, path)
 	if err != nil {
-		return BinaryDiagnostic{}, err
+		return model.BinaryDiagnostic{}, err
 	}
 
 	return diagnostic, nil
@@ -203,7 +167,7 @@ func (m *GoBinaryManager) DiagnoseBinary(
 // binaries only if managed is true. It returns a list of binary infos, or an
 // error if the binary directory cannot be determined or listed. It skips
 // silently failures to get the binary info.
-func (m *GoBinaryManager) GetAllBinaryInfos(managed bool) ([]BinaryInfo, error) {
+func (m *GoBinaryManager) GetAllBinaryInfos(managed bool) ([]model.BinaryInfo, error) {
 	path := m.workspace.GetGoBinPath()
 	if managed {
 		path = m.workspace.GetInternalBinPath()
@@ -214,7 +178,7 @@ func (m *GoBinaryManager) GetAllBinaryInfos(managed bool) ([]BinaryInfo, error) 
 		return nil, err
 	}
 
-	binInfos := make([]BinaryInfo, 0, len(bins))
+	binInfos := make([]model.BinaryInfo, 0, len(bins))
 	for _, bin := range bins {
 		info, infoErr := m.GetBinaryInfo(bin)
 		if infoErr == nil {
@@ -229,10 +193,10 @@ func (m *GoBinaryManager) GetAllBinaryInfos(managed bool) ([]BinaryInfo, error) 
 // It constructs the binary info from the binary's build info. It fails if the
 // binary does not exist, is not a Go binary, or the binary was built without
 // Go modules.
-func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
+func (m *GoBinaryManager) GetBinaryInfo(path string) (model.BinaryInfo, error) {
 	info, err := m.toolchain.GetBuildInfo(path)
 	if err != nil {
-		return BinaryInfo{}, err
+		return model.BinaryInfo{}, err
 	}
 
 	installPath := path
@@ -241,16 +205,15 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
 		installPath = target
 	}
 
-	binInfo := BinaryInfo{
-		Name:          strings.Split(filepath.Base(path), "@")[0],
-		FullPath:      path,
-		InstallPath:   installPath,
-		PackagePath:   info.Path,
-		ModulePath:    info.Main.Path,
-		ModuleVersion: info.Main.Version,
-		ModuleSum:     info.Main.Sum,
-		GoVersion:     info.GoVersion,
-		IsManaged:     strings.HasPrefix(installPath, m.workspace.GetInternalBinPath()),
+	binInfo := model.BinaryInfo{
+		Name:        strings.Split(filepath.Base(path), "@")[0],
+		FullPath:    path,
+		InstallPath: installPath,
+		PackagePath: info.Path,
+		Module:      model.NewModule(info.Main.Path, model.NewVersion(info.Main.Version)),
+		ModuleSum:   info.Main.Sum,
+		GoVersion:   info.GoVersion,
+		IsManaged:   strings.HasPrefix(installPath, m.workspace.GetInternalBinPath()),
 	}
 
 	for _, s := range info.Settings {
@@ -281,21 +244,21 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (BinaryInfo, error) {
 // to the default repository URL if the module origin is not available.
 func (m *GoBinaryManager) GetBinaryRepository(
 	ctx context.Context,
-	binary string,
+	bin model.Binary,
 ) (string, error) {
-	binInfo, err := m.GetBinaryInfo(filepath.Join(m.workspace.GetGoBinPath(), binary))
+	binInfo, err := m.GetBinaryInfo(filepath.Join(m.workspace.GetGoBinPath(), bin.Name))
 	if err != nil {
 		return "", err
 	}
 
-	modOrigin, err := m.toolchain.GetModuleOrigin(ctx, binInfo.ModulePath, binInfo.ModuleVersion)
+	modOrigin, err := m.toolchain.GetModuleOrigin(ctx, binInfo.Module)
 	if err != nil &&
 		!errors.Is(err, ErrModuleNotFound) &&
 		!errors.Is(err, ErrModuleOriginNotAvailable) {
 		return "", err
 	}
 
-	repoURL := "https://" + binInfo.ModulePath
+	repoURL := "https://" + binInfo.Module.Path
 	if modOrigin != nil {
 		repoURL = modOrigin.URL
 	}
@@ -311,347 +274,47 @@ func (m *GoBinaryManager) GetBinaryRepository(
 // not found).
 func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 	ctx context.Context,
-	info BinaryInfo,
+	info model.BinaryInfo,
 	checkMajor bool,
-) (BinaryUpgradeInfo, error) {
-	binUpInfo := BinaryUpgradeInfo{
-		BinaryInfo:         info,
-		LatestVersion:      info.ModuleVersion,
-		IsUpgradeAvailable: false,
+) (model.BinaryUpgradeInfo, error) {
+	binUpInfo := model.BinaryUpgradeInfo{
+		BinaryInfo: info,
 	}
 
-	modulePath, version, err := m.toolchain.GetLatestModuleVersion(ctx, binUpInfo.ModulePath)
+	mod, err := m.toolchain.GetLatestModuleVersion(ctx, binUpInfo.Module)
 	if err != nil {
-		return BinaryUpgradeInfo{}, err
+		return model.BinaryUpgradeInfo{}, err
 	}
 
-	binUpInfo.LatestModulePath = modulePath
-	binUpInfo.LatestVersion = version
-	binUpInfo.IsUpgradeAvailable = semver.Compare(binUpInfo.ModuleVersion, version) < 0
+	binUpInfo.LatestModule = mod
 
 	if checkMajor {
-		modulePath, version, err = m.checkModuleMajorUpgrade(
-			ctx, binUpInfo.ModulePath, binUpInfo.LatestVersion,
-		)
-		if err != nil {
-			return BinaryUpgradeInfo{}, err
-		}
+		for {
+			mod, err = m.toolchain.GetLatestModuleVersion(ctx, mod.NextMajorModule())
+			if errors.Is(err, ErrModuleNotFound) {
+				break
+			} else if err != nil {
+				return model.BinaryUpgradeInfo{}, err
+			}
 
-		binUpInfo.LatestModulePath = modulePath
-		binUpInfo.LatestVersion = version
-		binUpInfo.IsUpgradeAvailable = semver.Compare(binUpInfo.ModuleVersion, version) < 0
+			binUpInfo.LatestModule = mod
+		}
 	}
+
+	binUpInfo.IsUpgradeAvailable = binUpInfo.Module.Version.Compare(binUpInfo.LatestModule.Version) < 0
 
 	return binUpInfo, nil
 }
 
 // InstallPackage installs a package leveraging the toolchain. If version is
-// not provided, it installs the latest version.
-func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkgVersion string) error {
-	pkg, version := pkgVersion, latest
-
-	//nolint:mnd // expected package version format: package@version
-	if parts := strings.Split(pkgVersion, "@"); len(parts) == 2 {
-		pkg, version = parts[0], parts[1]
-	}
-
-	return m.installBinary(ctx, pkg, version)
-}
-
-// ListBinariesFullPaths lists all binaries in a directory. It returns the list
-// of full paths to the binaries.
-func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
-	logger := slog.Default().With("dir", dir)
-
-	entries, err := m.system.ReadDir(dir)
-	if err != nil {
-		logger.Error("error while reading binaries directory", "err", err)
-		return nil, err
-	}
-
-	binaries := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		fullPath := filepath.Join(dir, entry.Name())
-		if m.isBinary(fullPath) {
-			binaries = append(binaries, fullPath)
-		}
-	}
-
-	return binaries, nil
-}
-
-// MigrateBinary migrates a binary to be managed internally. It gets the binary
-// info, moves the binary from the go bin path to the internal bin path, and
-// creates a symlink to the go bin path.
-func (m *GoBinaryManager) MigrateBinary(path string) error {
-	logger := slog.Default()
-
-	info, err := m.GetBinaryInfo(path)
-	if err != nil {
-		return err
-	}
-
-	if info.IsManaged {
-		return ErrBinaryAlreadyManaged
-	}
-
-	internalBinPath := filepath.Join(
-		m.workspace.GetInternalBinPath(),
-		info.Name+"@"+info.ModuleVersion,
-	)
-
-	logger.Info(
-		"moving binary from go bin path to internal bin path",
-		"go_bin_path", path, "internal_bin_path", internalBinPath,
-	)
-
-	if err = m.system.Rename(path, internalBinPath); err != nil {
-		logger.Error(
-			"error while moving binary from go bin path to internal bin path",
-			"err", err, "src", path, "dst", internalBinPath,
-		)
-		return err
-	}
-
-	logger.Info(
-		"creating symlink for binary",
-		"internal_bin_path", internalBinPath, "go_bin_path", path,
-	)
-
-	if err = m.system.Symlink(internalBinPath, path); err != nil {
-		logger.Error(
-			"error while creating symlink for binary",
-			"err", err, "src", internalBinPath, "dst", path,
-		)
-		return err
-	}
-
-	return nil
-}
-
-// PinBinary pins a binary to the Go binary directory with the given kind. It
-// creates a symlink to the binary in the Go binary directory with names binary,
-// binary-major, or binary-major.minor if kind is latest, major, or minor
-// respectively.
-func (m *GoBinaryManager) PinBinary(bin string, kind Kind) error {
-	logger := slog.Default().With("bin", bin, "kind", kind.String())
-
-	parts := strings.Split(bin, "@")
-	reqName, reqVersion := parts[0], latest
-	//nolint:mnd // expected binary format: name@version
-	if len(parts) == 2 {
-		reqVersion = parts[1]
-	}
-
-	binPaths, err := m.ListBinariesFullPaths(m.workspace.GetInternalBinPath())
-	if err != nil {
-		return err
-	}
-
-	var matchPath, matchVersion string
-	for _, binPath := range binPaths {
-		parts = strings.Split(filepath.Base(binPath), "@")
-		intName, intVersion := parts[0], parts[1]
-
-		if reqName != intName {
-			continue
-		}
-
-		if reqVersion == latest {
-			if matchPath == "" {
-				matchPath = binPath
-				matchVersion = intVersion
-				continue
-			}
-
-			if semver.Compare(intVersion, matchVersion) > 0 {
-				matchPath = binPath
-				matchVersion = intVersion
-			}
-			continue
-		}
-
-		if isVersionPartOf(intVersion, reqVersion) &&
-			semver.Compare(intVersion, matchVersion) > 0 {
-			matchPath = binPath
-			matchVersion = intVersion
-		}
-	}
-
-	if matchPath == "" {
-		logger.Warn("binary not found")
-		return ErrBinaryNotFound
-	}
-
-	logger.Info("found binary to pin", "path", matchPath)
-
-	targetPath := getTargetPath(m.workspace.GetGoBinPath(), reqName, matchVersion, kind)
-
-	logger.Info("removing existing symlink for binary", "path", targetPath)
-
-	if err = m.system.Remove(targetPath); err != nil && !os.IsNotExist(err) {
-		logger.Error(
-			"error while removing existing symlink for binary",
-			"err", err, "path", targetPath,
-		)
-		return err
-	}
-
-	logger.Info("creating symlink for binary", "src", matchPath, "dst", targetPath)
-
-	if err = m.system.Symlink(matchPath, targetPath); err != nil {
-		logger.Error(
-			"error while creating symlink",
-			"err", err, "src", matchPath, "dst", targetPath,
-		)
-		return err
-	}
-
-	return nil
-}
-
-// UninstallBinary uninstalls a binary by removing the binary file. It removes
-// the binary from the go bin path for unmanaged binaries, or removes the
-// symlink for managed binaries. It returns an error if the binary cannot be
-// found or removed.
-func (m *GoBinaryManager) UninstallBinary(bin string) error {
-	logger := slog.Default().With("bin", bin)
-
-	err := m.system.Remove(filepath.Join(m.workspace.GetGoBinPath(), bin))
-	if errors.Is(err, os.ErrNotExist) {
-		logger.Warn("binary not found")
-	} else if err != nil {
-		logger.Error("failed to remove binary", "err", err)
-	}
-
-	return err
-}
-
-// UpgradeBinary upgrades a binary leveraging the toolchain. It gets the binary
-// info and upgrade info, and installs the binary if an upgrade is available or
-// if the rebuild flag is set.
-func (m *GoBinaryManager) UpgradeBinary(
-	ctx context.Context,
-	binFullPath string,
-	majorUpgrade bool,
-	rebuild bool,
-) error {
-	info, err := m.GetBinaryInfo(binFullPath)
-	if err != nil {
-		return err
-	}
-
-	binUpInfo, err := m.GetBinaryUpgradeInfo(ctx, info, majorUpgrade)
-	if err != nil {
-		return err
-	}
-
-	if binUpInfo.IsUpgradeAvailable || rebuild {
-		pkg, version := getBinaryUpgradePackageVersion(binUpInfo)
-		return m.installBinary(ctx, pkg, version)
-	}
-
-	return nil
-}
-
-// checkBinaryDuplicatesInPath checks for duplicate binaries in the PATH
-// environment variable. It returns a list of full paths to the duplicate
-// binaries, or nil if there are no duplicates.
-func (m *GoBinaryManager) checkBinaryDuplicatesInPath(name string) []string {
-	duplicates := []string{}
-	seen := make(map[string]struct{})
-
-	path, _ := m.system.GetEnvVar("PATH")
-	for dir := range strings.SplitSeq(path, string(m.system.PathListSeparator())) {
-		fullPath := filepath.Join(dir, name)
-		if m.isBinary(fullPath) {
-			if _, ok := seen[fullPath]; !ok {
-				seen[fullPath] = struct{}{}
-				duplicates = append(duplicates, fullPath)
-			}
-		}
-	}
-
-	if len(duplicates) > 1 {
-		return duplicates
-	}
-
-	return nil
-}
-
-// checkModuleMajorUpgrade checks if a module has a major version upgrade
-// available leveraging the toolchain. It returns the latest module path and
-// major version if an upgrade is available, otherwise it returns the original
-// module path and version. It adjusts the package path to include the major
-// version, following the Go module versioning rules.
-func (m *GoBinaryManager) checkModuleMajorUpgrade(
-	ctx context.Context,
-	module, version string,
-) (string, string, error) {
-	latestModulePath := module
-	latestMajorVersion := version
-
-	pkg := module
-	if major := semver.Major(version); major != "v0" && major != "v1" {
-		pkg = stripVersionSuffix(module)
-	}
-
-	for {
-		pkgMajor := pkg + "/" + nextMajorVersion(latestMajorVersion)
-		modulePath, majorVersion, err := m.toolchain.GetLatestModuleVersion(ctx, pkgMajor)
-		if errors.Is(err, ErrModuleNotFound) {
-			break
-		} else if err != nil {
-			return "", "", err
-		}
-
-		latestModulePath = modulePath
-		latestMajorVersion = majorVersion
-	}
-
-	return latestModulePath, latestMajorVersion, nil
-}
-
-// diagnoseGoModFile diagnoses the Go module file for a given module and
-// version leveraging the toolchain. It returns the retracted and deprecated
-// information if available.
-func (m *GoBinaryManager) diagnoseGoModFile(
-	ctx context.Context,
-	module, version string,
-) (string, string, error) {
-	modFile, err := m.toolchain.GetModuleFile(ctx, module, latest)
-	if err != nil {
-		return "", "", err
-	}
-
-	var retracted string
-	for _, r := range modFile.Retract {
-		if semver.Compare(r.Low, version) <= 0 &&
-			semver.Compare(r.High, version) >= 0 {
-			retracted = r.Rationale
-		}
-	}
-
-	var deprecated string
-	if modFile.Module != nil && modFile.Module.Deprecated != "" {
-		deprecated = modFile.Module.Deprecated
-	}
-
-	return retracted, deprecated, nil
-}
-
-// installBinary installs a binary leveraging the toolchain. If the latest
+// not provided, it installs the latest version.  If the latest
 // version is a major version v2 or higher, it adjusts the package path
 // to include the major version, following the Go module versioning rules.
-func (m *GoBinaryManager) installBinary(ctx context.Context, pkg, version string) error {
-	logger := slog.Default().With("pkg", pkg, "version", version)
+func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkg model.Package) error {
+	logger := slog.Default().With("pkg", pkg.String())
 
 	tempDir := m.workspace.GetInternalTempPath()
-	parts := strings.Split(pkg, "/")
-	binName := parts[len(parts)-1]
-	if semver.Major(binName) != "" {
-		binName = parts[len(parts)-2]
-	}
+	binName := pkg.GetBinaryName()
 
 	logger.InfoContext(ctx, "creating internal binary temp directory")
 
@@ -674,7 +337,7 @@ func (m *GoBinaryManager) installBinary(ctx context.Context, pkg, version string
 		}
 	}()
 
-	if err = m.toolchain.Install(ctx, binTempDir, pkg, version); err != nil {
+	if err = m.toolchain.Install(ctx, binTempDir, pkg); err != nil {
 		return err
 	}
 
@@ -735,6 +398,232 @@ func (m *GoBinaryManager) installBinary(ctx context.Context, pkg, version string
 	return nil
 }
 
+// ListBinariesFullPaths lists all binaries in a directory. It returns the list
+// of full paths to the binaries.
+func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
+	logger := slog.Default().With("dir", dir)
+
+	entries, err := m.system.ReadDir(dir)
+	if err != nil {
+		logger.Error("error while reading binaries directory", "err", err)
+		return nil, err
+	}
+
+	binaries := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		fullPath := filepath.Join(dir, entry.Name())
+		if m.isBinary(fullPath) {
+			binaries = append(binaries, fullPath)
+		}
+	}
+
+	return binaries, nil
+}
+
+// MigrateBinary migrates a binary to be managed internally. It gets the binary
+// info, moves the binary from the go bin path to the internal bin path, and
+// creates a symlink to the go bin path.
+func (m *GoBinaryManager) MigrateBinary(path string) error {
+	logger := slog.Default().With("path", path)
+
+	info, err := m.GetBinaryInfo(path)
+	if err != nil {
+		return err
+	}
+
+	if info.IsManaged {
+		return ErrBinaryAlreadyManaged
+	}
+
+	internalBinPath := filepath.Join(
+		m.workspace.GetInternalBinPath(),
+		info.Name+"@"+info.Module.Version.String(),
+	)
+
+	logger.Info(
+		"moving binary from go bin path to internal bin path",
+		"go_bin_path", path, "internal_bin_path", internalBinPath,
+	)
+
+	if err = m.system.Rename(path, internalBinPath); err != nil {
+		logger.Error(
+			"error while moving binary from go bin path to internal bin path",
+			"err", err, "src", path, "dst", internalBinPath,
+		)
+		return err
+	}
+
+	logger.Info(
+		"creating symlink for binary",
+		"internal_bin_path", internalBinPath, "go_bin_path", path,
+	)
+
+	if err = m.system.Symlink(internalBinPath, path); err != nil {
+		logger.Error(
+			"error while creating symlink for binary",
+			"err", err, "src", internalBinPath, "dst", path,
+		)
+		return err
+	}
+
+	return nil
+}
+
+// PinBinary pins a binary to the Go binary directory with the given kind. It
+// creates a symlink to the binary in the Go binary directory with names binary,
+// binary-major, or binary-major.minor if kind is latest, major, or minor
+// respectively.
+func (m *GoBinaryManager) PinBinary(bin model.Binary, kind model.Kind) error {
+	logger := slog.Default().With("bin", bin.String(), "kind", kind.String())
+
+	binPaths, err := m.ListBinariesFullPaths(m.workspace.GetInternalBinPath())
+	if err != nil {
+		return err
+	}
+
+	var matchPath string
+	var matchVersion model.Version
+	for _, binPath := range binPaths {
+		intBin := model.NewBinary(filepath.Base(binPath))
+
+		if !intBin.IsPartOf(bin) {
+			continue
+		}
+
+		if matchPath == "" || intBin.Version.Compare(matchVersion) > 0 {
+			matchPath = binPath
+			matchVersion = intBin.Version
+		}
+	}
+
+	if matchPath == "" {
+		logger.Warn("binary not found")
+		return ErrBinaryNotFound
+	}
+
+	logger.Info("found binary to pin", "path", matchPath)
+
+	targetPath := kind.GetTargetBinPath(m.workspace.GetGoBinPath(), bin.Name, matchVersion)
+
+	logger.Info("removing existing symlink for binary", "path", targetPath)
+
+	if err = m.system.Remove(targetPath); err != nil && !os.IsNotExist(err) {
+		logger.Error(
+			"error while removing existing symlink for binary",
+			"err", err, "path", targetPath,
+		)
+		return err
+	}
+
+	logger.Info("creating symlink for binary", "src", matchPath, "dst", targetPath)
+
+	if err = m.system.Symlink(matchPath, targetPath); err != nil {
+		logger.Error(
+			"error while creating symlink",
+			"err", err, "src", matchPath, "dst", targetPath,
+		)
+		return err
+	}
+
+	return nil
+}
+
+// UninstallBinary uninstalls a binary by removing the binary file. It removes
+// the binary from the go bin path for unmanaged binaries, or removes the
+// symlink for managed binaries. It returns an error if the binary cannot be
+// found or removed.
+func (m *GoBinaryManager) UninstallBinary(bin model.Binary) error {
+	logger := slog.Default().With("bin", bin.Name)
+
+	err := m.system.Remove(filepath.Join(m.workspace.GetGoBinPath(), bin.Name))
+	if errors.Is(err, os.ErrNotExist) {
+		logger.Warn("binary not found")
+	} else if err != nil {
+		logger.Error("failed to remove binary", "err", err)
+	}
+
+	return err
+}
+
+// UpgradeBinary upgrades a binary leveraging the toolchain. It gets the binary
+// info and upgrade info, and installs the binary if an upgrade is available or
+// if the rebuild flag is set.
+func (m *GoBinaryManager) UpgradeBinary(
+	ctx context.Context,
+	binFullPath string,
+	majorUpgrade bool,
+	rebuild bool,
+) error {
+	info, err := m.GetBinaryInfo(binFullPath)
+	if err != nil {
+		return err
+	}
+
+	binUpInfo, err := m.GetBinaryUpgradeInfo(ctx, info, majorUpgrade)
+	if err != nil {
+		return err
+	}
+
+	if binUpInfo.IsUpgradeAvailable || rebuild {
+		return m.InstallPackage(ctx, binUpInfo.GetUpgradePackage())
+	}
+
+	return nil
+}
+
+// checkBinaryDuplicatesInPath checks for duplicate binaries in the PATH
+// environment variable. It returns a list of full paths to the duplicate
+// binaries, or nil if there are no duplicates.
+func (m *GoBinaryManager) checkBinaryDuplicatesInPath(name string) []string {
+	duplicates := []string{}
+	seen := make(map[string]struct{})
+
+	path, _ := m.system.GetEnvVar("PATH")
+	for dir := range strings.SplitSeq(path, string(m.system.PathListSeparator())) {
+		fullPath := filepath.Join(dir, name)
+		if m.isBinary(fullPath) {
+			if _, ok := seen[fullPath]; !ok {
+				seen[fullPath] = struct{}{}
+				duplicates = append(duplicates, fullPath)
+			}
+		}
+	}
+
+	if len(duplicates) > 1 {
+		return duplicates
+	}
+
+	return nil
+}
+
+// diagnoseGoModFile diagnoses the Go module file for a given module and
+// version leveraging the toolchain. It returns the retracted and deprecated
+// information if available.
+func (m *GoBinaryManager) diagnoseGoModFile(
+	ctx context.Context,
+	module model.Module,
+) (string, string, error) {
+	modFile, err := m.toolchain.GetModuleFile(ctx, model.NewLatestModule(module.Path))
+	if err != nil {
+		return "", "", err
+	}
+
+	var retracted string
+	for _, r := range modFile.Retract {
+		if model.NewVersion(r.Low).Compare(module.Version) <= 0 &&
+			model.NewVersion(r.High).Compare(module.Version) >= 0 {
+			retracted = r.Rationale
+		}
+	}
+
+	var deprecated string
+	if modFile.Module != nil && modFile.Module.Deprecated != "" {
+		deprecated = modFile.Module.Deprecated
+	}
+
+	return retracted, deprecated, nil
+}
+
 // isBinary checks if a path is a binary file. It returns true if the path is a
 // regular file and executable for Unix, or if it is a Windows executable.
 func (m *GoBinaryManager) isBinary(path string) bool {
@@ -769,22 +658,6 @@ func (m *GoBinaryManager) isSymlinkToDir(path string, baseDir string) (bool, err
 	return strings.HasPrefix(target, baseDir+string(os.PathSeparator)), nil
 }
 
-// getBinaryUpgradePackageVersion returns the package and version for a binary
-// upgrade. If the latest version is a major version v2 or higher, it adjusts
-// the package path to include the major version, following the Go module
-// versioning rules.
-func getBinaryUpgradePackageVersion(info BinaryUpgradeInfo) (string, string) {
-	baseModule := stripVersionSuffix(info.LatestModulePath)
-	packageSuffix := strings.TrimPrefix(info.PackagePath, info.ModulePath)
-
-	pkg := baseModule + packageSuffix
-	if major := semver.Major(info.LatestVersion); major != "v0" && major != "v1" {
-		pkg = baseModule + "/" + major + packageSuffix
-	}
-
-	return pkg, info.LatestVersion
-}
-
 // getBinaryPlatform returns the platform of a binary based on the build info.
 func getBinaryPlatform(info *buildinfo.BuildInfo) string {
 	var goOS, goArch string
@@ -798,69 +671,4 @@ func getBinaryPlatform(info *buildinfo.BuildInfo) string {
 	}
 
 	return goOS + "/" + goArch
-}
-
-// getTargetPath returns the target path for a binary based on the base path,
-// name, version, and kind.
-func getTargetPath(basePath, name, version string, kind Kind) string {
-	var targetPath string
-	switch kind {
-	case KindLatest:
-		targetPath = filepath.Join(basePath, name)
-	case KindMajor:
-		targetPath = filepath.Join(basePath, name+"-"+semver.Major(version))
-	case KindMinor:
-		targetPath = filepath.Join(basePath, name+"-"+semver.MajorMinor(version))
-	}
-
-	return targetPath
-}
-
-// isVersionPartOf checks if a full version is part of a base version. If base
-// version is a major or major.minor version, it checks if the full version is
-// greater than or equal to the base version and less than the next major or
-// major.minor version. Otherwise it performs a full version comparison.
-func isVersionPartOf(fullVersion, baseVersion string) bool {
-	parts := strings.Split(strings.TrimPrefix(baseVersion, "v"), ".")
-
-	switch len(parts) {
-	case 1:
-		lower := fmt.Sprintf("v%d.0.0", Must(strconv.Atoi(parts[0])))
-		upper := fmt.Sprintf("v%d.0.0", Must(strconv.Atoi(parts[0]))+1)
-		return semver.Compare(fullVersion, lower) >= 0 && semver.Compare(fullVersion, upper) < 0
-
-	case 2: //nolint:mnd // expected version format: major.minor
-		major := Must(strconv.Atoi(parts[0]))
-		minor := Must(strconv.Atoi(parts[1]))
-		lower := fmt.Sprintf("v%d.%d.0", major, minor)
-		upper := fmt.Sprintf("v%d.%d.0", major, minor+1)
-		return semver.Compare(fullVersion, lower) >= 0 && semver.Compare(fullVersion, upper) < 0
-	default:
-		return semver.Compare(fullVersion, baseVersion) == 0
-	}
-}
-
-// nextMajorVersion returns the next major version for a given version.
-func nextMajorVersion(version string) string {
-	major := semver.Major(version)
-	if major == "v0" || major == "v1" {
-		return "v2"
-	}
-
-	return "v" + strconv.Itoa(Must(strconv.Atoi(strings.TrimPrefix(major, "v")))+1)
-}
-
-// stripVersionSuffix removes the version suffix from a module path, or returns
-// the module path unchanged if it does not have a version suffix.
-func stripVersionSuffix(module string) string {
-	parts := strings.Split(module, "/")
-	lastPart := parts[len(parts)-1]
-
-	if strings.HasPrefix(lastPart, "v") {
-		if _, err := strconv.Atoi(lastPart[1:]); err == nil {
-			return strings.Join(parts[:len(parts)-1], "/")
-		}
-	}
-
-	return module
 }

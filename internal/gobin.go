@@ -13,8 +13,9 @@ import (
 	"sync"
 	"text/template"
 
-	"golang.org/x/mod/semver"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/brunoribeiro127/gobin/internal/model"
 )
 
 const (
@@ -71,7 +72,7 @@ const (
 	infoTemplate = `Path          {{.FullPath}}
 Location      {{if eq .FullPath .InstallPath}}<unmanaged>{{else}}{{.InstallPath}}{{end}}
 Package       {{.PackagePath}}
-Module        {{.ModulePath}}@{{.ModuleVersion}}
+Module        {{.Module.String}}
 Module Sum    {{if .ModuleSum}}{{.ModuleSum}}{{else}}<none>{{end}}
 {{- if .CommitRevision}}
 Commit        {{.CommitRevision}}{{if .CommitTime}} ({{.CommitTime}}){{end}}
@@ -86,7 +87,7 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 	listTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Version"}}
 {{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth 6)}}
 {{range .Binaries -}}
-{{printf "%-*s" $.NameWidth .Name}} → {{printf "%-*s" $.ModulePathWidth .ModulePath}} @ {{printf "%-*s" $.ModuleVersionWidth .ModuleVersion}}
+{{printf "%-*s" $.NameWidth .Name}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{printf "%-*s" $.ModuleVersionWidth .Module.Version.String}}
 {{end -}}
 `
 
@@ -94,7 +95,7 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 	outdatedTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Current"}} ↑ {{printf "%-*s" $.LatestVersionWidth "Latest"}}
 {{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth $.LatestVersionWidth 9)}}
 {{range .Binaries -}}
-{{printf "%-*s" $.NameWidth .Name}} → {{printf "%-*s" $.ModulePathWidth .ModulePath}} @ {{color (printf "%-*s" $.ModuleVersionWidth .ModuleVersion) "red"}} ↑ {{color (printf "%-*s" $.LatestVersionWidth .LatestVersion) "green"}}
+{{printf "%-*s" $.NameWidth .Name}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{color (printf "%-*s" $.ModuleVersionWidth .Module.Version.String) "red"}} ↑ {{color (printf "%-*s" $.LatestVersionWidth .LatestModule.Version.String) "green"}}
 {{end -}}
 `
 )
@@ -141,7 +142,7 @@ func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
 
 	var (
 		mutex sync.Mutex
-		diags = make([]BinaryDiagnostic, 0, len(bins))
+		diags = make([]model.BinaryDiagnostic, 0, len(bins))
 		grp   = new(errgroup.Group)
 	)
 
@@ -178,7 +179,7 @@ func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
 func (g *Gobin) InstallPackages(
 	ctx context.Context,
 	parallelism int,
-	packages ...string,
+	packages ...model.Package,
 ) error {
 	grp := new(errgroup.Group)
 	grp.SetLimit(parallelism)
@@ -228,7 +229,7 @@ func (g *Gobin) ListOutdatedBinaries(
 
 	var (
 		mutex    sync.Mutex
-		outdated = make([]BinaryUpgradeInfo, 0, len(binInfos))
+		outdated = make([]model.BinaryUpgradeInfo, 0, len(binInfos))
 		grp      = new(errgroup.Group)
 	)
 
@@ -276,7 +277,7 @@ func (g *Gobin) ListOutdatedBinaries(
 // MigrateBinaries migrates the given binaries to be managed internally. It
 // returns an error if any of the binaries cannot be migrated due to the binary
 // being not found or the binary being already managed or any other error.
-func (g *Gobin) MigrateBinaries(bins ...string) error {
+func (g *Gobin) MigrateBinaries(bins ...model.Binary) error {
 	goBinPath := g.workspace.GetGoBinPath()
 
 	var binPaths []string
@@ -288,7 +289,7 @@ func (g *Gobin) MigrateBinaries(bins ...string) error {
 		}
 	} else {
 		for _, bin := range bins {
-			binPaths = append(binPaths, filepath.Join(goBinPath, bin))
+			binPaths = append(binPaths, filepath.Join(goBinPath, bin.Name))
 		}
 	}
 
@@ -314,14 +315,14 @@ func (g *Gobin) MigrateBinaries(bins ...string) error {
 
 // PinBinaries pins the given binaries to the Go binary directory. It returns an
 // error if any of the binaries cannot be pinned.
-func (g *Gobin) PinBinaries(kind Kind, bins ...string) error {
+func (g *Gobin) PinBinaries(kind model.Kind, bins ...model.Binary) error {
 	var err error
 	for _, bin := range bins {
 		pinErr := g.binaryManager.PinBinary(bin, kind)
 		if errors.Is(pinErr, ErrBinaryNotFound) {
-			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin)
+			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin.String())
 		} else if pinErr != nil {
-			fmt.Fprintf(g.stdErr, "❌ error pinning binary %q\n", bin)
+			fmt.Fprintf(g.stdErr, "❌ error pinning binary %q\n", bin.String())
 		}
 
 		err = pinErr
@@ -333,15 +334,15 @@ func (g *Gobin) PinBinaries(kind Kind, bins ...string) error {
 // PrintBinaryInfo prints the binary info for a given binary. It prints a
 // template with the binary info to the standard output (or another defined
 // io.Writer), or an error if the binary cannot be found.
-func (g *Gobin) PrintBinaryInfo(binary string) error {
+func (g *Gobin) PrintBinaryInfo(bin model.Binary) error {
 	binInfo, err := g.binaryManager.GetBinaryInfo(
-		filepath.Join(g.workspace.GetGoBinPath(), binary),
+		filepath.Join(g.workspace.GetGoBinPath(), bin.Name),
 	)
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
-			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
+			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin.String())
 		} else {
-			fmt.Fprintf(g.stdErr, "❌ error getting info for binary %q\n", binary)
+			fmt.Fprintf(g.stdErr, "❌ error getting info for binary %q\n", bin.String())
 		}
 
 		return err
@@ -365,7 +366,7 @@ func (g *Gobin) PrintShortVersion(path string) error {
 		return err
 	}
 
-	fmt.Fprintln(g.stdOut, binInfo.ModuleVersion)
+	fmt.Fprintln(g.stdOut, binInfo.Module.Version.String())
 
 	return nil
 }
@@ -382,7 +383,7 @@ func (g *Gobin) PrintVersion(path string) error {
 	fmt.Fprintf(
 		g.stdOut,
 		"%s (%s %s/%s)\n",
-		binInfo.ModuleVersion,
+		binInfo.Module.Version.String(),
 		binInfo.GoVersion,
 		binInfo.OS,
 		binInfo.Arch,
@@ -395,13 +396,13 @@ func (g *Gobin) PrintVersion(path string) error {
 // the repository URL to the standard output (or another defined io.Writer), or
 // an error if the binary cannot be found. If the open flag is set, it opens the
 // repository URL in the default system browser.
-func (g *Gobin) ShowBinaryRepository(ctx context.Context, binary string, open bool) error {
-	repoURL, err := g.binaryManager.GetBinaryRepository(ctx, binary)
+func (g *Gobin) ShowBinaryRepository(ctx context.Context, bin model.Binary, open bool) error {
+	repoURL, err := g.binaryManager.GetBinaryRepository(ctx, bin)
 	if err != nil {
 		if errors.Is(err, ErrBinaryNotFound) {
-			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", binary)
+			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin.String())
 		} else {
-			fmt.Fprintf(g.stdErr, "❌ error getting repository for binary %q\n", binary)
+			fmt.Fprintf(g.stdErr, "❌ error getting repository for binary %q\n", bin.String())
 		}
 
 		return err
@@ -417,7 +418,7 @@ func (g *Gobin) ShowBinaryRepository(ctx context.Context, binary string, open bo
 
 // UninstallBinaries uninstalls the given binaries by removing the binary files.
 // It returns an error if the binary cannot be found or removed.
-func (g *Gobin) UninstallBinaries(bins ...string) error {
+func (g *Gobin) UninstallBinaries(bins ...model.Binary) error {
 	var err error
 	for _, bin := range bins {
 		removeErr := g.binaryManager.UninstallBinary(bin)
@@ -444,7 +445,7 @@ func (g *Gobin) UpgradeBinaries(
 	majorUpgrade bool,
 	rebuild bool,
 	parallelism int,
-	bins ...string,
+	bins ...model.Binary,
 ) error {
 	binFullPath := g.workspace.GetGoBinPath()
 
@@ -457,7 +458,7 @@ func (g *Gobin) UpgradeBinaries(
 		}
 	} else {
 		for _, bin := range bins {
-			binPaths = append(binPaths, filepath.Join(binFullPath, bin))
+			binPaths = append(binPaths, filepath.Join(binFullPath, bin.Name))
 		}
 	}
 
@@ -516,8 +517,8 @@ func (g *Gobin) openResource(ctx context.Context, resource string) error {
 
 // printBinaryDiagnostics prints the binary diagnostics to the standard output
 // (or another defined io.Writer).
-func (g *Gobin) printBinaryDiagnostics(diags []BinaryDiagnostic) error {
-	var diagWithIssues = make([]BinaryDiagnostic, 0, len(diags))
+func (g *Gobin) printBinaryDiagnostics(diags []model.BinaryDiagnostic) error {
+	var diagWithIssues = make([]model.BinaryDiagnostic, 0, len(diags))
 	for _, d := range diags {
 		if d.HasIssues() {
 			diagWithIssues = append(diagWithIssues, d)
@@ -531,7 +532,7 @@ func (g *Gobin) printBinaryDiagnostics(diags []BinaryDiagnostic) error {
 	data := struct {
 		Total           int
 		WithIssues      int
-		DiagsWithIssues []BinaryDiagnostic
+		DiagsWithIssues []model.BinaryDiagnostic
 	}{
 		Total:           len(diags),
 		WithIssues:      len(diagWithIssues),
@@ -549,32 +550,32 @@ func (g *Gobin) printBinaryDiagnostics(diags []BinaryDiagnostic) error {
 
 // printInstalledBinaries prints the installed binaries to the standard output
 // (or another defined io.Writer).
-func (g *Gobin) printInstalledBinaries(binInfos []BinaryInfo) error {
+func (g *Gobin) printInstalledBinaries(binInfos []model.BinaryInfo) error {
 	sort.Slice(binInfos, func(i, j int) bool {
-		if binInfos[i].Name == binInfos[j].Name {
-			return semver.Compare(binInfos[i].ModuleVersion, binInfos[j].ModuleVersion) > 0
+		if binInfos[i].Name != binInfos[j].Name {
+			return binInfos[i].Name < binInfos[j].Name
 		}
-		return binInfos[i].Name < binInfos[j].Name
+		return binInfos[i].Module.Version.Compare(binInfos[j].Module.Version) > 0
 	})
 
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
-		func(bin BinaryInfo) string { return bin.Name },
+		func(bin model.BinaryInfo) string { return bin.Name },
 	)
 	maxModulePathWidth := getColumnMaxWidth(
 		"Module",
 		binInfos,
-		func(bin BinaryInfo) string { return bin.ModulePath },
+		func(bin model.BinaryInfo) string { return bin.Module.Path },
 	)
 	maxModuleVersionWidth := getColumnMaxWidth(
 		"Version",
 		binInfos,
-		func(bin BinaryInfo) string { return bin.ModuleVersion },
+		func(bin model.BinaryInfo) string { return bin.Module.Version.String() },
 	)
 
 	data := struct {
-		Binaries           []BinaryInfo
+		Binaries           []model.BinaryInfo
 		NameWidth          int
 		ModulePathWidth    int
 		ModuleVersionWidth int
@@ -600,7 +601,7 @@ func (g *Gobin) printInstalledBinaries(binInfos []BinaryInfo) error {
 
 // printOutdatedBinaries prints the outdated binaries to the standard output
 // (or another defined io.Writer).
-func (g *Gobin) printOutdatedBinaries(binInfos []BinaryUpgradeInfo) error {
+func (g *Gobin) printOutdatedBinaries(binInfos []model.BinaryUpgradeInfo) error {
 	sort.Slice(binInfos, func(i, j int) bool {
 		return binInfos[i].Name < binInfos[j].Name
 	})
@@ -608,26 +609,26 @@ func (g *Gobin) printOutdatedBinaries(binInfos []BinaryUpgradeInfo) error {
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
-		func(bin BinaryUpgradeInfo) string { return bin.Name },
+		func(bin model.BinaryUpgradeInfo) string { return bin.Name },
 	)
 	maxModulePathWidth := getColumnMaxWidth(
 		"Module",
 		binInfos,
-		func(bin BinaryUpgradeInfo) string { return bin.ModulePath },
+		func(bin model.BinaryUpgradeInfo) string { return bin.Module.Path },
 	)
 	maxModuleVersionWidth := getColumnMaxWidth(
 		"Current",
 		binInfos,
-		func(bin BinaryUpgradeInfo) string { return bin.ModuleVersion },
+		func(bin model.BinaryUpgradeInfo) string { return bin.Module.Version.String() },
 	)
 	maxLatestVersionWidth := getColumnMaxWidth(
 		"Latest",
 		binInfos,
-		func(bin BinaryUpgradeInfo) string { return bin.LatestVersion },
+		func(bin model.BinaryUpgradeInfo) string { return bin.LatestModule.Version.String() },
 	)
 
 	data := struct {
-		Binaries           []BinaryUpgradeInfo
+		Binaries           []model.BinaryUpgradeInfo
 		NameWidth          int
 		ModulePathWidth    int
 		ModuleVersionWidth int

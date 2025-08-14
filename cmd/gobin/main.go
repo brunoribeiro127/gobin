@@ -13,8 +13,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/brunoribeiro127/gobin/internal"
+	"github.com/brunoribeiro127/gobin/internal/model"
 )
 
+// exitCodeSignalOffset is the offset for signal exit codes when terminates via
+// signal.
 const exitCodeSignalOffset = 128
 
 func main() {
@@ -167,7 +170,7 @@ Run this command regularly to make sure everything is ok with your installed bin
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			parallelism := internal.Must(cmd.Flags().GetInt("parallelism"))
+			parallelism, _ := cmd.Flags().GetInt("parallelism")
 
 			return gobin.DiagnoseBinaries(cmd.Context(), parallelism)
 		},
@@ -184,7 +187,14 @@ func newInfoCmd(gobin *internal.Gobin) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.PrintBinaryInfo(args[0])
+			bin := model.NewBinary(args[0])
+			if !bin.IsValid() {
+				err := fmt.Errorf("invalid binary argument: %s", args[0])
+				fmt.Fprintln(os.Stderr, err.Error())
+				return err
+			}
+
+			return gobin.PrintBinaryInfo(bin)
 		},
 	}
 }
@@ -210,9 +220,21 @@ The GOFLAGS environment variable can be used to define build flags.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			parallelism := internal.Must(cmd.Flags().GetInt("parallelism"))
+			parallelism, _ := cmd.Flags().GetInt("parallelism")
 
-			return gobin.InstallPackages(cmd.Context(), parallelism, args...)
+			packages := make([]model.Package, len(args))
+			for i, arg := range args {
+				pkg := model.NewPackage(arg)
+				if !pkg.IsValid() {
+					err := fmt.Errorf("invalid package argument: %s", arg)
+					fmt.Fprintln(os.Stderr, err.Error())
+					return err
+				}
+
+				packages[i] = pkg
+			}
+
+			return gobin.InstallPackages(cmd.Context(), parallelism, packages...)
 		},
 	}
 }
@@ -271,6 +293,18 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
+			bins := make([]model.Binary, len(args))
+			for i, arg := range args {
+				bin := model.NewBinary(arg)
+				if !bin.IsValid() {
+					err := fmt.Errorf("invalid binary argument: %s", arg)
+					fmt.Fprintln(os.Stderr, err.Error())
+					return err
+				}
+
+				bins[i] = bin
+			}
+
 			switch {
 			case migrateAll && len(args) > 0:
 				err := errors.New("cannot use --all with specific binaries")
@@ -286,7 +320,7 @@ Examples:
 				return err
 
 			default:
-				return gobin.MigrateBinaries(args...)
+				return gobin.MigrateBinaries(bins...)
 			}
 		},
 	}
@@ -322,7 +356,7 @@ potentially breaking major version upgrades.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			parallelism := internal.Must(cmd.Flags().GetInt("parallelism"))
+			parallelism, _ := cmd.Flags().GetInt("parallelism")
 
 			return gobin.ListOutdatedBinaries(cmd.Context(), checkMajor, parallelism)
 		},
@@ -341,7 +375,7 @@ potentially breaking major version upgrades.`,
 
 // newPinCmd creates a pin command to pin managed binaries.
 func newPinCmd(gobin *internal.Gobin) *cobra.Command {
-	kind := internal.KindLatest
+	kind := model.KindLatest
 
 	cmd := &cobra.Command{
 		Use:   "pin [binaries]",
@@ -361,7 +395,19 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.PinBinaries(kind, args...)
+			bins := make([]model.Binary, len(args))
+			for i, arg := range args {
+				bin := model.NewBinary(arg)
+				if !bin.IsValid() {
+					err := fmt.Errorf("invalid binary argument: %s", arg)
+					fmt.Fprintln(os.Stderr, err.Error())
+					return err
+				}
+
+				bins[i] = bin
+			}
+
+			return gobin.PinBinaries(kind, bins...)
 		},
 	}
 
@@ -396,7 +442,14 @@ falling back to constructing the URL from the module path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.ShowBinaryRepository(cmd.Context(), args[0], open)
+			bin := model.NewBinary(args[0])
+			if !bin.IsValid() {
+				err := fmt.Errorf("invalid binary argument: %s", args[0])
+				fmt.Fprintln(os.Stderr, err.Error())
+				return err
+			}
+
+			return gobin.ShowBinaryRepository(cmd.Context(), bin, open)
 		},
 	}
 
@@ -421,7 +474,19 @@ func newUninstallCmd(gobin *internal.Gobin) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.UninstallBinaries(args...)
+			bins := make([]model.Binary, len(args))
+			for i, arg := range args {
+				bin := model.NewBinary(arg)
+				if !bin.IsValid() {
+					err := fmt.Errorf("invalid binary argument: %s", arg)
+					fmt.Fprintln(os.Stderr, err.Error())
+					return err
+				}
+
+				bins[i] = bin
+			}
+
+			return gobin.UninstallBinaries(bins...)
 		},
 	}
 }
@@ -451,7 +516,19 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			parallelism := internal.Must(cmd.Flags().GetInt("parallelism"))
+			parallelism, _ := cmd.Flags().GetInt("parallelism")
+
+			bins := make([]model.Binary, len(args))
+			for i, arg := range args {
+				bin := model.NewBinary(arg)
+				if !bin.IsValid() {
+					err := fmt.Errorf("invalid binary argument: %s", arg)
+					fmt.Fprintln(os.Stderr, err.Error())
+					return err
+				}
+
+				bins[i] = bin
+			}
 
 			switch {
 			case upgradeAll && len(args) > 0:
@@ -478,7 +555,7 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 					majorUpgrade,
 					rebuild,
 					parallelism,
-					args...,
+					bins...,
 				)
 			}
 		},
