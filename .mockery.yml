@@ -4,11 +4,20 @@ pkgname: mocks
 template: testify
 dir: "{{.InterfaceDir}}/mocks"
 packages:
-  github.com/brunoribeiro127/gobin/internal:
+  github.com/brunoribeiro127/gobin/internal/manager:
     interfaces:
       BinaryManager:
+  github.com/brunoribeiro127/gobin/internal/system:
+    interfaces:
+      BuildInfo:
+      Environment:
+      Exec:
       ExecCombinedOutput:
       ExecRun:
-      System:
-      Toolchain:
+      FileSystem:
+      Resource:
+      Runtime:
       Workspace:
+  github.com/brunoribeiro127/gobin/internal/toolchain:
+    interfaces:
+      Toolchain:

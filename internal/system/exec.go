@@ -1,4 +1,4 @@
-package internal
+package system
 
 import (
 	"context"
@@ -6,14 +6,18 @@ import (
 	"os/exec"
 )
 
-// ExecRun is an interface that represents a command that can be run.
+// Exec is the interface for creating commands to be executed.
+type Exec interface {
+	Run(ctx context.Context, name string, args ...string) ExecRun
+	CombinedOutput(ctx context.Context, name string, args ...string) ExecCombinedOutput
+}
+
+// ExecRun is an interface that represents a command that can be run and inject
+// environment variables.
 type ExecRun interface {
 	Run() error
 	InjectEnv(env ...string)
 }
-
-// ExecRunFunc is a function that creates a new ExecRun that runs a command.
-type ExecRunFunc func(ctx context.Context, name string, args ...string) ExecRun
 
 // ExecCombinedOutput is an interface that represents a command that can be run
 // and returns the combined output.
@@ -21,9 +25,23 @@ type ExecCombinedOutput interface {
 	CombinedOutput() ([]byte, error)
 }
 
-// ExecCombinedOutputFunc is a function that creates a new ExecCombinedOutput
-// that runs a command and returns the combined output.
-type ExecCombinedOutputFunc func(ctx context.Context, name string, args ...string) ExecCombinedOutput
+// execCmd is the default implementation of the Exec interface.
+type execCmd struct{}
+
+// NewExec creates a new Exec.
+func NewExec() Exec {
+	return &execCmd{}
+}
+
+// Run creates a new ExecRun that runs a command.
+func (e *execCmd) Run(ctx context.Context, name string, args ...string) ExecRun {
+	return NewExecRun(ctx, name, args...)
+}
+
+// CombinedOutput creates a new ExecCombinedOutput that runs a command.
+func (e *execCmd) CombinedOutput(ctx context.Context, name string, args ...string) ExecCombinedOutput {
+	return NewExecCombinedOutput(ctx, name, args...)
+}
 
 // execRun is the default implementation of ExecRun that runs a command.
 type execRun struct {

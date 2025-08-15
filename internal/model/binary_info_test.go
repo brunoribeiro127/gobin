@@ -3,8 +3,9 @@ package model_test
 import (
 	"testing"
 
-	"github.com/brunoribeiro127/gobin/internal/model"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/brunoribeiro127/gobin/internal/model"
 )
 
 func TestBinaryUpgradeInfo_GetUpgradePackage(t *testing.T) {

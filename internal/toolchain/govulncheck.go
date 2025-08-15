@@ -1,4 +1,4 @@
-package internal
+package toolchain
 
 import (
 	"bytes"
@@ -6,11 +6,13 @@ import (
 	"os"
 
 	"golang.org/x/vuln/scan"
+
+	"github.com/brunoribeiro127/gobin/internal/system"
 )
 
 // ScanExecCombinedOutputFunc is a function that creates a new ExecCombinedOutput
 // that runs the govulncheck command.
-type ScanExecCombinedOutputFunc func(ctx context.Context, args ...string) ExecCombinedOutput
+type ScanExecCombinedOutputFunc func(ctx context.Context, args ...string) system.ExecCombinedOutput
 
 // scanExecCombinedOutput is the default implementation of ExecCombinedOutput
 // that runs the govulncheck command.
@@ -25,7 +27,7 @@ type scanExecCombinedOutput struct {
 func NewScanExecCombinedOutput(
 	ctx context.Context,
 	args ...string,
-) ExecCombinedOutput {
+) system.ExecCombinedOutput {
 	var output bytes.Buffer
 	cmd := scan.Command(ctx, args...)
 	cmd.Stdout = &output

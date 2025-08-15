@@ -1,8 +1,6 @@
 package model
 
-import (
-	"strings"
-)
+import "strings"
 
 // BinaryInfo represents the information for a binary.
 type BinaryInfo struct {
