@@ -1,4 +1,4 @@
-package internal
+package manager
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"golang.org/x/mod/module"
 
 	"github.com/brunoribeiro127/gobin/internal/model"
+	"github.com/brunoribeiro127/gobin/internal/system"
+	"github.com/brunoribeiro127/gobin/internal/toolchain"
 )
 
 const (
@@ -58,10 +60,6 @@ type BinaryManager interface {
 		ctx context.Context,
 		pkg model.Package,
 	) error
-	// ListBinariesFullPaths lists all binary full paths in the Go binary directory.
-	ListBinariesFullPaths(
-		dir string,
-	) ([]string, error)
 	// MigrateBinary migrates a binary to be managed internally.
 	MigrateBinary(
 		path string,
@@ -86,19 +84,22 @@ type BinaryManager interface {
 
 // GoBinaryManager is a manager for Go binaries.
 type GoBinaryManager struct {
-	system    System
-	toolchain Toolchain
-	workspace Workspace
+	fs        system.FileSystem
+	runtime   system.Runtime
+	toolchain toolchain.Toolchain
+	workspace system.Workspace
 }
 
 // NewGoBinaryManager creates a new GoBinaryManager.
 func NewGoBinaryManager(
-	system System,
-	toolchain Toolchain,
-	workspace Workspace,
+	fs system.FileSystem,
+	runtime system.Runtime,
+	toolchain toolchain.Toolchain,
+	workspace system.Workspace,
 ) *GoBinaryManager {
 	return &GoBinaryManager{
-		system:    system,
+		fs:        fs,
+		runtime:   runtime,
 		toolchain: toolchain,
 		workspace: workspace,
 	}
@@ -119,7 +120,7 @@ func (m *GoBinaryManager) DiagnoseBinary(
 
 	buildInfo, err := m.toolchain.GetBuildInfo(path)
 	if err != nil {
-		if errors.Is(err, ErrBinaryBuiltWithoutGoModules) {
+		if errors.Is(err, toolchain.ErrBinaryBuiltWithoutGoModules) {
 			diagnostic.NotBuiltWithGoModules = true
 			return diagnostic, nil
 		}
@@ -128,20 +129,22 @@ func (m *GoBinaryManager) DiagnoseBinary(
 	}
 
 	binPlatform := getBinaryPlatform(buildInfo)
-	runtimePlatform := m.system.RuntimeOS() + "/" + m.system.RuntimeARCH()
-	diagnostic.DuplicatesInPath = m.checkBinaryDuplicatesInPath(binaryName)
+	runtimePlatform := m.runtime.Platform()
 	diagnostic.IsPseudoVersion = module.IsPseudoVersion(buildInfo.Main.Version)
 	diagnostic.IsOrphaned = buildInfo.Main.Sum == ""
 	diagnostic.GoVersion.Actual = buildInfo.GoVersion
-	diagnostic.GoVersion.Expected = m.system.RuntimeVersion()
+	diagnostic.GoVersion.Expected = m.runtime.Version()
 	diagnostic.Platform.Actual = binPlatform
 	diagnostic.Platform.Expected = runtimePlatform
 
-	isSymlinkToDir, _ := m.isSymlinkToDir(path, m.workspace.GetInternalBinPath())
-	diagnostic.IsNotManaged = !isSymlinkToDir
+	locations := m.fs.LocateBinaryInPath(binaryName)
+	if len(locations) > 1 {
+		diagnostic.DuplicatesInPath = locations
+	}
+	diagnostic.NotInPath = len(locations) == 0
 
-	_, err = m.system.LookPath(binaryName)
-	diagnostic.NotInPath = err != nil
+	isSymlinkToDir, _ := m.fs.IsSymlinkToDir(path, m.workspace.GetInternalBinPath())
+	diagnostic.IsNotManaged = !isSymlinkToDir
 
 	if buildInfo.Main.Sum != "" {
 		retracted, deprecated, modErr := m.diagnoseGoModFile(
@@ -173,7 +176,7 @@ func (m *GoBinaryManager) GetAllBinaryInfos(managed bool) ([]model.BinaryInfo, e
 		path = m.workspace.GetInternalBinPath()
 	}
 
-	bins, err := m.ListBinariesFullPaths(path)
+	bins, err := m.fs.ListBinaries(path)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +203,7 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (model.BinaryInfo, error) {
 	}
 
 	installPath := path
-	target, err := m.system.Readlink(path)
+	target, err := m.fs.GetSymlinkTarget(path)
 	if err == nil {
 		installPath = target
 	}
@@ -253,8 +256,8 @@ func (m *GoBinaryManager) GetBinaryRepository(
 
 	modOrigin, err := m.toolchain.GetModuleOrigin(ctx, binInfo.Module)
 	if err != nil &&
-		!errors.Is(err, ErrModuleNotFound) &&
-		!errors.Is(err, ErrModuleOriginNotAvailable) {
+		!errors.Is(err, toolchain.ErrModuleNotFound) &&
+		!errors.Is(err, toolchain.ErrModuleOriginNotAvailable) {
 		return "", err
 	}
 
@@ -291,7 +294,7 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 	if checkMajor {
 		for {
 			mod, err = m.toolchain.GetLatestModuleVersion(ctx, mod.NextMajorModule())
-			if errors.Is(err, ErrModuleNotFound) {
+			if errors.Is(err, toolchain.ErrModuleNotFound) {
 				break
 			} else if err != nil {
 				return model.BinaryUpgradeInfo{}, err
@@ -318,23 +321,12 @@ func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkg model.Package)
 
 	logger.InfoContext(ctx, "creating internal binary temp directory")
 
-	binTempDir, err := m.system.MkdirTemp(tempDir, binName+"-*")
+	binTempDir, cleanup, err := m.fs.CreateTempDir(tempDir, binName+"-*")
 	if err != nil {
-		logger.ErrorContext(
-			ctx, "error while creating internal binary temp directory",
-			"err", err, "temp_dir", tempDir,
-		)
 		return err
 	}
 	defer func() {
-		logger.Info("removing internal binary temp directory")
-
-		if err = m.system.RemoveAll(binTempDir); err != nil {
-			logger.ErrorContext(
-				ctx, "error while removing internal binary temp directory",
-				"err", err, "temp_dir", binTempDir,
-			)
-		}
+		_ = cleanup()
 	}()
 
 	if err = m.toolchain.Install(ctx, binTempDir, pkg); err != nil {
@@ -359,7 +351,7 @@ func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkg model.Package)
 		"temp_path", tempBinPath, "bin_path", binPath,
 	)
 
-	if err = m.system.Rename(tempBinPath, binPath); err != nil {
+	if err = m.fs.Move(tempBinPath, binPath); err != nil {
 		logger.ErrorContext(
 			ctx, "error while moving binary from temp path to bin path",
 			"err", err, "src", tempBinPath, "dst", binPath,
@@ -370,54 +362,15 @@ func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkg model.Package)
 	goBinPath := filepath.Join(m.workspace.GetGoBinPath(), binName)
 
 	logger.InfoContext(
-		ctx, "removing existing symlink for binary",
+		ctx, "replacing existing symlink for binary",
 		"go_bin_path", goBinPath,
 	)
 
-	if err = m.system.Remove(goBinPath); err != nil && !os.IsNotExist(err) {
-		logger.ErrorContext(
-			ctx, "error while removing existing symlink for binary",
-			"err", err, "path", goBinPath,
-		)
-		return err
-	}
-
-	logger.InfoContext(
-		ctx, "creating symlink for binary",
-		"bin_path", binPath, "go_bin_path", goBinPath,
-	)
-
-	if err = m.system.Symlink(binPath, goBinPath); err != nil {
-		logger.ErrorContext(
-			ctx, "error while creating symlink for binary",
-			"err", err, "src", binPath, "dst", goBinPath,
-		)
+	if err = m.fs.ReplaceSymlink(binPath, goBinPath); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// ListBinariesFullPaths lists all binaries in a directory. It returns the list
-// of full paths to the binaries.
-func (m *GoBinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
-	logger := slog.Default().With("dir", dir)
-
-	entries, err := m.system.ReadDir(dir)
-	if err != nil {
-		logger.Error("error while reading binaries directory", "err", err)
-		return nil, err
-	}
-
-	binaries := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		fullPath := filepath.Join(dir, entry.Name())
-		if m.isBinary(fullPath) {
-			binaries = append(binaries, fullPath)
-		}
-	}
-
-	return binaries, nil
 }
 
 // MigrateBinary migrates a binary to be managed internally. It gets the binary
@@ -445,24 +398,7 @@ func (m *GoBinaryManager) MigrateBinary(path string) error {
 		"go_bin_path", path, "internal_bin_path", internalBinPath,
 	)
 
-	if err = m.system.Rename(path, internalBinPath); err != nil {
-		logger.Error(
-			"error while moving binary from go bin path to internal bin path",
-			"err", err, "src", path, "dst", internalBinPath,
-		)
-		return err
-	}
-
-	logger.Info(
-		"creating symlink for binary",
-		"internal_bin_path", internalBinPath, "go_bin_path", path,
-	)
-
-	if err = m.system.Symlink(internalBinPath, path); err != nil {
-		logger.Error(
-			"error while creating symlink for binary",
-			"err", err, "src", internalBinPath, "dst", path,
-		)
+	if err = m.fs.MoveWithSymlink(path, internalBinPath); err != nil {
 		return err
 	}
 
@@ -476,7 +412,7 @@ func (m *GoBinaryManager) MigrateBinary(path string) error {
 func (m *GoBinaryManager) PinBinary(bin model.Binary, kind model.Kind) error {
 	logger := slog.Default().With("bin", bin.String(), "kind", kind.String())
 
-	binPaths, err := m.ListBinariesFullPaths(m.workspace.GetInternalBinPath())
+	binPaths, err := m.fs.ListBinaries(m.workspace.GetInternalBinPath())
 	if err != nil {
 		return err
 	}
@@ -498,7 +434,7 @@ func (m *GoBinaryManager) PinBinary(bin model.Binary, kind model.Kind) error {
 
 	if matchPath == "" {
 		logger.Warn("binary not found")
-		return ErrBinaryNotFound
+		return toolchain.ErrBinaryNotFound
 	}
 
 	logger.Info("found binary to pin", "path", matchPath)
@@ -507,21 +443,7 @@ func (m *GoBinaryManager) PinBinary(bin model.Binary, kind model.Kind) error {
 
 	logger.Info("removing existing symlink for binary", "path", targetPath)
 
-	if err = m.system.Remove(targetPath); err != nil && !os.IsNotExist(err) {
-		logger.Error(
-			"error while removing existing symlink for binary",
-			"err", err, "path", targetPath,
-		)
-		return err
-	}
-
-	logger.Info("creating symlink for binary", "src", matchPath, "dst", targetPath)
-
-	if err = m.system.Symlink(matchPath, targetPath); err != nil {
-		logger.Error(
-			"error while creating symlink",
-			"err", err, "src", matchPath, "dst", targetPath,
-		)
+	if err = m.fs.ReplaceSymlink(matchPath, targetPath); err != nil {
 		return err
 	}
 
@@ -535,7 +457,7 @@ func (m *GoBinaryManager) PinBinary(bin model.Binary, kind model.Kind) error {
 func (m *GoBinaryManager) UninstallBinary(bin model.Binary) error {
 	logger := slog.Default().With("bin", bin.Name)
 
-	err := m.system.Remove(filepath.Join(m.workspace.GetGoBinPath(), bin.Name))
+	err := m.fs.Remove(filepath.Join(m.workspace.GetGoBinPath(), bin.Name))
 	if errors.Is(err, os.ErrNotExist) {
 		logger.Warn("binary not found")
 	} else if err != nil {
@@ -571,31 +493,6 @@ func (m *GoBinaryManager) UpgradeBinary(
 	return nil
 }
 
-// checkBinaryDuplicatesInPath checks for duplicate binaries in the PATH
-// environment variable. It returns a list of full paths to the duplicate
-// binaries, or nil if there are no duplicates.
-func (m *GoBinaryManager) checkBinaryDuplicatesInPath(name string) []string {
-	duplicates := []string{}
-	seen := make(map[string]struct{})
-
-	path, _ := m.system.GetEnvVar("PATH")
-	for dir := range strings.SplitSeq(path, string(m.system.PathListSeparator())) {
-		fullPath := filepath.Join(dir, name)
-		if m.isBinary(fullPath) {
-			if _, ok := seen[fullPath]; !ok {
-				seen[fullPath] = struct{}{}
-				duplicates = append(duplicates, fullPath)
-			}
-		}
-	}
-
-	if len(duplicates) > 1 {
-		return duplicates
-	}
-
-	return nil
-}
-
 // diagnoseGoModFile diagnoses the Go module file for a given module and
 // version leveraging the toolchain. It returns the retracted and deprecated
 // information if available.
@@ -622,40 +519,6 @@ func (m *GoBinaryManager) diagnoseGoModFile(
 	}
 
 	return retracted, deprecated, nil
-}
-
-// isBinary checks if a path is a binary file. It returns true if the path is a
-// regular file and executable for Unix, or if it is a Windows executable.
-func (m *GoBinaryManager) isBinary(path string) bool {
-	info, err := m.system.Stat(path)
-	if err != nil || info.IsDir() {
-		return false
-	}
-
-	if m.system.RuntimeOS() == windowsOS {
-		return strings.EqualFold(filepath.Ext(info.Name()), ".exe")
-	}
-
-	return info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
-}
-
-// isSymlinkToDir checks if a path is a symlink to another directory.
-func (m *GoBinaryManager) isSymlinkToDir(path string, baseDir string) (bool, error) {
-	info, err := m.system.LStat(path)
-	if err != nil {
-		return false, err
-	}
-
-	if info.Mode()&os.ModeSymlink == 0 {
-		return false, nil
-	}
-
-	target, err := m.system.Readlink(path)
-	if err != nil {
-		return false, err
-	}
-
-	return strings.HasPrefix(target, baseDir+string(os.PathSeparator)), nil
 }
 
 // getBinaryPlatform returns the platform of a binary based on the build info.

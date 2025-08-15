@@ -13,7 +13,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/brunoribeiro127/gobin/internal"
+	"github.com/brunoribeiro127/gobin/internal/gobin"
+	"github.com/brunoribeiro127/gobin/internal/manager"
 	"github.com/brunoribeiro127/gobin/internal/model"
+	"github.com/brunoribeiro127/gobin/internal/system"
+	"github.com/brunoribeiro127/gobin/internal/toolchain"
 )
 
 // exitCodeSignalOffset is the offset for signal exit codes when terminates via
@@ -60,29 +64,31 @@ func exitWithSignal(sig os.Signal) {
 // configures the command-line interface, and runs the requested command. It
 // propagates the context to ensure a graceful shutdown.
 func run(ctx context.Context) int {
-	execCombinedOutput := internal.NewExecCombinedOutput
-	system := internal.NewSystem()
+	env := system.NewEnvironment()
+	exec := system.NewExec()
+	rt := system.NewRuntime()
+	fs := system.NewFileSystem(rt)
 
-	workspace, err := internal.NewWorkspace(system)
+	workspace, err := system.NewWorkspace(env, fs, rt)
 	if err != nil {
 		return 1
 	}
 
-	gobin := internal.NewGobin(
-		internal.NewGoBinaryManager(
-			system,
-			internal.NewGoToolchain(
-				execCombinedOutput,
-				internal.NewExecRun,
-				internal.NewScanExecCombinedOutput,
-				system,
+	gobin := gobin.NewGobin(
+		manager.NewGoBinaryManager(
+			fs,
+			rt,
+			toolchain.NewGoToolchain(
+				system.NewBuildInfo(),
+				exec,
+				toolchain.NewScanExecCombinedOutput,
 			),
 			workspace,
 		),
-		execCombinedOutput,
+		fs,
+		system.NewResource(exec, rt),
 		os.Stderr,
 		os.Stdout,
-		system,
 		workspace,
 	)
 
@@ -147,7 +153,7 @@ func run(ctx context.Context) int {
 
 // newDoctorCmd creates a doctor command to diagnose issues with installed
 // binaries.
-func newDoctorCmd(gobin *internal.Gobin) *cobra.Command {
+func newDoctorCmd(gobin *gobin.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
 		Short: "Diagnose issues for installed binaries",
@@ -178,7 +184,7 @@ Run this command regularly to make sure everything is ok with your installed bin
 }
 
 // newInfoCmd creates a info command to print information about a binary.
-func newInfoCmd(gobin *internal.Gobin) *cobra.Command {
+func newInfoCmd(gobin *gobin.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:           "info [binary]",
 		Short:         "Print information about a binary",
@@ -200,7 +206,7 @@ func newInfoCmd(gobin *internal.Gobin) *cobra.Command {
 }
 
 // newInstallCmd creates a install command to install packages.
-func newInstallCmd(gobin *internal.Gobin) *cobra.Command {
+func newInstallCmd(gobin *gobin.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:   "install [packages]",
 		Short: "Install packages",
@@ -240,7 +246,7 @@ The GOFLAGS environment variable can be used to define build flags.`,
 }
 
 // newListCmd creates a list command to list installed binaries.
-func newListCmd(gobin *internal.Gobin) *cobra.Command {
+func newListCmd(gobin *gobin.Gobin) *cobra.Command {
 	var managed bool
 
 	cmd := &cobra.Command{
@@ -276,7 +282,7 @@ managed binaries.`,
 
 // newMigrateCmd creates a migrate command to migrate binaries to be managed
 // internally.
-func newMigrateCmd(gobin *internal.Gobin) *cobra.Command {
+func newMigrateCmd(gobin *gobin.Gobin) *cobra.Command {
 	var migrateAll bool
 
 	cmd := &cobra.Command{
@@ -337,7 +343,7 @@ Examples:
 }
 
 // newOutdatedCmd creates a outdated command to list outdated binaries.
-func newOutdatedCmd(gobin *internal.Gobin) *cobra.Command {
+func newOutdatedCmd(gobin *gobin.Gobin) *cobra.Command {
 	var checkMajor bool
 
 	cmd := &cobra.Command{
@@ -374,7 +380,7 @@ potentially breaking major version upgrades.`,
 }
 
 // newPinCmd creates a pin command to pin managed binaries.
-func newPinCmd(gobin *internal.Gobin) *cobra.Command {
+func newPinCmd(gobin *gobin.Gobin) *cobra.Command {
 	kind := model.KindLatest
 
 	cmd := &cobra.Command{
@@ -423,7 +429,7 @@ Examples:
 
 // newRepoCmd creates a repo command to show/open the repository URL for a
 // binary.
-func newRepoCmd(gobin *internal.Gobin) *cobra.Command {
+func newRepoCmd(gobin *gobin.Gobin) *cobra.Command {
 	var open bool
 
 	cmd := &cobra.Command{
@@ -465,7 +471,7 @@ falling back to constructing the URL from the module path.`,
 }
 
 // newUninstallCmd creates a uninstall command to uninstall a binary.
-func newUninstallCmd(gobin *internal.Gobin) *cobra.Command {
+func newUninstallCmd(gobin *gobin.Gobin) *cobra.Command {
 	return &cobra.Command{
 		Use:           "uninstall [binaries]",
 		Short:         "Uninstall binaries",
@@ -492,7 +498,7 @@ func newUninstallCmd(gobin *internal.Gobin) *cobra.Command {
 }
 
 // newUpgradeCmd creates a upgrade command to upgrade a binary.
-func newUpgradeCmd(gobin *internal.Gobin) *cobra.Command {
+func newUpgradeCmd(gobin *gobin.Gobin) *cobra.Command {
 	var upgradeAll bool
 	var majorUpgrade bool
 	var rebuild bool
@@ -589,7 +595,7 @@ The --rebuild flag is useful when binaries are up-to-date but compiled with olde
 }
 
 // newVersionCmd creates a version command to print the version of the package.
-func newVersionCmd(gobin *internal.Gobin) *cobra.Command {
+func newVersionCmd(gobin *gobin.Gobin) *cobra.Command {
 	var short bool
 
 	var cmd = &cobra.Command{

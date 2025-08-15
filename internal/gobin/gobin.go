@@ -1,4 +1,4 @@
-package internal
+package gobin
 
 import (
 	"context"
@@ -15,7 +15,10 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/brunoribeiro127/gobin/internal/manager"
 	"github.com/brunoribeiro127/gobin/internal/model"
+	"github.com/brunoribeiro127/gobin/internal/system"
+	"github.com/brunoribeiro127/gobin/internal/toolchain"
 )
 
 const (
@@ -102,29 +105,29 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 
 // Gobin is an application that manages Go binaries.
 type Gobin struct {
-	binaryManager BinaryManager
-	execCmd       ExecCombinedOutputFunc
+	binaryManager manager.BinaryManager
+	fs            system.FileSystem
+	resource      system.Resource
 	stdErr        io.Writer
 	stdOut        io.Writer
-	system        System
-	workspace     Workspace
+	workspace     system.Workspace
 }
 
 // NewGobin creates a new Gobin application.
 func NewGobin(
-	binaryManager BinaryManager,
-	execCmd ExecCombinedOutputFunc,
+	binaryManager manager.BinaryManager,
+	fs system.FileSystem,
+	resource system.Resource,
 	stdErr io.Writer,
 	stdOut io.Writer,
-	system System,
-	workspace Workspace,
+	workspace system.Workspace,
 ) *Gobin {
 	return &Gobin{
 		binaryManager: binaryManager,
-		execCmd:       execCmd,
+		fs:            fs,
+		resource:      resource,
 		stdErr:        stdErr,
 		stdOut:        stdOut,
-		system:        system,
 		workspace:     workspace,
 	}
 }
@@ -135,7 +138,7 @@ func NewGobin(
 // determined or listed. The command runs in parallel, launching go routines to
 // diagnose binaries up to the given parallelism.
 func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
-	bins, err := g.binaryManager.ListBinariesFullPaths(g.workspace.GetGoBinPath())
+	bins, err := g.fs.ListBinaries(g.workspace.GetGoBinPath())
 	if err != nil {
 		return err
 	}
@@ -240,7 +243,7 @@ func (g *Gobin) ListOutdatedBinaries(
 			binUpInfo, infoErr := g.binaryManager.GetBinaryUpgradeInfo(
 				ctx, info, checkMajor,
 			)
-			if errors.Is(infoErr, ErrBinaryBuiltWithoutGoModules) {
+			if errors.Is(infoErr, toolchain.ErrBinaryBuiltWithoutGoModules) {
 				return nil
 			} else if infoErr != nil {
 				return infoErr
@@ -283,7 +286,7 @@ func (g *Gobin) MigrateBinaries(bins ...model.Binary) error {
 	var binPaths []string
 	if len(bins) == 0 {
 		var err error
-		binPaths, err = g.binaryManager.ListBinariesFullPaths(goBinPath)
+		binPaths, err = g.fs.ListBinaries(goBinPath)
 		if err != nil {
 			return err
 		}
@@ -297,9 +300,9 @@ func (g *Gobin) MigrateBinaries(bins ...model.Binary) error {
 	for _, path := range binPaths {
 		if migrateErr := g.binaryManager.MigrateBinary(path); migrateErr != nil {
 			switch {
-			case errors.Is(migrateErr, ErrBinaryAlreadyManaged):
+			case errors.Is(migrateErr, manager.ErrBinaryAlreadyManaged):
 				fmt.Fprintf(g.stdErr, "❌ binary %q already managed\n", filepath.Base(path))
-			case errors.Is(migrateErr, ErrBinaryNotFound):
+			case errors.Is(migrateErr, toolchain.ErrBinaryNotFound):
 				fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", filepath.Base(path))
 			default:
 				fmt.Fprintf(g.stdErr, "❌ error migrating binary %q\n", filepath.Base(path))
@@ -319,7 +322,7 @@ func (g *Gobin) PinBinaries(kind model.Kind, bins ...model.Binary) error {
 	var err error
 	for _, bin := range bins {
 		pinErr := g.binaryManager.PinBinary(bin, kind)
-		if errors.Is(pinErr, ErrBinaryNotFound) {
+		if errors.Is(pinErr, toolchain.ErrBinaryNotFound) {
 			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin.String())
 		} else if pinErr != nil {
 			fmt.Fprintf(g.stdErr, "❌ error pinning binary %q\n", bin.String())
@@ -339,7 +342,7 @@ func (g *Gobin) PrintBinaryInfo(bin model.Binary) error {
 		filepath.Join(g.workspace.GetGoBinPath(), bin.Name),
 	)
 	if err != nil {
-		if errors.Is(err, ErrBinaryNotFound) {
+		if errors.Is(err, toolchain.ErrBinaryNotFound) {
 			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin.String())
 		} else {
 			fmt.Fprintf(g.stdErr, "❌ error getting info for binary %q\n", bin.String())
@@ -399,7 +402,7 @@ func (g *Gobin) PrintVersion(path string) error {
 func (g *Gobin) ShowBinaryRepository(ctx context.Context, bin model.Binary, open bool) error {
 	repoURL, err := g.binaryManager.GetBinaryRepository(ctx, bin)
 	if err != nil {
-		if errors.Is(err, ErrBinaryNotFound) {
+		if errors.Is(err, toolchain.ErrBinaryNotFound) {
 			fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", bin.String())
 		} else {
 			fmt.Fprintf(g.stdErr, "❌ error getting repository for binary %q\n", bin.String())
@@ -409,7 +412,7 @@ func (g *Gobin) ShowBinaryRepository(ctx context.Context, bin model.Binary, open
 	}
 
 	if open {
-		return g.openResource(ctx, repoURL)
+		return g.resource.Open(ctx, repoURL)
 	}
 
 	fmt.Fprintln(g.stdOut, repoURL)
@@ -452,7 +455,7 @@ func (g *Gobin) UpgradeBinaries(
 	var binPaths []string
 	if len(bins) == 0 {
 		var err error
-		binPaths, err = g.binaryManager.ListBinariesFullPaths(binFullPath)
+		binPaths, err = g.fs.ListBinaries(binFullPath)
 		if err != nil {
 			return err
 		}
@@ -468,7 +471,7 @@ func (g *Gobin) UpgradeBinaries(
 	for _, bin := range binPaths {
 		grp.Go(func() error {
 			upErr := g.binaryManager.UpgradeBinary(ctx, bin, majorUpgrade, rebuild)
-			if errors.Is(upErr, ErrBinaryNotFound) {
+			if errors.Is(upErr, toolchain.ErrBinaryNotFound) {
 				fmt.Fprintf(g.stdErr, "❌ binary %q not found\n", filepath.Base(bin))
 			} else if upErr != nil {
 				fmt.Fprintf(g.stdErr, "❌ error upgrading binary %q\n", filepath.Base(bin))
@@ -479,40 +482,6 @@ func (g *Gobin) UpgradeBinaries(
 	}
 
 	return grp.Wait()
-}
-
-// openResource opens a resource using the default system tools. It returns an
-// error if the resource cannot be opened or the platform is not supported.
-func (g *Gobin) openResource(ctx context.Context, resource string) error {
-	logger := slog.Default().With("resource", resource)
-
-	var cmd ExecCombinedOutput
-	runtimeOS := g.system.RuntimeOS()
-	switch runtimeOS {
-	case darwinOS:
-		cmd = g.execCmd(ctx, "open", resource)
-	case linuxOS:
-		cmd = g.execCmd(ctx, "xdg-open", resource)
-	case windowsOS:
-		cmd = g.execCmd(ctx, "cmd", "/c", "start", resource)
-	default:
-		err := fmt.Errorf("unsupported platform: %s", runtimeOS)
-		logger.ErrorContext(ctx, "error opening resource", "err", err)
-		return err
-	}
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		outputStr := strings.TrimSpace(string(output))
-		if outputStr != "" {
-			err = fmt.Errorf("%w: %s", err, outputStr)
-		}
-
-		logger.ErrorContext(ctx, "error opening resource", "err", err)
-		return err
-	}
-
-	return nil
 }
 
 // printBinaryDiagnostics prints the binary diagnostics to the standard output

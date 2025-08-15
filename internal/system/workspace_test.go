@@ -1,4 +1,4 @@
-package internal_test
+package system_test
 
 import (
 	"errors"
@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/brunoribeiro127/gobin/internal"
-	"github.com/brunoribeiro127/gobin/internal/mocks"
+	"github.com/brunoribeiro127/gobin/internal/system"
+	"github.com/brunoribeiro127/gobin/internal/system/mocks"
 )
 
 type mockMkdirAllCall struct {
@@ -216,37 +216,39 @@ func TestWorkspace_Paths(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			system := mocks.NewSystem(t)
+			env := mocks.NewEnvironment(t)
+			fs := mocks.NewFileSystem(t)
+			rt := mocks.NewRuntime(t)
 
-			system.EXPECT().UserHomeDir().
+			env.EXPECT().UserHomeDir().
 				Return(tc.mockUserHomeDir, tc.mockUserHomeDirErr).
 				Once()
 
 			if tc.callGetGOBINEnvVar {
-				system.EXPECT().GetEnvVar("GOBIN").
+				env.EXPECT().Get("GOBIN").
 					Return(tc.mockGOBINEnvVar, tc.mockGOBINEnvVarOk).
 					Once()
 			}
 
 			if tc.callGetGOPATHEnvVar {
-				system.EXPECT().GetEnvVar("GOPATH").
+				env.EXPECT().Get("GOPATH").
 					Return(tc.mockGOPATHEnvVar, tc.mockGOPATHEnvVarOk).
 					Once()
 			}
 
 			if tc.callRuntimeOS {
-				system.EXPECT().RuntimeOS().
+				rt.EXPECT().OS().
 					Return(tc.mockRuntimeOS).
 					Once()
 			}
 
 			for _, call := range tc.mockMkdirAllCalls {
-				system.EXPECT().MkdirAll(call.dir, call.perm).
+				fs.EXPECT().CreateDir(call.dir, call.perm).
 					Return(call.err).
 					Once()
 			}
 
-			workspace, err := internal.NewWorkspace(system)
+			workspace, err := system.NewWorkspace(env, fs, rt)
 			if tc.expectedErr != nil {
 				assert.Equal(t, tc.expectedErr, err)
 			} else {

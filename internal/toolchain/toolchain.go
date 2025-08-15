@@ -1,4 +1,4 @@
-package internal
+package toolchain
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"golang.org/x/mod/modfile"
 
 	"github.com/brunoribeiro127/gobin/internal/model"
+	"github.com/brunoribeiro127/gobin/internal/system"
 )
 
 var (
@@ -72,24 +73,21 @@ type Toolchain interface {
 
 // GoToolchain is a toolchain to interact with the Go toolchain.
 type GoToolchain struct {
-	execCombinedOutput ExecCombinedOutputFunc
-	execRun            ExecRunFunc
-	scanCombinedOutput ScanExecCombinedOutputFunc
-	system             System
+	buildInfo system.BuildInfo
+	exec      system.Exec
+	scanExec  ScanExecCombinedOutputFunc
 }
 
 // NewGoToolchain creates a new GoToolchain to interact with the Go toolchain.
 func NewGoToolchain(
-	execCombinedOutput ExecCombinedOutputFunc,
-	execRun ExecRunFunc,
-	scanCombinedOutput ScanExecCombinedOutputFunc,
-	system System,
+	buildInfo system.BuildInfo,
+	exec system.Exec,
+	scanExec ScanExecCombinedOutputFunc,
 ) *GoToolchain {
 	return &GoToolchain{
-		execCombinedOutput: execCombinedOutput,
-		execRun:            execRun,
-		scanCombinedOutput: scanCombinedOutput,
-		system:             system,
+		buildInfo: buildInfo,
+		exec:      exec,
+		scanExec:  scanExec,
 	}
 }
 
@@ -99,7 +97,7 @@ func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
 	logger := slog.Default().With("path", path)
 	logger.Info("getting build info")
 
-	info, err := t.system.ReadBuildInfo(path)
+	info, err := t.buildInfo.Read(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, ErrBinaryNotFound
@@ -131,7 +129,7 @@ func (t *GoToolchain) GetLatestModuleVersion(
 	logger.InfoContext(ctx, "getting latest module version")
 
 	modLatest := module.Path + "@latest"
-	cmd := t.execCombinedOutput(ctx, "go", "list", "-m", "-json", modLatest)
+	cmd := t.exec.CombinedOutput(ctx, "go", "list", "-m", "-json", modLatest)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -199,7 +197,7 @@ func (t *GoToolchain) GetModuleFile(
 	logger := slog.Default().With("module", module.String())
 	logger.InfoContext(ctx, "getting module file")
 
-	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", module.String())
+	cmd := t.exec.CombinedOutput(ctx, "go", "mod", "download", "-json", module.String())
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -252,7 +250,7 @@ func (t *GoToolchain) GetModuleOrigin(
 	logger := slog.Default().With("module", module.String())
 	logger.InfoContext(ctx, "getting module origin")
 
-	cmd := t.execCombinedOutput(ctx, "go", "mod", "download", "-json", module.String())
+	cmd := t.exec.CombinedOutput(ctx, "go", "mod", "download", "-json", module.String())
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -303,7 +301,7 @@ func (t *GoToolchain) Install(
 	logger := slog.Default().With("path", path, "package", pkg.String())
 	logger.InfoContext(ctx, "installing package")
 
-	cmd := t.execRun(ctx, "go", "install", "-a", pkg.String())
+	cmd := t.exec.Run(ctx, "go", "install", "-a", pkg.String())
 	cmd.InjectEnv("GOBIN=" + path)
 
 	if err := cmd.Run(); err != nil {
@@ -325,7 +323,7 @@ func (t *GoToolchain) VulnCheck(
 	logger := slog.Default().With("path", path)
 	logger.InfoContext(ctx, "running govulncheck")
 
-	cmd := t.scanCombinedOutput(ctx, "-mode", "binary", "-format", "openvex", path)
+	cmd := t.scanExec(ctx, "-mode", "binary", "-format", "openvex", path)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

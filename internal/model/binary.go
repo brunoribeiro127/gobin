@@ -1,8 +1,6 @@
 package model
 
-import (
-	"strings"
-)
+import "strings"
 
 // Binary represents a binary.
 type Binary struct {

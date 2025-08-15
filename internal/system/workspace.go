@@ -1,4 +1,4 @@
-package internal
+package system
 
 import (
 	"log/slog"
@@ -17,19 +17,30 @@ type Workspace interface {
 	GetInternalTempPath() string
 }
 
-// defaultWorkspace is the default implementation of the Workspace interface.
-type defaultWorkspace struct {
+// workspace is the default implementation of the Workspace interface.
+type workspace struct {
 	goBinPath        string
 	internalBasePath string
 	internalBinPath  string
 	internalTempPath string
-	system           System
+
+	env     Environment
+	fs      FileSystem
+	runtime Runtime
 }
 
 // NewWorkspace creates a new workspace. It returns an error if the workspace
 // initialization fails.
-func NewWorkspace(system System) (Workspace, error) {
-	ws := &defaultWorkspace{system: system}
+func NewWorkspace(
+	env Environment,
+	fs FileSystem,
+	runtime Runtime,
+) (Workspace, error) {
+	ws := &workspace{
+		env:     env,
+		fs:      fs,
+		runtime: runtime,
+	}
 
 	if err := ws.init(); err != nil {
 		return nil, err
@@ -39,29 +50,29 @@ func NewWorkspace(system System) (Workspace, error) {
 }
 
 // GetGoBinPath returns the Go binary path.
-func (w *defaultWorkspace) GetGoBinPath() string {
+func (w *workspace) GetGoBinPath() string {
 	return w.goBinPath
 }
 
 // GetBaseDir returns the base directory.
-func (w *defaultWorkspace) GetInternalBasePath() string {
+func (w *workspace) GetInternalBasePath() string {
 	return w.internalBasePath
 }
 
 // GetBinDir returns the binary directory.
-func (w *defaultWorkspace) GetInternalBinPath() string {
+func (w *workspace) GetInternalBinPath() string {
 	return w.internalBinPath
 }
 
 // GetTempPath returns the temporary directory.
-func (w *defaultWorkspace) GetInternalTempPath() string {
+func (w *workspace) GetInternalTempPath() string {
 	return w.internalTempPath
 }
 
 // init initializes the workspace. It creates the base, binary, and temporary
 // directories. It returns an error if the directories cannot be created.
-func (w *defaultWorkspace) init() error {
-	homeDir, err := w.system.UserHomeDir()
+func (w *workspace) init() error {
+	homeDir, err := w.env.UserHomeDir()
 	if err != nil {
 		slog.Default().Error("failed to get user home directory", "err", err)
 		return err
@@ -71,7 +82,8 @@ func (w *defaultWorkspace) init() error {
 	w.loadInternalPaths(homeDir)
 
 	for _, dir := range []string{w.internalBasePath, w.internalBinPath, w.internalTempPath} {
-		if err = w.system.MkdirAll(dir, dirPerm); err != nil {
+		//nolint:mnd // owner only permissions
+		if err = w.fs.CreateDir(dir, 0700); err != nil {
 			slog.Default().Error("failed to create directory", "dir", dir, "err", err)
 			return err
 		}
@@ -81,13 +93,13 @@ func (w *defaultWorkspace) init() error {
 }
 
 // loadGoBinPath loads the Go binary path.
-func (w *defaultWorkspace) loadGoBinPath(homeDir string) {
-	if gobin, ok := w.system.GetEnvVar("GOBIN"); ok {
+func (w *workspace) loadGoBinPath(homeDir string) {
+	if gobin, ok := w.env.Get("GOBIN"); ok {
 		w.goBinPath = gobin
 		return
 	}
 
-	if gopath, ok := w.system.GetEnvVar("GOPATH"); ok {
+	if gopath, ok := w.env.Get("GOPATH"); ok {
 		w.goBinPath = filepath.Join(gopath, "bin")
 		return
 	}
@@ -96,10 +108,10 @@ func (w *defaultWorkspace) loadGoBinPath(homeDir string) {
 }
 
 // loadInternalPaths loads the internal paths.
-func (w *defaultWorkspace) loadInternalPaths(homeDir string) {
+func (w *workspace) loadInternalPaths(homeDir string) {
 	var baseDir, binDir, tmpDir string
-	switch w.system.RuntimeOS() {
-	case windowsOS:
+	switch w.runtime.OS() {
+	case "windows": //nolint:goconst // windows is a valid OS
 		baseDir = filepath.Join(homeDir, "AppData", "Local", "gobin")
 		binDir = filepath.Join(baseDir, "bin")
 		tmpDir = filepath.Join(baseDir, "tmp")

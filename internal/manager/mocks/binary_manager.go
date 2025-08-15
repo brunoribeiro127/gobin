@@ -421,68 +421,6 @@ func (_c *BinaryManager_InstallPackage_Call) RunAndReturn(run func(ctx context.C
 	return _c
 }
 
-// ListBinariesFullPaths provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) ListBinariesFullPaths(dir string) ([]string, error) {
-	ret := _mock.Called(dir)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListBinariesFullPaths")
-	}
-
-	var r0 []string
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) ([]string, error)); ok {
-		return returnFunc(dir)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string) []string); ok {
-		r0 = returnFunc(dir)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]string)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(dir)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// BinaryManager_ListBinariesFullPaths_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBinariesFullPaths'
-type BinaryManager_ListBinariesFullPaths_Call struct {
-	*mock.Call
-}
-
-// ListBinariesFullPaths is a helper method to define mock.On call
-//   - dir string
-func (_e *BinaryManager_Expecter) ListBinariesFullPaths(dir interface{}) *BinaryManager_ListBinariesFullPaths_Call {
-	return &BinaryManager_ListBinariesFullPaths_Call{Call: _e.mock.On("ListBinariesFullPaths", dir)}
-}
-
-func (_c *BinaryManager_ListBinariesFullPaths_Call) Run(run func(dir string)) *BinaryManager_ListBinariesFullPaths_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
-	})
-	return _c
-}
-
-func (_c *BinaryManager_ListBinariesFullPaths_Call) Return(strings []string, err error) *BinaryManager_ListBinariesFullPaths_Call {
-	_c.Call.Return(strings, err)
-	return _c
-}
-
-func (_c *BinaryManager_ListBinariesFullPaths_Call) RunAndReturn(run func(dir string) ([]string, error)) *BinaryManager_ListBinariesFullPaths_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // MigrateBinary provides a mock function for the type BinaryManager
 func (_mock *BinaryManager) MigrateBinary(path string) error {
 	ret := _mock.Called(path)
