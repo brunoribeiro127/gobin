@@ -21,6 +21,19 @@ type BinaryInfo struct {
 	IsManaged bool
 }
 
+// GetPinnedVersion returns the pinned version of the binary. If the binary
+// name contains a version suffix, it returns the version. Otherwise, it
+// returns "latest".
+func (b BinaryInfo) GetPinnedVersion() Version {
+	parts := strings.Split(b.Name, "-")
+	//nolint:mnd // expected version format: name-v<major> or name-v<major>.<minor>
+	if len(parts) == 2 {
+		return NewVersion(parts[1])
+	}
+
+	return NewLatestVersion()
+}
+
 // BinaryUpgradeInfo represents the upgrade information for a binary.
 type BinaryUpgradeInfo struct {
 	BinaryInfo

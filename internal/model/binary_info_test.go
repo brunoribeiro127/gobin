@@ -8,6 +8,39 @@ import (
 	"github.com/brunoribeiro127/gobin/internal/model"
 )
 
+func TestBinaryInfo_GetPinnedVersion(t *testing.T) {
+	cases := map[string]struct {
+		binaryInfo model.BinaryInfo
+		expected   model.Version
+	}{
+		"latest-version": {
+			binaryInfo: model.BinaryInfo{
+				Name: "mockproj",
+			},
+			expected: model.NewLatestVersion(),
+		},
+		"major-version": {
+			binaryInfo: model.BinaryInfo{
+				Name: "mockproj-v1",
+			},
+			expected: model.NewVersion("v1"),
+		},
+		"minor-version": {
+			binaryInfo: model.BinaryInfo{
+				Name: "mockproj-v1.2",
+			},
+			expected: model.NewVersion("v1.2"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			result := tc.binaryInfo.GetPinnedVersion()
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
 func TestBinaryUpgradeInfo_GetUpgradePackage(t *testing.T) {
 	cases := map[string]struct {
 		binaryInfo model.BinaryUpgradeInfo

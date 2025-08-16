@@ -4,7 +4,6 @@ import (
 	"context"
 	"debug/buildinfo"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -76,11 +75,11 @@ func TestGoToolchain_GetBuildInfo(t *testing.T) {
 }
 
 func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
-	makeExecCmdOutput := func(t *testing.T, modFile string) []byte {
+	makeExecCmdOutput := func(t *testing.T, modFile string, version string) []byte {
 		wd, err := os.Getwd()
 		require.NoError(t, err)
 		testFile := filepath.Join(wd, "testdata", modFile)
-		return fmt.Appendf(nil, `{"GoMod":"%s","Version":"v0.1.0"}`, testFile)
+		return []byte(`{"GoMod":"` + testFile + `","Version":"` + version + `"}`)
 	}
 
 	cases := map[string]struct {
@@ -90,15 +89,25 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 		expectedModule    model.Module
 		expectedErr       error
 	}{
-		"success": {
+		"success-latest": {
 			module:            model.NewLatestModule("example.com/mockorg/mockproj"),
-			mockExecCmdOutput: makeExecCmdOutput(t, "go.mod"),
+			mockExecCmdOutput: makeExecCmdOutput(t, "go.mod", "v0.1.0"),
 			expectedModule:    model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 		},
-		"sucess-module-path-update": {
+		"success-latest-module-path-update": {
 			module:            model.NewLatestModule("example.com/mockorg/mockproj"),
-			mockExecCmdOutput: makeExecCmdOutput(t, "new.go.mod"),
+			mockExecCmdOutput: makeExecCmdOutput(t, "new.go.mod", "v0.1.0"),
 			expectedModule:    model.NewModule("example.com/newmockorg/newmockproj", model.NewVersion("v0.1.0")),
+		},
+		"success-specific-major-version": {
+			module:            model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1")),
+			mockExecCmdOutput: makeExecCmdOutput(t, "go.mod", "v1.0.0"),
+			expectedModule:    model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
+		},
+		"success-specific-minor-version": {
+			module:            model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1")),
+			mockExecCmdOutput: makeExecCmdOutput(t, "go.mod", "v1.1.0"),
+			expectedModule:    model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
 		},
 		"error-module-not-found": {
 			module: model.NewLatestModule("example.com/mockorg/mockproj"),
@@ -139,12 +148,12 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 		},
 		"error-parsing-go-mod-file": {
 			module:            model.NewLatestModule("example.com/mockorg/mockproj"),
-			mockExecCmdOutput: makeExecCmdOutput(t, "invalid.go.mod"),
+			mockExecCmdOutput: makeExecCmdOutput(t, "invalid.go.mod", ""),
 			expectedErr:       errors.New("go.mod:1: unknown directive: invalid"),
 		},
 		"error-module-info-not-available": {
 			module:            model.NewLatestModule("example.com/mockorg/mockproj"),
-			mockExecCmdOutput: makeExecCmdOutput(t, "empty.go.mod"),
+			mockExecCmdOutput: makeExecCmdOutput(t, "empty.go.mod", ""),
 			expectedErr:       toolchain.ErrModuleInfoNotAvailable,
 		},
 	}
@@ -181,7 +190,7 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 		wd, err := os.Getwd()
 		require.NoError(t, err)
 		testFile := filepath.Join(wd, "testdata", modFile)
-		return fmt.Appendf(nil, `{"GoMod":"%s"}`, testFile)
+		return []byte(`{"GoMod":"` + testFile + `"}`)
 	}
 
 	cases := map[string]struct {

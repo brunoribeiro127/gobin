@@ -830,7 +830,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 			checkMajor: false,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 				},
 			},
@@ -845,7 +845,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 				},
 				{
@@ -864,7 +864,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj/v2", model.NewVersion("v2.0.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj/v2"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj/v2", model.NewVersion("v2.0.0")),
 				},
 				{
@@ -883,7 +883,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 			checkMajor: false,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
 				},
 			},
@@ -898,7 +898,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
 				},
 				{
@@ -921,7 +921,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
 				},
 				{
@@ -943,12 +943,42 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 				IsUpgradeAvailable: true,
 			},
 		},
+		"success-check-major-pinned-version-upgrade-available": {
+			info:       getBinaryInfo("mockproj-v1", "v1.1.0", false, true),
+			checkMajor: true,
+			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
+				{
+					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1")),
+					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.2.0")),
+				},
+			},
+			expectedInfo: model.BinaryUpgradeInfo{
+				BinaryInfo:         getBinaryInfo("mockproj-v1", "v1.1.0", false, true),
+				LatestModule:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.2.0")),
+				IsUpgradeAvailable: true,
+			},
+		},
+		"success-check-minor-pinned-version-upgrade-available": {
+			info:       getBinaryInfo("mockproj-v1.1", "v1.1.0", false, true),
+			checkMajor: true,
+			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
+				{
+					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1")),
+					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.2.0")),
+				},
+			},
+			expectedInfo: model.BinaryUpgradeInfo{
+				BinaryInfo:         getBinaryInfo("mockproj-v1.1", "v1.1.0", false, true),
+				LatestModule:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.2.0")),
+				IsUpgradeAvailable: true,
+			},
+		},
 		"error-get-latest-module-minor-version": {
 			info:       getBinaryInfo("mockproj", "v0.1.0", false, true),
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module: model.NewLatestModule("example.com/mockorg/mockproj"),
 					err:    toolchain.ErrModuleInfoNotAvailable,
 				},
 			},
@@ -959,7 +989,7 @@ func TestGoBinaryManager_GetBinaryUpgradeInfo(t *testing.T) {
 			checkMajor: true,
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
 				},
 				{
@@ -1617,7 +1647,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 				},
 			},
@@ -1633,7 +1663,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 				},
 				{
@@ -1653,7 +1683,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 				},
 			},
@@ -1687,7 +1717,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
 				},
 			},
@@ -1721,7 +1751,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
 				},
 				{
@@ -1770,7 +1800,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+					module: model.NewLatestModule("example.com/mockorg/mockproj"),
 					err:    toolchain.ErrModuleInfoNotAvailable,
 				},
 			},
@@ -1787,7 +1817,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
 				},
 			},
@@ -1809,7 +1839,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
 				},
 			},
@@ -1834,7 +1864,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
 				},
 			},
@@ -1862,7 +1892,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
 				},
 			},
@@ -1893,7 +1923,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockGetInternalBinPath:      "/home/user/.gobin/bin",
 			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
 				{
-					module:       model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.0.0")),
+					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
 					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
 				},
 			},

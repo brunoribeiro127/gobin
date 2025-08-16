@@ -206,12 +206,6 @@ func (g *Gobin) ListInstalledBinaries(managed bool) error {
 		return err
 	}
 
-	if managed {
-		for i := range binInfos {
-			binInfos[i].Name = strings.Split(binInfos[i].Name, "@")[0]
-		}
-	}
-
 	return g.printInstalledBinaries(binInfos)
 }
 

@@ -16,6 +16,11 @@ func NewVersion(version string) Version {
 	return Version(strings.ToLower(strings.TrimSpace(version)))
 }
 
+// NewLatestVersion creates a new version "latest".
+func NewLatestVersion() Version {
+	return NewVersion("latest")
+}
+
 // Compare compares two versions.
 func (v Version) Compare(other Version) int {
 	return semver.Compare(string(v), string(other))

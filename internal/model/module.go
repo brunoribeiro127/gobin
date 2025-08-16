@@ -21,7 +21,7 @@ func NewModule(path string, version Version) Module {
 
 // NewLatestModule creates a new module with the given path and version "latest".
 func NewLatestModule(path string) Module {
-	return NewModule(path, NewVersion("latest"))
+	return NewModule(path, NewLatestVersion())
 }
 
 // GetBaseModule returns the base module path. It returns the module path

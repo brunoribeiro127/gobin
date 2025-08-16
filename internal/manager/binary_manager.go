@@ -284,14 +284,15 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 		BinaryInfo: info,
 	}
 
-	mod, err := m.toolchain.GetLatestModuleVersion(ctx, binUpInfo.Module)
+	version := info.GetPinnedVersion()
+	mod, err := m.toolchain.GetLatestModuleVersion(ctx, model.NewModule(binUpInfo.Module.Path, version))
 	if err != nil {
 		return model.BinaryUpgradeInfo{}, err
 	}
 
 	binUpInfo.LatestModule = mod
 
-	if checkMajor {
+	if checkMajor && version.IsLatest() {
 		for {
 			mod, err = m.toolchain.GetLatestModuleVersion(ctx, mod.NextMajorModule())
 			if errors.Is(err, toolchain.ErrModuleNotFound) {

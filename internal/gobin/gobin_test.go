@@ -20,47 +20,7 @@ import (
 	"github.com/brunoribeiro127/gobin/internal/toolchain"
 )
 
-//nolint:gochecknoglobals // test variables
 var (
-	binInfo1 = model.BinaryInfo{
-		Name:        "mockproj1",
-		FullPath:    "/home/user/go/bin/mockproj1",
-		PackagePath: "example.com/mockorg/mockproj1/cmd/mockproj1",
-		Module:      model.NewModule("example.com/mockorg/mockproj1", model.NewVersion("v0.1.0")),
-		ModuleSum:   "h1:Zn6y0QZqqixH1kGqbYWR/Ce4eG9FD4xZ8buAi7rStQc=",
-		GoVersion:   "go1.24.5",
-		OS:          "darwin",
-		Arch:        "arm64",
-		Feature:     "v8.0",
-		EnvVars:     []string{"CGO_ENABLED=1"},
-	}
-
-	binInfo2 = model.BinaryInfo{
-		Name:        "mockproj2",
-		FullPath:    "/home/user/go/bin/mockproj2",
-		PackagePath: "example.com/mockorg/mockproj2/cmd/mockproj2",
-		Module:      model.NewModule("example.com/mockorg/mockproj2", model.NewVersion("v1.1.0")),
-		ModuleSum:   "h1:Zn6y0QZqqixH1kGqbYWR/Ce4eG9FD4xZ8buAi7rStQc=",
-		GoVersion:   "go1.24.5",
-		OS:          "darwin",
-		Arch:        "arm64",
-		Feature:     "v8.0",
-		EnvVars:     []string{"CGO_ENABLED=1"},
-	}
-
-	binInfo3 = model.BinaryInfo{
-		Name:        "mockproj3",
-		FullPath:    "/home/user/go/bin/mockproj3",
-		PackagePath: "example.com/mockorg/mockproj3/v2/cmd/mockproj3",
-		Module:      model.NewModule("example.com/mockorg/mockproj3/v2", model.NewVersion("v2.1.0")),
-		ModuleSum:   "h1:Zn6y0QZqqixH1kGqbYWR/Ce4eG9FD4xZ8buAi7rStQc=",
-		GoVersion:   "go1.24.5",
-		OS:          "darwin",
-		Arch:        "arm64",
-		Feature:     "v8.0",
-		EnvVars:     []string{"CGO_ENABLED=1"},
-	}
-
 	errMockWriteError = errors.New("write error")
 )
 
@@ -529,10 +489,18 @@ mockproj → example.com/mockorg/mockproj    @ v0.1.0
 			expectedErr:              errors.New("unexpected error"),
 		},
 		"error-write-error": {
-			stdOut:                &errorWriter{},
-			managed:               false,
-			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3},
-			expectedErr:           errMockWriteError,
+			stdOut:  &errorWriter{},
+			managed: false,
+			mockGetAllBinaryInfos: []model.BinaryInfo{
+				{
+					Name: "mockproj",
+					Module: model.NewModule(
+						"example.com/mockorg/mockproj",
+						model.NewVersion("v0.1.0"),
+					),
+				},
+			},
+			expectedErr: errMockWriteError,
 		},
 	}
 
@@ -556,6 +524,38 @@ mockproj → example.com/mockorg/mockproj    @ v0.1.0
 }
 
 func TestGobin_ListOutdatedBinaries(t *testing.T) {
+	binInfo1 := model.BinaryInfo{
+		Name: "mockproj1",
+		Module: model.NewModule(
+			"example.com/mockorg/mockproj1",
+			model.NewVersion("v0.1.0"),
+		),
+	}
+
+	binInfo2 := model.BinaryInfo{
+		Name: "mockproj2",
+		Module: model.NewModule(
+			"example.com/mockorg/mockproj2",
+			model.NewVersion("v1.1.0"),
+		),
+	}
+
+	binInfo3 := model.BinaryInfo{
+		Name: "mockproj3-v2",
+		Module: model.NewModule(
+			"example.com/mockorg/mockproj3/v2",
+			model.NewVersion("v2.1.0"),
+		),
+	}
+
+	binInfo4 := model.BinaryInfo{
+		Name: "mockproj3-v2.1",
+		Module: model.NewModule(
+			"example.com/mockorg/mockproj3/v2",
+			model.NewVersion("v2.1.0"),
+		),
+	}
+
 	cases := map[string]struct {
 		stdOut                        io.ReadWriter
 		checkMajor                    bool
@@ -570,7 +570,7 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 			stdOut:                &bytes.Buffer{},
 			checkMajor:            false,
 			parallelism:           1,
-			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3},
+			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3, binInfo4},
 			mockGetBinaryUpgradeInfoCalls: []mockGetBinaryUpgradeInfoCall{
 				{
 					info: binInfo1,
@@ -605,6 +605,17 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 						IsUpgradeAvailable: false,
 					},
 				},
+				{
+					info: binInfo4,
+					upgradeInfo: model.BinaryUpgradeInfo{
+						BinaryInfo: binInfo4,
+						LatestModule: model.NewModule(
+							"example.com/mockorg/mockproj3/v2",
+							model.NewVersion("v2.1.0"),
+						),
+						IsUpgradeAvailable: false,
+					},
+				},
 			},
 			expectedStdOut: "✅ All binaries are up to date\n",
 		},
@@ -612,7 +623,7 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 			stdOut:                &bytes.Buffer{},
 			checkMajor:            false,
 			parallelism:           1,
-			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3},
+			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2},
 			mockGetBinaryUpgradeInfoCalls: []mockGetBinaryUpgradeInfoCall{
 				{
 					info: binInfo1,
@@ -629,17 +640,6 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 					info: binInfo2,
 					err:  toolchain.ErrBinaryBuiltWithoutGoModules,
 				},
-				{
-					info: binInfo3,
-					upgradeInfo: model.BinaryUpgradeInfo{
-						BinaryInfo: binInfo3,
-						LatestModule: model.NewModule(
-							"example.com/mockorg/mockproj3/v2",
-							model.NewVersion("v2.1.0"),
-						),
-						IsUpgradeAvailable: false,
-					},
-				},
 			},
 			expectedStdOut: "✅ All binaries are up to date\n",
 		},
@@ -647,7 +647,7 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 			stdOut:                &bytes.Buffer{},
 			checkMajor:            false,
 			parallelism:           1,
-			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3},
+			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2},
 			mockGetBinaryUpgradeInfoCalls: []mockGetBinaryUpgradeInfoCall{
 				{
 					info: binInfo1,
@@ -664,17 +664,6 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 					info: binInfo2,
 					err:  toolchain.ErrModuleInfoNotAvailable,
 				},
-				{
-					info: binInfo3,
-					upgradeInfo: model.BinaryUpgradeInfo{
-						BinaryInfo: binInfo3,
-						LatestModule: model.NewModule(
-							"example.com/mockorg/mockproj3/v2",
-							model.NewVersion("v2.1.0"),
-						),
-						IsUpgradeAvailable: false,
-					},
-				},
 			},
 			expectedErr: toolchain.ErrModuleInfoNotAvailable,
 		},
@@ -682,7 +671,7 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 			stdOut:                &bytes.Buffer{},
 			checkMajor:            false,
 			parallelism:           1,
-			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3},
+			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3, binInfo4},
 			mockGetBinaryUpgradeInfoCalls: []mockGetBinaryUpgradeInfoCall{
 				{
 					info: binInfo1,
@@ -717,18 +706,30 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 						IsUpgradeAvailable: true,
 					},
 				},
+				{
+					info: binInfo4,
+					upgradeInfo: model.BinaryUpgradeInfo{
+						BinaryInfo: binInfo4,
+						LatestModule: model.NewModule(
+							"example.com/mockorg/mockproj3/v2",
+							model.NewVersion("v2.1.1"),
+						),
+						IsUpgradeAvailable: true,
+					},
+				},
 			},
-			expectedStdOut: `Name      → Module                           @ Current ↑ Latest
----------------------------------------------------------------
-mockproj2 → example.com/mockorg/mockproj2    @ ` + "\033[31m" + `v1.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v1.2.0` + "\033[0m" + `
-mockproj3 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v2.2.0` + "\033[0m" + `
+			expectedStdOut: `Name           → Module                           @ Current ↑ Latest
+--------------------------------------------------------------------
+mockproj2      → example.com/mockorg/mockproj2    @ ` + "\033[31m" + `v1.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v1.2.0` + "\033[0m" + `
+mockproj3-v2   → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v2.2.0` + "\033[0m" + `
+mockproj3-v2.1 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v2.1.1` + "\033[0m" + `
 `,
 		},
 		"success-major-upgrades": {
 			stdOut:                &bytes.Buffer{},
 			checkMajor:            true,
 			parallelism:           1,
-			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3},
+			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3, binInfo4},
 			mockGetBinaryUpgradeInfoCalls: []mockGetBinaryUpgradeInfoCall{
 				{
 					info: binInfo1,
@@ -746,8 +747,8 @@ mockproj3 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\
 					upgradeInfo: model.BinaryUpgradeInfo{
 						BinaryInfo: binInfo2,
 						LatestModule: model.NewModule(
-							"example.com/mockorg/mockproj2",
-							model.NewVersion("v1.2.0"),
+							"example.com/mockorg/mockproj2/v2",
+							model.NewVersion("v2.2.0"),
 						),
 						IsUpgradeAvailable: true,
 					},
@@ -758,23 +759,35 @@ mockproj3 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\
 						BinaryInfo: binInfo3,
 						LatestModule: model.NewModule(
 							"example.com/mockorg/mockproj3/v3",
-							model.NewVersion("v3.1.0"),
+							model.NewVersion("v2.2.0"),
+						),
+						IsUpgradeAvailable: true,
+					},
+				},
+				{
+					info: binInfo4,
+					upgradeInfo: model.BinaryUpgradeInfo{
+						BinaryInfo: binInfo4,
+						LatestModule: model.NewModule(
+							"example.com/mockorg/mockproj3/v2",
+							model.NewVersion("v2.1.1"),
 						),
 						IsUpgradeAvailable: true,
 					},
 				},
 			},
-			expectedStdOut: `Name      → Module                           @ Current ↑ Latest
----------------------------------------------------------------
-mockproj2 → example.com/mockorg/mockproj2    @ ` + "\033[31m" + `v1.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v1.2.0` + "\033[0m" + `
-mockproj3 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v3.1.0` + "\033[0m" + `
+			expectedStdOut: `Name           → Module                           @ Current ↑ Latest
+--------------------------------------------------------------------
+mockproj2      → example.com/mockorg/mockproj2    @ ` + "\033[31m" + `v1.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v2.2.0` + "\033[0m" + `
+mockproj3-v2   → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v2.2.0` + "\033[0m" + `
+mockproj3-v2.1 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v2.1.1` + "\033[0m" + `
 `,
 		},
 		"success-with-parallelism": {
 			stdOut:                &bytes.Buffer{},
 			checkMajor:            true,
 			parallelism:           2,
-			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3},
+			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3, binInfo4},
 			mockGetBinaryUpgradeInfoCalls: []mockGetBinaryUpgradeInfoCall{
 				{
 					info: binInfo1,
@@ -792,8 +805,8 @@ mockproj3 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\
 					upgradeInfo: model.BinaryUpgradeInfo{
 						BinaryInfo: binInfo2,
 						LatestModule: model.NewModule(
-							"example.com/mockorg/mockproj2",
-							model.NewVersion("v1.2.0"),
+							"example.com/mockorg/mockproj2/v2",
+							model.NewVersion("v2.2.0"),
 						),
 						IsUpgradeAvailable: true,
 					},
@@ -804,16 +817,28 @@ mockproj3 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\
 						BinaryInfo: binInfo3,
 						LatestModule: model.NewModule(
 							"example.com/mockorg/mockproj3/v3",
-							model.NewVersion("v3.1.0"),
+							model.NewVersion("v2.2.0"),
+						),
+						IsUpgradeAvailable: true,
+					},
+				},
+				{
+					info: binInfo4,
+					upgradeInfo: model.BinaryUpgradeInfo{
+						BinaryInfo: binInfo4,
+						LatestModule: model.NewModule(
+							"example.com/mockorg/mockproj3/v2",
+							model.NewVersion("v2.1.1"),
 						),
 						IsUpgradeAvailable: true,
 					},
 				},
 			},
-			expectedStdOut: `Name      → Module                           @ Current ↑ Latest
----------------------------------------------------------------
-mockproj2 → example.com/mockorg/mockproj2    @ ` + "\033[31m" + `v1.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v1.2.0` + "\033[0m" + `
-mockproj3 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v3.1.0` + "\033[0m" + `
+			expectedStdOut: `Name           → Module                           @ Current ↑ Latest
+--------------------------------------------------------------------
+mockproj2      → example.com/mockorg/mockproj2    @ ` + "\033[31m" + `v1.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v2.2.0` + "\033[0m" + `
+mockproj3-v2   → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v2.2.0` + "\033[0m" + `
+mockproj3-v2.1 → example.com/mockorg/mockproj3/v2 @ ` + "\033[31m" + `v2.1.0 ` + "\033[0m" + ` ↑ ` + "\033[32m" + `v2.1.1` + "\033[0m" + `
 `,
 		},
 		"partial-success-error-get-binary-upgrade-info": {
@@ -866,7 +891,7 @@ mockproj2 → example.com/mockorg/mockproj2 @ ` + "\033[31m" + `v1.1.0 ` + "\033
 			stdOut:                &errorWriter{},
 			checkMajor:            false,
 			parallelism:           1,
-			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2, binInfo3},
+			mockGetAllBinaryInfos: []model.BinaryInfo{binInfo1, binInfo2},
 			mockGetBinaryUpgradeInfoCalls: []mockGetBinaryUpgradeInfoCall{
 				{
 					info: binInfo1,
@@ -886,17 +911,6 @@ mockproj2 → example.com/mockorg/mockproj2 @ ` + "\033[31m" + `v1.1.0 ` + "\033
 						LatestModule: model.NewModule(
 							"example.com/mockorg/mockproj2",
 							model.NewVersion("v1.2.0"),
-						),
-						IsUpgradeAvailable: true,
-					},
-				},
-				{
-					info: binInfo3,
-					upgradeInfo: model.BinaryUpgradeInfo{
-						BinaryInfo: binInfo3,
-						LatestModule: model.NewModule(
-							"example.com/mockorg/mockproj3/v2",
-							model.NewVersion("v2.2.0"),
 						),
 						IsUpgradeAvailable: true,
 					},
@@ -1532,24 +1546,24 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 			mockListBinaries: []string{
 				"/home/user/go/bin/mockproj1",
 				"/home/user/go/bin/mockproj2",
-				"/home/user/go/bin/mockproj3",
+				"/home/user/go/bin/mockproj3-v2",
 			},
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
 				{path: "/home/user/go/bin/mockproj1"},
 				{path: "/home/user/go/bin/mockproj2"},
-				{path: "/home/user/go/bin/mockproj3"},
+				{path: "/home/user/go/bin/mockproj3-v2"},
 			},
 		},
 		"success-specific-bins": {
 			parallelism: 1,
 			bins: []model.Binary{
 				model.NewBinary("mockproj2"),
-				model.NewBinary("mockproj3"),
+				model.NewBinary("mockproj3-v2"),
 			},
 			mockGetGoBinPath: "/home/user/go/bin",
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
 				{path: "/home/user/go/bin/mockproj2"},
-				{path: "/home/user/go/bin/mockproj3"},
+				{path: "/home/user/go/bin/mockproj3-v2"},
 			},
 		},
 		"success-with-parallelism": {
@@ -1559,12 +1573,12 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 			mockListBinaries: []string{
 				"/home/user/go/bin/mockproj1",
 				"/home/user/go/bin/mockproj2",
-				"/home/user/go/bin/mockproj3",
+				"/home/user/go/bin/mockproj3-v2",
 			},
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
 				{path: "/home/user/go/bin/mockproj1"},
 				{path: "/home/user/go/bin/mockproj2"},
-				{path: "/home/user/go/bin/mockproj3"},
+				{path: "/home/user/go/bin/mockproj3-v2"},
 			},
 		},
 		"error-list-binaries-full-paths": {
