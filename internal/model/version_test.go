@@ -301,7 +301,7 @@ func TestVersion_String(t *testing.T) {
 		expected string
 	}{
 		"latest": {
-			version:  model.NewVersion("latest"),
+			version:  model.NewLatestVersion(),
 			expected: "latest",
 		},
 		"semantic-version": {

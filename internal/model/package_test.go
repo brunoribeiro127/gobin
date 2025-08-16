@@ -17,7 +17,7 @@ func TestNewPackage(t *testing.T) {
 			pkg: "example.com/mockorg/mockproj",
 			expected: model.NewPackageWithVersion(
 				"example.com/mockorg/mockproj",
-				model.NewVersion("latest"),
+				model.NewLatestVersion(),
 			),
 		},
 		"with-version": {

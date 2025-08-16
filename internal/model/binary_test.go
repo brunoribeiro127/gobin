@@ -15,7 +15,7 @@ func TestNewBinary(t *testing.T) {
 	}{
 		"latest": {
 			bin:      "mockproj",
-			expected: model.NewBinaryWithVersion("mockproj", model.NewVersion("latest")),
+			expected: model.NewBinaryWithVersion("mockproj", model.NewLatestVersion()),
 		},
 		"with-version": {
 			bin:      "mockproj@v1.2.3",

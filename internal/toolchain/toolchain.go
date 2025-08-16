@@ -116,11 +116,12 @@ func (t *GoToolchain) GetBuildInfo(path string) (*buildinfo.BuildInfo, error) {
 	return info, nil
 }
 
-// GetLatestModuleVersion returns the latest module path and version of a module.
-// It uses the go list command with the option -m -json to get a json response with
-// the path to the go.mod file and the latest version. It fails if the module is
-// not found, the go list command fails or the go.mod file does not contain the
-// module information.
+// GetLatestModuleVersion returns the latest module path and version of a module
+// based on the module path and version received, which can be latest or a
+// specific major or minor version. It uses the go list command with the option
+// -m -json to get a json response with the path to the go.mod file and the
+// version. It fails if the module is not found, the go list command fails or
+// the go.mod file does not contain the module information.
 func (t *GoToolchain) GetLatestModuleVersion(
 	ctx context.Context,
 	module model.Module,
@@ -128,8 +129,7 @@ func (t *GoToolchain) GetLatestModuleVersion(
 	logger := slog.Default().With("module", module.Path)
 	logger.InfoContext(ctx, "getting latest module version")
 
-	modLatest := module.Path + "@latest"
-	cmd := t.exec.CombinedOutput(ctx, "go", "list", "-m", "-json", modLatest)
+	cmd := t.exec.CombinedOutput(ctx, "go", "list", "-m", "-json", module.String())
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

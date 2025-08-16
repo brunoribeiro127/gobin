@@ -21,7 +21,7 @@ func TestKind_GetTargetBinPath(t *testing.T) {
 			kind:     model.KindLatest,
 			basePath: "/usr/local/bin",
 			name:     "mockproj",
-			version:  model.NewVersion("latest"),
+			version:  model.NewLatestVersion(),
 			expected: "/usr/local/bin/mockproj",
 		},
 		"major": {
