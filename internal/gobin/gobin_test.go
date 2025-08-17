@@ -365,17 +365,23 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 func TestGobin_InstallPackages(t *testing.T) {
 	cases := map[string]struct {
 		parallelism int
+		kind        model.Kind
+		rebuild     bool
 		packages    []model.Package
 		expectedErr error
 	}{
 		"success-single-package": {
 			parallelism: 1,
+			kind:        model.KindLatest,
+			rebuild:     false,
 			packages: []model.Package{
 				model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@latest"),
 			},
 		},
 		"success-multiple-packages-with-parallelism": {
 			parallelism: 2,
+			kind:        model.KindLatest,
+			rebuild:     false,
 			packages: []model.Package{
 				model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@latest"),
 				model.NewPackage("example.com/mockorg/mockproj2/cmd/mockproj2@v1.1.0"),
@@ -395,13 +401,13 @@ func TestGobin_InstallPackages(t *testing.T) {
 			binaryManager := managermocks.NewBinaryManager(t)
 
 			for _, pkg := range tc.packages {
-				binaryManager.EXPECT().InstallPackage(context.Background(), pkg).
+				binaryManager.EXPECT().InstallPackage(context.Background(), pkg, tc.kind, tc.rebuild).
 					Return(tc.expectedErr).
 					Once()
 			}
 
 			gobin := gobin.NewGobin(binaryManager, nil, nil, nil, nil, nil)
-			err := gobin.InstallPackages(context.Background(), tc.parallelism, tc.packages...)
+			err := gobin.InstallPackages(context.Background(), tc.parallelism, tc.kind, tc.rebuild, tc.packages...)
 			assert.Equal(t, tc.expectedErr, err)
 		})
 	}

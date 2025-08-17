@@ -28,6 +28,21 @@ var allowedKinds = []Kind{
 	KindMinor,
 }
 
+// GetKindFromName returns the kind of the binary name. If the binary name
+// contains a version suffix, it returns the kind. Otherwise, it returns latest.
+func GetKindFromName(name string) Kind {
+	parts := strings.Split(name, "-")
+	if len(parts) == 1 {
+		return KindLatest
+	}
+
+	if strings.Contains(parts[1], ".") {
+		return KindMinor
+	}
+
+	return KindMajor
+}
+
 // GetTargetBinPath returns the target path for a binary based on the base path,
 // binary name, and version.
 func (k *Kind) GetTargetBinPath(basePath, name string, version Version) string {

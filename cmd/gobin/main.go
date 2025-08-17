@@ -207,17 +207,25 @@ func newInfoCmd(gobin *gobin.Gobin) *cobra.Command {
 
 // newInstallCmd creates a install command to install packages.
 func newInstallCmd(gobin *gobin.Gobin) *cobra.Command {
-	return &cobra.Command{
+	kind := model.KindLatest
+	var rebuild bool
+
+	cmd := &cobra.Command{
 		Use:   "install [packages]",
 		Short: "Install packages",
-		Long: `Install compiles and installs the packages named by the import paths.
+		Long: `Install compiles and installs the packages named by the import paths. You can specify the pin kind to create
+[latest (default), major, minor] and whether to rebuild the package and its dependencies.
 
 Examples:
-  gobin install github.com/go-delve/delve/cmd/dlv          # Install latest version
-  gobin install github.com/go-delve/delve/cmd/dlv@latest   # Install latest version
-  gobin install github.com/go-delve/delve/cmd/dlv@v1       # Install latest v1 minor version
-  gobin install github.com/go-delve/delve/cmd/dlv@v1.25    # Install latest v1.25 patch version
-  gobin install github.com/go-delve/delve/cmd/dlv@v1.25.1  # Install specific version
+  gobin install github.com/go-delve/delve/cmd/dlv                      # Install latest version (dlv)
+  gobin install github.com/go-delve/delve/cmd/dlv@latest               # Install latest version (dlv)
+  gobin install github.com/go-delve/delve/cmd/dlv@v1                   # Install latest v1 minor version (dlv)
+  gobin install github.com/go-delve/delve/cmd/dlv@v1.25                # Install latest v1.25 patch version (dlv)
+  gobin install github.com/go-delve/delve/cmd/dlv@v1.25.1              # Install specific version (dlv)
+  gobin install github.com/go-delve/delve/cmd/dlv@v1.25.1 --rebuild    # Force package and dependencies rebuild (dlv)
+  gobin install github.com/go-delve/delve/cmd/dlv@v1.25.1 --kind major # Install and pin latest version (dlv)
+  gobin install github.com/go-delve/delve/cmd/dlv@v1.25.1 --kind major # Install and pin major version (dlv-v1)
+  gobin install github.com/go-delve/delve/cmd/dlv@v1.25.1 --kind minor # Install and pin minor version (dlv-v1.25)
 
 The package version is optional, defaulting to "latest".
 The GOFLAGS environment variable can be used to define build flags.`,
@@ -240,9 +248,26 @@ The GOFLAGS environment variable can be used to define build flags.`,
 				packages[i] = pkg
 			}
 
-			return gobin.InstallPackages(cmd.Context(), parallelism, packages...)
+			return gobin.InstallPackages(cmd.Context(), parallelism, kind, rebuild, packages...)
 		},
 	}
+
+	cmd.Flags().VarP(
+		&kind,
+		"kind",
+		"k",
+		"pin kind [latest (default), major, minor]",
+	)
+
+	cmd.Flags().BoolVarP(
+		&rebuild,
+		"rebuild",
+		"r",
+		false,
+		"forces package and dependencies rebuild",
+	)
+
+	return cmd
 }
 
 // newListCmd creates a list command to list installed binaries.

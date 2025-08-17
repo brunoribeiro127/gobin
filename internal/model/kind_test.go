@@ -9,6 +9,32 @@ import (
 	"github.com/brunoribeiro127/gobin/internal/model"
 )
 
+func TestKind_GetKindFromName(t *testing.T) {
+	cases := map[string]struct {
+		name     string
+		expected model.Kind
+	}{
+		"latest": {
+			name:     "mockproj",
+			expected: model.KindLatest,
+		},
+		"major": {
+			name:     "mockproj-v1",
+			expected: model.KindMajor,
+		},
+		"minor": {
+			name:     "mockproj-v1.2",
+			expected: model.KindMinor,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, model.GetKindFromName(tc.name))
+		})
+	}
+}
+
 func TestKind_GetTargetBinPath(t *testing.T) {
 	cases := map[string]struct {
 		kind     model.Kind

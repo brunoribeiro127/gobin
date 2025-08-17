@@ -59,6 +59,8 @@ type BinaryManager interface {
 	InstallPackage(
 		ctx context.Context,
 		pkg model.Package,
+		kind model.Kind,
+		rebuild bool,
 	) error
 	// MigrateBinary migrates a binary to be managed internally.
 	MigrateBinary(
@@ -310,11 +312,15 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 	return binUpInfo, nil
 }
 
-// InstallPackage installs a package leveraging the toolchain. If version is
-// not provided, it installs the latest version.  If the latest
-// version is a major version v2 or higher, it adjusts the package path
-// to include the major version, following the Go module versioning rules.
-func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkg model.Package) error {
+// InstallPackage installs a package leveraging the toolchain. If kind is major
+// or minor, it pins the binary to the Go binary directory with the given kind.
+// If rebuild is true, it rebuilds the binary.
+func (m *GoBinaryManager) InstallPackage(
+	ctx context.Context,
+	pkg model.Package,
+	kind model.Kind,
+	rebuild bool,
+) error {
 	logger := slog.Default().With("pkg", pkg.String())
 
 	tempDir := m.workspace.GetInternalTempPath()
@@ -330,7 +336,7 @@ func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkg model.Package)
 		_ = cleanup()
 	}()
 
-	if err = m.toolchain.Install(ctx, binTempDir, pkg); err != nil {
+	if err = m.toolchain.Install(ctx, binTempDir, pkg, rebuild); err != nil {
 		return err
 	}
 
@@ -360,7 +366,11 @@ func (m *GoBinaryManager) InstallPackage(ctx context.Context, pkg model.Package)
 		return err
 	}
 
-	goBinPath := filepath.Join(m.workspace.GetGoBinPath(), binName)
+	goBinPath := kind.GetTargetBinPath(
+		m.workspace.GetGoBinPath(),
+		binName,
+		model.NewVersion(buildInfo.Main.Version),
+	)
 
 	logger.InfoContext(
 		ctx, "replacing existing symlink for binary",
@@ -488,7 +498,8 @@ func (m *GoBinaryManager) UpgradeBinary(
 	}
 
 	if binUpInfo.IsUpgradeAvailable || rebuild {
-		return m.InstallPackage(ctx, binUpInfo.GetUpgradePackage())
+		kind := model.GetKindFromName(binUpInfo.Name)
+		return m.InstallPackage(ctx, binUpInfo.GetUpgradePackage(), kind, rebuild)
 	}
 
 	return nil
