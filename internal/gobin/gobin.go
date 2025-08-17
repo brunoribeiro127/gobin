@@ -182,6 +182,8 @@ func (g *Gobin) DiagnoseBinaries(ctx context.Context, parallelism int) error {
 func (g *Gobin) InstallPackages(
 	ctx context.Context,
 	parallelism int,
+	kind model.Kind,
+	rebuild bool,
 	packages ...model.Package,
 ) error {
 	grp := new(errgroup.Group)
@@ -189,7 +191,7 @@ func (g *Gobin) InstallPackages(
 
 	for _, pkg := range packages {
 		grp.Go(func() error {
-			return g.binaryManager.InstallPackage(ctx, pkg)
+			return g.binaryManager.InstallPackage(ctx, pkg, kind, rebuild)
 		})
 	}
 

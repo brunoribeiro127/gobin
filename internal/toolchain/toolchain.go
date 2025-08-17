@@ -63,6 +63,7 @@ type Toolchain interface {
 		ctx context.Context,
 		path string,
 		pkg model.Package,
+		rebuild bool,
 	) error
 	// VulnCheck checks for vulnerabilities in a binary.
 	VulnCheck(
@@ -290,18 +291,26 @@ func (t *GoToolchain) GetModuleOrigin(
 }
 
 // Install installs a package and its dependencies for the specified version in
-// the target path. It uses the go install command with the -a option to force
-// the rebuild of the package and its dependencies, even if they are already
-// up to date. It fails if the go install command fails.
+// the target path. It uses the go install command to install the package and
+// its dependencies. If the rebuild flag is true, it uses the -a option to force
+// the rebuild of the package and its dependencies. It fails if the go install
+// command fails.
 func (t *GoToolchain) Install(
 	ctx context.Context,
 	path string,
 	pkg model.Package,
+	rebuild bool,
 ) error {
 	logger := slog.Default().With("path", path, "package", pkg.String())
 	logger.InfoContext(ctx, "installing package")
 
-	cmd := t.exec.Run(ctx, "go", "install", "-a", pkg.String())
+	args := []string{"install"}
+	if rebuild {
+		args = append(args, "-a")
+	}
+	args = append(args, pkg.String())
+
+	cmd := t.exec.Run(ctx, "go", args...)
 	cmd.InjectEnv("GOBIN=" + path)
 
 	if err := cmd.Run(); err != nil {

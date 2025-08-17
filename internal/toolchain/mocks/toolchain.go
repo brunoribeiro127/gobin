@@ -305,16 +305,16 @@ func (_c *Toolchain_GetModuleOrigin_Call) RunAndReturn(run func(ctx context.Cont
 }
 
 // Install provides a mock function for the type Toolchain
-func (_mock *Toolchain) Install(ctx context.Context, path string, pkg model.Package) error {
-	ret := _mock.Called(ctx, path, pkg)
+func (_mock *Toolchain) Install(ctx context.Context, path string, pkg model.Package, rebuild bool) error {
+	ret := _mock.Called(ctx, path, pkg, rebuild)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Install")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, model.Package) error); ok {
-		r0 = returnFunc(ctx, path, pkg)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, model.Package, bool) error); ok {
+		r0 = returnFunc(ctx, path, pkg, rebuild)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -330,11 +330,12 @@ type Toolchain_Install_Call struct {
 //   - ctx context.Context
 //   - path string
 //   - pkg model.Package
-func (_e *Toolchain_Expecter) Install(ctx interface{}, path interface{}, pkg interface{}) *Toolchain_Install_Call {
-	return &Toolchain_Install_Call{Call: _e.mock.On("Install", ctx, path, pkg)}
+//   - rebuild bool
+func (_e *Toolchain_Expecter) Install(ctx interface{}, path interface{}, pkg interface{}, rebuild interface{}) *Toolchain_Install_Call {
+	return &Toolchain_Install_Call{Call: _e.mock.On("Install", ctx, path, pkg, rebuild)}
 }
 
-func (_c *Toolchain_Install_Call) Run(run func(ctx context.Context, path string, pkg model.Package)) *Toolchain_Install_Call {
+func (_c *Toolchain_Install_Call) Run(run func(ctx context.Context, path string, pkg model.Package, rebuild bool)) *Toolchain_Install_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -348,10 +349,15 @@ func (_c *Toolchain_Install_Call) Run(run func(ctx context.Context, path string,
 		if args[2] != nil {
 			arg2 = args[2].(model.Package)
 		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -362,7 +368,7 @@ func (_c *Toolchain_Install_Call) Return(err error) *Toolchain_Install_Call {
 	return _c
 }
 
-func (_c *Toolchain_Install_Call) RunAndReturn(run func(ctx context.Context, path string, pkg model.Package) error) *Toolchain_Install_Call {
+func (_c *Toolchain_Install_Call) RunAndReturn(run func(ctx context.Context, path string, pkg model.Package, rebuild bool) error) *Toolchain_Install_Call {
 	_c.Call.Return(run)
 	return _c
 }

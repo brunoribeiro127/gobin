@@ -365,16 +365,16 @@ func (_c *BinaryManager_GetBinaryUpgradeInfo_Call) RunAndReturn(run func(ctx con
 }
 
 // InstallPackage provides a mock function for the type BinaryManager
-func (_mock *BinaryManager) InstallPackage(ctx context.Context, pkg model.Package) error {
-	ret := _mock.Called(ctx, pkg)
+func (_mock *BinaryManager) InstallPackage(ctx context.Context, pkg model.Package, kind model.Kind, rebuild bool) error {
+	ret := _mock.Called(ctx, pkg, kind, rebuild)
 
 	if len(ret) == 0 {
 		panic("no return value specified for InstallPackage")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Package) error); ok {
-		r0 = returnFunc(ctx, pkg)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, model.Package, model.Kind, bool) error); ok {
+		r0 = returnFunc(ctx, pkg, kind, rebuild)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -389,11 +389,13 @@ type BinaryManager_InstallPackage_Call struct {
 // InstallPackage is a helper method to define mock.On call
 //   - ctx context.Context
 //   - pkg model.Package
-func (_e *BinaryManager_Expecter) InstallPackage(ctx interface{}, pkg interface{}) *BinaryManager_InstallPackage_Call {
-	return &BinaryManager_InstallPackage_Call{Call: _e.mock.On("InstallPackage", ctx, pkg)}
+//   - kind model.Kind
+//   - rebuild bool
+func (_e *BinaryManager_Expecter) InstallPackage(ctx interface{}, pkg interface{}, kind interface{}, rebuild interface{}) *BinaryManager_InstallPackage_Call {
+	return &BinaryManager_InstallPackage_Call{Call: _e.mock.On("InstallPackage", ctx, pkg, kind, rebuild)}
 }
 
-func (_c *BinaryManager_InstallPackage_Call) Run(run func(ctx context.Context, pkg model.Package)) *BinaryManager_InstallPackage_Call {
+func (_c *BinaryManager_InstallPackage_Call) Run(run func(ctx context.Context, pkg model.Package, kind model.Kind, rebuild bool)) *BinaryManager_InstallPackage_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -403,9 +405,19 @@ func (_c *BinaryManager_InstallPackage_Call) Run(run func(ctx context.Context, p
 		if args[1] != nil {
 			arg1 = args[1].(model.Package)
 		}
+		var arg2 model.Kind
+		if args[2] != nil {
+			arg2 = args[2].(model.Kind)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -416,7 +428,7 @@ func (_c *BinaryManager_InstallPackage_Call) Return(err error) *BinaryManager_In
 	return _c
 }
 
-func (_c *BinaryManager_InstallPackage_Call) RunAndReturn(run func(ctx context.Context, pkg model.Package) error) *BinaryManager_InstallPackage_Call {
+func (_c *BinaryManager_InstallPackage_Call) RunAndReturn(run func(ctx context.Context, pkg model.Package, kind model.Kind, rebuild bool) error) *BinaryManager_InstallPackage_Call {
 	_c.Call.Return(run)
 	return _c
 }

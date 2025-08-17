@@ -389,10 +389,12 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 
 func TestGoToolchain_Install(t *testing.T) {
 	cases := map[string]struct {
-		path           string
-		pkg            model.Package
-		mockExecCmdErr error
-		expectedErr    error
+		path            string
+		pkg             model.Package
+		rebuild         bool
+		mockExecCmdArgs []string
+		mockExecCmdErr  error
+		expectedErr     error
 	}{
 		"success": {
 			path: "/home/user/.gobin/.tmp/mockproj-1234567890",
@@ -400,6 +402,24 @@ func TestGoToolchain_Install(t *testing.T) {
 				"example.com/mockorg/mockproj/cmd/mockproj",
 				model.NewVersion("v0.1.0"),
 			),
+			rebuild: false,
+			mockExecCmdArgs: []string{
+				"install",
+				"example.com/mockorg/mockproj/cmd/mockproj@v0.1.0",
+			},
+		},
+		"success-rebuild": {
+			path: "/home/user/.gobin/.tmp/mockproj-1234567890",
+			pkg: model.NewPackageWithVersion(
+				"example.com/mockorg/mockproj/cmd/mockproj",
+				model.NewVersion("v0.1.0"),
+			),
+			rebuild: true,
+			mockExecCmdArgs: []string{
+				"install",
+				"-a",
+				"example.com/mockorg/mockproj/cmd/mockproj@v0.1.0",
+			},
 		},
 		"error-installing-binary": {
 			path: "/home/user/.gobin/.tmp/mockproj-1234567890",
@@ -407,6 +427,11 @@ func TestGoToolchain_Install(t *testing.T) {
 				"example.com/mockorg/mockproj/cmd/mockproj",
 				model.NewVersion("v0.1.0"),
 			),
+			rebuild: false,
+			mockExecCmdArgs: []string{
+				"install",
+				"example.com/mockorg/mockproj/cmd/mockproj@v0.1.0",
+			},
 			mockExecCmdErr: errors.New("unexpected error"),
 			expectedErr:    errors.New("unexpected error"),
 		},
@@ -420,14 +445,14 @@ func TestGoToolchain_Install(t *testing.T) {
 			exec.EXPECT().Run(
 				context.Background(),
 				"go",
-				[]string{"install", "-a", tc.pkg.String()},
+				tc.mockExecCmdArgs,
 			).Return(execRun).Once()
 
 			execRun.EXPECT().Run().Return(tc.mockExecCmdErr).Once()
 			execRun.EXPECT().InjectEnv([]string{"GOBIN=" + tc.path}).Once()
 
 			toolchain := toolchain.NewGoToolchain(nil, exec, nil)
-			err := toolchain.Install(context.Background(), tc.path, tc.pkg)
+			err := toolchain.Install(context.Background(), tc.path, tc.pkg, tc.rebuild)
 			if tc.expectedErr != nil {
 				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
