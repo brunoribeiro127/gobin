@@ -271,7 +271,6 @@ func (t *GoToolchain) GetModuleOrigin(
 		logger.ErrorContext(ctx, "error downloading module", "err", err)
 		return nil, err
 	}
-
 	var res struct {
 		Origin *model.ModuleOrigin `json:"Origin"`
 	}
@@ -281,7 +280,7 @@ func (t *GoToolchain) GetModuleOrigin(
 		return nil, err
 	}
 
-	if res.Origin == nil {
+	if res.Origin == nil || res.Origin.URL == "" {
 		err = ErrModuleOriginNotAvailable
 		logger.WarnContext(ctx, err.Error())
 		return nil, err
