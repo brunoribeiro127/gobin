@@ -353,9 +353,14 @@ func TestGoToolchain_GetModuleOrigin(t *testing.T) {
 			}(),
 			expectedErr: errors.New("unexpected end of JSON input"),
 		},
-		"error-module-origin-not-available": {
+		"error-module-origin-not-available-empty-origin": {
 			module:            model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
-			mockExecCmdOutput: []byte(`{"Origin":null}`),
+			mockExecCmdOutput: []byte(`{"Origin":{}}`),
+			expectedErr:       toolchain.ErrModuleOriginNotAvailable,
+		},
+		"error-module-origin-not-available-empty-url": {
+			module:            model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
+			mockExecCmdOutput: []byte(`{"Origin":{"URL":""}}`),
 			expectedErr:       toolchain.ErrModuleOriginNotAvailable,
 		},
 	}
