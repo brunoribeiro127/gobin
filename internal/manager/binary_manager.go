@@ -210,6 +210,8 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (model.BinaryInfo, error) {
 		installPath = target
 	}
 
+	internalBinPath := m.workspace.GetInternalBinPath()
+
 	binInfo := model.BinaryInfo{
 		Name:        strings.Split(filepath.Base(path), "@")[0],
 		FullPath:    path,
@@ -218,7 +220,23 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (model.BinaryInfo, error) {
 		Module:      model.NewModule(info.Main.Path, model.NewVersion(info.Main.Version)),
 		ModuleSum:   info.Main.Sum,
 		GoVersion:   info.GoVersion,
-		IsManaged:   strings.HasPrefix(installPath, m.workspace.GetInternalBinPath()),
+		IsManaged:   strings.HasPrefix(installPath, internalBinPath),
+	}
+
+	if strings.HasPrefix(path, internalBinPath) {
+		binPaths, err := m.fs.ListBinaries(m.workspace.GetGoBinPath())
+		if err != nil {
+			return model.BinaryInfo{}, err
+		}
+
+		for _, bin := range binPaths {
+			if target, err := m.fs.GetSymlinkTarget(bin); err == nil {
+				if target == path {
+					binInfo.IsPinned = true
+					break
+				}
+			}
+		}
 	}
 
 	for _, s := range info.Settings {
