@@ -276,21 +276,18 @@ func newListCmd(gobin *gobin.Gobin) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List installed binaries",
-		Long: `List installed binaries.
+		Short: "List binaries",
+		Long: `List binaries in the Go binary path, or if managed is true, list all managed binaries.
 
 Examples:
   gobin list                   # List binaries in the Go binary path
-  gobin list --managed         # List all managed binaries
-
-By default, only binaries in the GO bin path are shown. Use -m to list all
-managed binaries.`,
+  gobin list --managed         # List all managed binaries`,
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
-			return gobin.ListInstalledBinaries(managed)
+			return gobin.ListBinaries(managed)
 		},
 	}
 

@@ -86,11 +86,21 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
               {{$env}}{{end}}{{end}}
 `
 
-	// listTemplate is the template for the list command.
-	listTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Version"}}
+	// listInstalledTemplate is the template for the list command for installed
+	// binaries.
+	listInstalledTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Version"}}
 {{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth 6)}}
 {{range .Binaries -}}
-{{printf "%-*s" $.NameWidth .Name}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{printf "%-*s" $.ModuleVersionWidth .Module.Version.String}}
+{{if .IsManaged}}{{color (printf "%-*s" $.NameWidth .Name) "green"}}{{else}}{{printf "%-*s" $.NameWidth .Name}}{{end}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{printf "%-*s" $.ModuleVersionWidth .Module.Version.String}}
+{{end -}}
+`
+
+	// listManagedTemplate is the template for the list command for managed
+	// binaries.
+	listManagedTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Version"}}
+{{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth 6)}}
+{{range .Binaries -}}
+{{if .IsPinned}}{{color (printf "%-*s" $.NameWidth .Name) "green"}}{{else}}{{printf "%-*s" $.NameWidth .Name}}{{end}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{printf "%-*s" $.ModuleVersionWidth .Module.Version.String}}
 {{end -}}
 `
 
@@ -198,17 +208,18 @@ func (g *Gobin) InstallPackages(
 	return grp.Wait()
 }
 
-// ListInstalledBinaries lists all installed binaries in the Go binary directory.
-// It prints a template with the installed binaries to the standard output (or
-// another defined io.Writer), or an error if the binary directory cannot be
-// determined or listed. If managed is true, it lists all managed binaries.
-func (g *Gobin) ListInstalledBinaries(managed bool) error {
+// ListBinaries lists all binaries in the Go binary directory, or if managed is
+// true, it lists all binaries in the internal binary directory. It prints a
+// template with the binaries to the standard output (or another defined
+// io.Writer), or an error if the binary directory cannot be determined or
+// listed.
+func (g *Gobin) ListBinaries(managed bool) error {
 	binInfos, err := g.binaryManager.GetAllBinaryInfos(managed)
 	if err != nil {
 		return err
 	}
 
-	return g.printInstalledBinaries(binInfos)
+	return g.printBinaries(binInfos, managed)
 }
 
 // ListOutdatedBinaries lists all outdated binaries in the Go binary directory.
@@ -513,9 +524,11 @@ func (g *Gobin) printBinaryDiagnostics(diags []model.BinaryDiagnostic) error {
 	return nil
 }
 
-// printInstalledBinaries prints the installed binaries to the standard output
-// (or another defined io.Writer).
-func (g *Gobin) printInstalledBinaries(binInfos []model.BinaryInfo) error {
+// printBinaries prints the binaries to the standard output (or another defined
+// io.Writer). If managed is false, it prints the installed binaries, highlighting
+// the managed binaries in green. If managed is true, it prints the managed
+// binaries, highlighting the pinned binaries in green.
+func (g *Gobin) printBinaries(binInfos []model.BinaryInfo, managed bool) error {
 	sort.Slice(binInfos, func(i, j int) bool {
 		if binInfos[i].Name != binInfos[j].Name {
 			return binInfos[i].Name < binInfos[j].Name
@@ -551,10 +564,16 @@ func (g *Gobin) printInstalledBinaries(binInfos []model.BinaryInfo) error {
 		ModuleVersionWidth: maxModuleVersionWidth,
 	}
 
+	tmpl := listInstalledTemplate
+	if managed {
+		tmpl = listManagedTemplate
+	}
+
 	tmplParsed := template.Must(template.New("list").Funcs(template.FuncMap{
 		"add":    add,
+		"color":  colorize,
 		"repeat": strings.Repeat,
-	}).Parse(listTemplate))
+	}).Parse(tmpl))
 
 	if err := tmplParsed.Execute(g.stdOut, data); err != nil {
 		slog.Default().Error("error executing template", "template", tmplParsed.Name(), "err", err)

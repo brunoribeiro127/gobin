@@ -21,6 +21,7 @@ type BinaryInfo struct {
 	EnvVars        []string
 
 	IsManaged bool
+	IsPinned  bool
 }
 
 // GetPinnedVersion returns the pinned version of the binary. If the binary
