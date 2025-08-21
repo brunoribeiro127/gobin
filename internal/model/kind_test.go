@@ -18,12 +18,24 @@ func TestKind_GetKindFromName(t *testing.T) {
 			name:     "mockproj",
 			expected: model.KindLatest,
 		},
+		"latest-multiple-parts": {
+			name:     "mockproj-test",
+			expected: model.KindLatest,
+		},
 		"major": {
 			name:     "mockproj-v1",
 			expected: model.KindMajor,
 		},
+		"major-multiple-parts": {
+			name:     "mockproj-test-v1",
+			expected: model.KindMajor,
+		},
 		"minor": {
 			name:     "mockproj-v1.2",
+			expected: model.KindMinor,
+		},
+		"minor-multiple-parts": {
+			name:     "mockproj-test-v1.2",
 			expected: model.KindMinor,
 		},
 	}

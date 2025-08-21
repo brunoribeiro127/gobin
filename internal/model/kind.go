@@ -32,15 +32,15 @@ var allowedKinds = []Kind{
 // contains a version suffix, it returns the kind. Otherwise, it returns latest.
 func GetKindFromName(name string) Kind {
 	parts := strings.Split(name, "-")
-	if len(parts) == 1 {
-		return KindLatest
+	if version := NewVersion(parts[len(parts)-1]); version.IsValid() {
+		if strings.Contains(version.String(), ".") {
+			return KindMinor
+		}
+
+		return KindMajor
 	}
 
-	if strings.Contains(parts[1], ".") {
-		return KindMinor
-	}
-
-	return KindMajor
+	return KindLatest
 }
 
 // GetTargetBinPath returns the target path for a binary based on the base path,

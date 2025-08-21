@@ -19,15 +19,33 @@ func TestBinaryInfo_GetPinnedVersion(t *testing.T) {
 			},
 			expected: model.NewLatestVersion(),
 		},
+		"latest-version-multiple-parts": {
+			binaryInfo: model.BinaryInfo{
+				Name: "mockproj-test",
+			},
+			expected: model.NewLatestVersion(),
+		},
 		"major-version": {
 			binaryInfo: model.BinaryInfo{
 				Name: "mockproj-v1",
 			},
 			expected: model.NewVersion("v1"),
 		},
+		"major-version-multiple-parts": {
+			binaryInfo: model.BinaryInfo{
+				Name: "mockproj-test-v1",
+			},
+			expected: model.NewVersion("v1"),
+		},
 		"minor-version": {
 			binaryInfo: model.BinaryInfo{
 				Name: "mockproj-v1.2",
+			},
+			expected: model.NewVersion("v1.2"),
+		},
+		"minor-version-multiple-parts": {
+			binaryInfo: model.BinaryInfo{
+				Name: "mockproj-test-v1.2",
 			},
 			expected: model.NewVersion("v1.2"),
 		},
