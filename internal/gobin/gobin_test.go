@@ -16,6 +16,7 @@ import (
 	"github.com/brunoribeiro127/gobin/internal/manager"
 	managermocks "github.com/brunoribeiro127/gobin/internal/manager/mocks"
 	"github.com/brunoribeiro127/gobin/internal/model"
+	"github.com/brunoribeiro127/gobin/internal/system"
 	systemmocks "github.com/brunoribeiro127/gobin/internal/system/mocks"
 	"github.com/brunoribeiro127/gobin/internal/toolchain"
 )
@@ -55,6 +56,11 @@ type mockPinBinaryCall struct {
 	bin  model.Binary
 	kind model.Kind
 	err  error
+}
+
+type mockPruneBinaryCall struct {
+	bin model.Binary
+	err error
 }
 
 type mockUninstallBinaryCall struct {
@@ -1397,6 +1403,89 @@ func TestGobin_PrintVersion(t *testing.T) {
 			err := gobin.PrintVersion(tc.binary)
 			assert.Equal(t, tc.expectedErr, err)
 			assert.Equal(t, tc.expectedStdOut, stdOut.String())
+		})
+	}
+}
+
+func TestGobin_PruneBinaries(t *testing.T) {
+	workspace := system.NewWorkspace(
+		system.NewEnvironment(),
+		nil,
+		system.NewRuntime(),
+	)
+
+	intBinPath := workspace.GetInternalBinPath()
+
+	cases := map[string]struct {
+		bins                 []model.Binary
+		callListBinaries     bool
+		mockListBinaries     []string
+		mockListBinariesErr  error
+		mockPruneBinaryCalls []mockPruneBinaryCall
+		expectedErr          error
+	}{
+		"success-specific-binaries": {
+			bins: []model.Binary{
+				model.NewBinary("mockproj1"),
+				model.NewBinary("mockproj2@v2"),
+			},
+			mockPruneBinaryCalls: []mockPruneBinaryCall{
+				{bin: model.NewBinary("mockproj1")},
+				{bin: model.NewBinary("mockproj2@v2")},
+			},
+		},
+		"success-all-binaries": {
+			callListBinaries: true,
+			mockListBinaries: []string{
+				filepath.Join(intBinPath, "mockproj1@v1.0.0"),
+				filepath.Join(intBinPath, "mockproj1@v2.0.0"),
+				filepath.Join(intBinPath, "mockproj2@v1.1.0"),
+				filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+			},
+			mockPruneBinaryCalls: []mockPruneBinaryCall{
+				{bin: model.NewBinary("mockproj1")},
+				{bin: model.NewBinary("mockproj2")},
+			},
+		},
+		"error-list-binaries": {
+			callListBinaries:    true,
+			mockListBinariesErr: errors.New("unexpected error"),
+			expectedErr:         errors.New("unexpected error"),
+		},
+		"error-prune-binary": {
+			bins: []model.Binary{
+				model.NewBinary("mockproj1"),
+			},
+			mockPruneBinaryCalls: []mockPruneBinaryCall{
+				{
+					bin: model.NewBinary("mockproj1"),
+					err: errors.New("unexpected error"),
+				},
+			},
+			expectedErr: errors.New("unexpected error"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fs := systemmocks.NewFileSystem(t)
+			binaryManager := managermocks.NewBinaryManager(t)
+
+			if tc.callListBinaries {
+				fs.EXPECT().ListBinaries(intBinPath).
+					Return(tc.mockListBinaries, tc.mockListBinariesErr).
+					Once()
+			}
+
+			for _, call := range tc.mockPruneBinaryCalls {
+				binaryManager.EXPECT().PruneBinary(call.bin).
+					Return(call.err).
+					Once()
+			}
+
+			gobin := gobin.NewGobin(binaryManager, fs, nil, nil, nil, workspace)
+			err := gobin.PruneBinaries(tc.bins...)
+			assert.Equal(t, tc.expectedErr, err)
 		})
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -288,11 +289,12 @@ func (g *Gobin) ListOutdatedBinaries(
 // returns an error if any of the binaries cannot be migrated due to the binary
 // being not found or the binary being already managed or any other error.
 func (g *Gobin) MigrateBinaries(bins ...model.Binary) error {
+	var err error
+	var binPaths []string
+
 	goBinPath := g.workspace.GetGoBinPath()
 
-	var binPaths []string
 	if len(bins) == 0 {
-		var err error
 		binPaths, err = g.fs.ListBinaries(goBinPath)
 		if err != nil {
 			return err
@@ -303,7 +305,6 @@ func (g *Gobin) MigrateBinaries(bins ...model.Binary) error {
 		}
 	}
 
-	var err error
 	for _, path := range binPaths {
 		if migrateErr := g.binaryManager.MigrateBinary(path); migrateErr != nil {
 			switch {
@@ -400,6 +401,35 @@ func (g *Gobin) PrintVersion(path string) error {
 	)
 
 	return nil
+}
+
+// PruneBinaries prunes the given binaries or the whole internal binary
+// directory. It returns an error if the binary directory cannot be determined
+// or listed, or if the binaries failed to be pruned.
+func (g *Gobin) PruneBinaries(bins ...model.Binary) error {
+	if len(bins) == 0 {
+		binPaths, err := g.fs.ListBinaries(g.workspace.GetInternalBinPath())
+		if err != nil {
+			return err
+		}
+
+		for _, path := range binPaths {
+			bin := model.NewBinary(filepath.Base(path))
+			bins = append(bins, model.NewBinary(bin.Name))
+		}
+
+		bins = slices.Compact(bins)
+	}
+
+	var err error
+	for _, bin := range bins {
+		if pruneErr := g.binaryManager.PruneBinary(bin); pruneErr != nil {
+			err = pruneErr
+			continue
+		}
+	}
+
+	return err
 }
 
 // ShowBinaryRepository shows the repository URL for a given binary. It prints

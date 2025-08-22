@@ -71,6 +71,10 @@ type BinaryManager interface {
 		bin model.Binary,
 		kind model.Kind,
 	) error
+	// PruneBinary prunes binaries from the internal binary directory.
+	PruneBinary(
+		bin model.Binary,
+	) error
 	// UninstallBinary uninstalls a binary.
 	UninstallBinary(
 		bin model.Binary,
@@ -474,6 +478,40 @@ func (m *GoBinaryManager) PinBinary(bin model.Binary, kind model.Kind) error {
 
 	if err = m.fs.ReplaceSymlink(matchPath, targetPath); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// PruneBinary prunes binaries from the internal binary directory identified by
+// the given binary when not pinned. It returns an error if binaries cannot be
+// listed, retrieved, or removed.
+func (m *GoBinaryManager) PruneBinary(bin model.Binary) error {
+	logger := slog.Default().With("bin", bin.String())
+
+	binPaths, err := m.fs.ListBinaries(m.workspace.GetInternalBinPath())
+	if err != nil {
+		return err
+	}
+
+	for _, binPath := range binPaths {
+		intBin := model.NewBinary(filepath.Base(binPath))
+		if intBin.IsPartOf(bin) {
+			info, err := m.GetBinaryInfo(binPath)
+			if err != nil {
+				return err
+			}
+
+			if info.IsPinned {
+				logger.Info("skipping prune for pinned binary", "internal_bin", intBin.String())
+				continue
+			}
+
+			if err = m.fs.Remove(info.InstallPath); err != nil {
+				logger.Error("failed to remove binary", "err", err, "path", info.InstallPath)
+				return err
+			}
+		}
 	}
 
 	return nil

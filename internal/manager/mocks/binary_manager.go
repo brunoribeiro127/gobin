@@ -541,6 +541,57 @@ func (_c *BinaryManager_PinBinary_Call) RunAndReturn(run func(bin model.Binary, 
 	return _c
 }
 
+// PruneBinary provides a mock function for the type BinaryManager
+func (_mock *BinaryManager) PruneBinary(bin model.Binary) error {
+	ret := _mock.Called(bin)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PruneBinary")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(model.Binary) error); ok {
+		r0 = returnFunc(bin)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// BinaryManager_PruneBinary_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PruneBinary'
+type BinaryManager_PruneBinary_Call struct {
+	*mock.Call
+}
+
+// PruneBinary is a helper method to define mock.On call
+//   - bin model.Binary
+func (_e *BinaryManager_Expecter) PruneBinary(bin interface{}) *BinaryManager_PruneBinary_Call {
+	return &BinaryManager_PruneBinary_Call{Call: _e.mock.On("PruneBinary", bin)}
+}
+
+func (_c *BinaryManager_PruneBinary_Call) Run(run func(bin model.Binary)) *BinaryManager_PruneBinary_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 model.Binary
+		if args[0] != nil {
+			arg0 = args[0].(model.Binary)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *BinaryManager_PruneBinary_Call) Return(err error) *BinaryManager_PruneBinary_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *BinaryManager_PruneBinary_Call) RunAndReturn(run func(bin model.Binary) error) *BinaryManager_PruneBinary_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UninstallBinary provides a mock function for the type BinaryManager
 func (_mock *BinaryManager) UninstallBinary(bin model.Binary) error {
 	ret := _mock.Called(bin)

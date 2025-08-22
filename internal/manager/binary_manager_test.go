@@ -15,6 +15,7 @@ import (
 
 	"github.com/brunoribeiro127/gobin/internal/manager"
 	"github.com/brunoribeiro127/gobin/internal/model"
+	"github.com/brunoribeiro127/gobin/internal/system"
 	systemmocks "github.com/brunoribeiro127/gobin/internal/system/mocks"
 	"github.com/brunoribeiro127/gobin/internal/toolchain"
 	toolchainmocks "github.com/brunoribeiro127/gobin/internal/toolchain/mocks"
@@ -32,16 +33,21 @@ type mockGetLatestModuleVersionCall struct {
 	err          error
 }
 
+type mockGetSymlinkTargetCall struct {
+	path   string
+	target string
+	err    error
+}
+
 type mockListBinariesCall struct {
 	path     string
 	binaries []string
 	err      error
 }
 
-type mockGetSymlinkTargetCall struct {
-	path   string
-	target string
-	err    error
+type mockRemoveCall struct {
+	bin string
+	err error
 }
 
 //nolint:gocognit
@@ -713,6 +719,34 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 			path:                "/home/user/go/bin/mockproj",
 			mockGetBuildInfoErr: toolchain.ErrBinaryBuiltWithoutGoModules,
 			expectedErr:         toolchain.ErrBinaryBuiltWithoutGoModules,
+		},
+		"error-list-binaries": {
+			path: "/home/user/.gobin/bin/mockproj@v0.1.0",
+			mockGetBuildInfo: &buildinfo.BuildInfo{
+				Path: "example.com/mockorg/mockproj/cmd/mockproj",
+				Main: debug.Module{
+					Path:    "example.com/mockorg/mockproj",
+					Version: "v0.1.0",
+					Sum:     "h1:Zn6y0QZqqixH1kGqbYWR/Ce4eG9FD4xZ8buAi7rStQc=",
+				},
+				GoVersion: "go1.24.5",
+				Settings: []debug.BuildSetting{
+					{Key: "GOOS", Value: "darwin"},
+					{Key: "GOARCH", Value: "arm64"},
+					{Key: "GOARM64", Value: "v8.0"},
+					{Key: "CGO_ENABLED", Value: "1"},
+				},
+			},
+			mockGetSymlinkTargetCalls: []mockGetSymlinkTargetCall{
+				{path: "/home/user/.gobin/bin/mockproj@v0.1.0", err: os.ErrInvalid},
+			},
+			callGetInternalBinPath: true,
+			mockGetInternalBinPath: "/home/user/.gobin/bin",
+			callGetGoBinPath:       true,
+			mockGetGoBinPath:       "/home/user/go/bin",
+			callListBinaries:       true,
+			mockListBinariesErr:    os.ErrNotExist,
+			expectedErr:            os.ErrNotExist,
 		},
 	}
 
@@ -1670,6 +1704,216 @@ func TestGoBinaryManager_PinBinary(t *testing.T) {
 
 			binaryManager := manager.NewGoBinaryManager(fs, nil, toolchain, workspace)
 			err := binaryManager.PinBinary(tc.bin, tc.kind)
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+}
+
+func TestGoBinaryManager_PruneBinary(t *testing.T) {
+	workspace := system.NewWorkspace(
+		system.NewEnvironment(),
+		nil,
+		system.NewRuntime(),
+	)
+
+	goBinPath := workspace.GetGoBinPath()
+	intBinPath := workspace.GetInternalBinPath()
+
+	cases := map[string]struct {
+		bin                       model.Binary
+		mockListBinariesCalls     []mockListBinariesCall
+		mockGetBuildInfoCalls     []mockGetBuildInfoCall
+		mockGetSymlinkTargetCalls []mockGetSymlinkTargetCall
+		mockRemoveCalls           []mockRemoveCall
+		expectedErr               error
+	}{
+		"success-no-binaries-to-prune": {
+			bin: model.NewBinary("mockproj"),
+			mockListBinariesCalls: []mockListBinariesCall{
+				{
+					path: intBinPath,
+					binaries: []string{
+						filepath.Join(intBinPath, "mockproj1@v1.2.0"),
+						filepath.Join(intBinPath, "mockproj2@v2.0.0"),
+						filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					},
+				},
+			},
+		},
+		"success-binaries-to-prune": {
+			bin: model.NewBinary("mockproj2@v2"),
+			mockListBinariesCalls: []mockListBinariesCall{
+				{
+					path: intBinPath,
+					binaries: []string{
+						filepath.Join(intBinPath, "mockproj2@v1.8.0"),
+						filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					},
+				},
+				{
+					path: goBinPath,
+					binaries: []string{
+						filepath.Join(goBinPath, "mockproj2"),
+					},
+				},
+			},
+			mockGetBuildInfoCalls: []mockGetBuildInfoCall{
+				{
+					path: filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					info: getBuildInfo("mockproj2@v2", "v2.1.0"),
+				},
+			},
+			mockGetSymlinkTargetCalls: []mockGetSymlinkTargetCall{
+				{
+					path: filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					err:  os.ErrNotExist,
+				},
+				{
+					path:   filepath.Join(goBinPath, "mockproj2"),
+					target: filepath.Join(intBinPath, "mockproj2@v1.8.0"),
+				},
+			},
+			mockRemoveCalls: []mockRemoveCall{
+				{
+					bin: filepath.Join(goBinPath, "mockproj2@v2.1.0"),
+				},
+			},
+		},
+		"success-skip-pinned-binary": {
+			bin: model.NewBinary("mockproj2"),
+			mockListBinariesCalls: []mockListBinariesCall{
+				{
+					path: intBinPath,
+					binaries: []string{
+						filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					},
+				},
+				{
+					path: goBinPath,
+					binaries: []string{
+						filepath.Join(goBinPath, "mockproj2"),
+					},
+				},
+			},
+			mockGetBuildInfoCalls: []mockGetBuildInfoCall{
+				{
+					path: filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					info: getBuildInfo("mockproj2@v2", "v2.1.0"),
+				},
+			},
+			mockGetSymlinkTargetCalls: []mockGetSymlinkTargetCall{
+				{
+					path: filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					err:  os.ErrNotExist,
+				},
+				{
+					path:   filepath.Join(goBinPath, "mockproj2"),
+					target: filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+				},
+			},
+		},
+		"error-list-binaries": {
+			bin: model.NewBinary("mockproj2@v2"),
+			mockListBinariesCalls: []mockListBinariesCall{
+				{
+					path: intBinPath,
+					err:  os.ErrNotExist,
+				},
+			},
+			expectedErr: os.ErrNotExist,
+		},
+		"error-get-binary-info": {
+			bin: model.NewBinary("mockproj2"),
+			mockListBinariesCalls: []mockListBinariesCall{
+				{
+					path: intBinPath,
+					binaries: []string{
+						filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					},
+				},
+			},
+			mockGetBuildInfoCalls: []mockGetBuildInfoCall{
+				{
+					path: filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					err:  toolchain.ErrBinaryBuiltWithoutGoModules,
+				},
+			},
+			expectedErr: toolchain.ErrBinaryBuiltWithoutGoModules,
+		},
+		"error-remove-binary": {
+			bin: model.NewBinary("mockproj2@v2"),
+			mockListBinariesCalls: []mockListBinariesCall{
+				{
+					path: intBinPath,
+					binaries: []string{
+						filepath.Join(intBinPath, "mockproj2@v1.8.0"),
+						filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					},
+				},
+				{
+					path: goBinPath,
+					binaries: []string{
+						filepath.Join(goBinPath, "mockproj2"),
+					},
+				},
+			},
+			mockGetBuildInfoCalls: []mockGetBuildInfoCall{
+				{
+					path: filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					info: getBuildInfo("mockproj2@v2", "v2.1.0"),
+				},
+			},
+			mockGetSymlinkTargetCalls: []mockGetSymlinkTargetCall{
+				{
+					path: filepath.Join(intBinPath, "mockproj2@v2.1.0"),
+					err:  os.ErrNotExist,
+				},
+				{
+					path:   filepath.Join(goBinPath, "mockproj2"),
+					target: filepath.Join(intBinPath, "mockproj2@v1.8.0"),
+				},
+			},
+			mockRemoveCalls: []mockRemoveCall{
+				{
+					bin: filepath.Join(goBinPath, "mockproj2@v2.1.0"),
+					err: errors.New("unexpected error"),
+				},
+			},
+			expectedErr: errors.New("unexpected error"),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fs := systemmocks.NewFileSystem(t)
+			toolchain := toolchainmocks.NewToolchain(t)
+
+			for _, call := range tc.mockListBinariesCalls {
+				fs.EXPECT().ListBinaries(call.path).
+					Return(call.binaries, call.err).
+					Once()
+			}
+
+			for _, call := range tc.mockGetBuildInfoCalls {
+				toolchain.EXPECT().GetBuildInfo(call.path).
+					Return(call.info, call.err).
+					Once()
+			}
+
+			for _, call := range tc.mockGetSymlinkTargetCalls {
+				fs.EXPECT().GetSymlinkTarget(call.path).
+					Return(call.target, call.err).
+					Once()
+			}
+
+			for _, call := range tc.mockRemoveCalls {
+				fs.EXPECT().Remove(call.bin).
+					Return(call.err).
+					Once()
+			}
+
+			binaryManager := manager.NewGoBinaryManager(fs, nil, toolchain, workspace)
+			err := binaryManager.PruneBinary(tc.bin)
 			assert.Equal(t, tc.expectedErr, err)
 		})
 	}

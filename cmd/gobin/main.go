@@ -69,7 +69,8 @@ func run(ctx context.Context) int {
 	rt := system.NewRuntime()
 	fs := system.NewFileSystem(rt)
 
-	workspace, err := system.NewWorkspace(env, fs, rt)
+	workspace := system.NewWorkspace(env, fs, rt)
+	err := workspace.Initialize()
 	if err != nil {
 		return 1
 	}
@@ -139,6 +140,7 @@ func run(ctx context.Context) int {
 	cmd.AddCommand(newMigrateCmd(gobin))
 	cmd.AddCommand(newOutdatedCmd(gobin))
 	cmd.AddCommand(newPinCmd(gobin))
+	cmd.AddCommand(newPruneCmd(gobin))
 	cmd.AddCommand(newRepoCmd(gobin))
 	cmd.AddCommand(newUninstallCmd(gobin))
 	cmd.AddCommand(newUpgradeCmd(gobin))
@@ -447,6 +449,71 @@ Examples:
 	)
 
 	return cmd
+}
+
+// newPruneCmd creates a prune command to prune binaries.
+func newPruneCmd(gobin *gobin.Gobin) *cobra.Command {
+	var pruneAll bool
+
+	cmd := &cobra.Command{
+		Use:   "prune [binaries]",
+		Short: "Prune specific binaries or all with --all",
+		Long: `Prune binaries from the internal binary directory. You can prune specific binaries or all binaries.
+
+Examples:
+  gobin prune dlv                        # Prune specific binary
+  gobin prune dlv@v1                     # Prune specific binary with major version
+  gobin prune dlv@v1.25                  # Prune specific binary with minor version
+  gobin prune dlv@v1.25.1                # Prune specific binary with patch version
+  gobin prune dlv golangci-lint mockery  # Prune multiple binaries
+  gobin prune --all                 	 # Prune all binaries`,
+		Args:          cobra.ArbitraryArgs,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
+			bins := make([]model.Binary, len(args))
+			for i, arg := range args {
+				bin := model.NewBinary(arg)
+				if !bin.IsValid() {
+					err := fmt.Errorf("invalid binary argument: %s", arg)
+					fmt.Fprintln(os.Stderr, err.Error())
+					return err
+				}
+
+				bins[i] = bin
+			}
+
+			switch {
+			case pruneAll && len(args) > 0:
+				err := errors.New("cannot use --all with specific binaries")
+				fmt.Fprintln(os.Stderr, err.Error())
+				return err
+
+			case pruneAll:
+				return gobin.PruneBinaries()
+
+			case len(args) == 0:
+				err := errors.New("no binaries specified (use --all to prune all)")
+				fmt.Fprintln(os.Stderr, err.Error())
+				return err
+
+			default:
+				return gobin.PruneBinaries(bins...)
+			}
+		},
+	}
+
+	cmd.Flags().BoolVarP(
+		&pruneAll,
+		"all",
+		"a",
+		false,
+		"prunes all binaries",
+	)
+
+	return cmd
+
 }
 
 // newRepoCmd creates a repo command to show/open the repository URL for a
