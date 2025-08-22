@@ -18,7 +18,7 @@ type mockMkdirAllCall struct {
 	err  error
 }
 
-func TestWorkspace_Paths(t *testing.T) {
+func TestWorkspace(t *testing.T) {
 	cases := map[string]struct {
 		mockUserHomeDir          string
 		mockUserHomeDirErr       error
@@ -248,7 +248,8 @@ func TestWorkspace_Paths(t *testing.T) {
 					Once()
 			}
 
-			workspace, err := system.NewWorkspace(env, fs, rt)
+			workspace := system.NewWorkspace(env, fs, rt)
+			err := workspace.Initialize()
 			if tc.expectedErr != nil {
 				assert.Equal(t, tc.expectedErr, err)
 			} else {

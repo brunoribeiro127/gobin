@@ -210,3 +210,47 @@ func (_c *Workspace_GetInternalTempPath_Call) RunAndReturn(run func() string) *W
 	_c.Call.Return(run)
 	return _c
 }
+
+// Initialize provides a mock function for the type Workspace
+func (_mock *Workspace) Initialize() error {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Initialize")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func() error); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// Workspace_Initialize_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Initialize'
+type Workspace_Initialize_Call struct {
+	*mock.Call
+}
+
+// Initialize is a helper method to define mock.On call
+func (_e *Workspace_Expecter) Initialize() *Workspace_Initialize_Call {
+	return &Workspace_Initialize_Call{Call: _e.mock.On("Initialize")}
+}
+
+func (_c *Workspace_Initialize_Call) Run(run func()) *Workspace_Initialize_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *Workspace_Initialize_Call) Return(err error) *Workspace_Initialize_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *Workspace_Initialize_Call) RunAndReturn(run func() error) *Workspace_Initialize_Call {
+	_c.Call.Return(run)
+	return _c
+}

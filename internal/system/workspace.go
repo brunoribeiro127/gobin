@@ -15,6 +15,8 @@ type Workspace interface {
 	GetInternalBinPath() string
 	// GetInternalTempPath returns the internal temporary directory.
 	GetInternalTempPath() string
+	// Initialize initializes the workspace.
+	Initialize() error
 }
 
 // workspace is the default implementation of the Workspace interface.
@@ -35,18 +37,12 @@ func NewWorkspace(
 	env Environment,
 	fs FileSystem,
 	runtime Runtime,
-) (Workspace, error) {
-	ws := &workspace{
+) Workspace {
+	return &workspace{
 		env:     env,
 		fs:      fs,
 		runtime: runtime,
 	}
-
-	if err := ws.init(); err != nil {
-		return nil, err
-	}
-
-	return ws, nil
 }
 
 // GetGoBinPath returns the Go binary path.
@@ -69,9 +65,10 @@ func (w *workspace) GetInternalTempPath() string {
 	return w.internalTempPath
 }
 
-// init initializes the workspace. It creates the base, binary, and temporary
-// directories. It returns an error if the directories cannot be created.
-func (w *workspace) init() error {
+// Initialize initializes the workspace. It creates the base, binary, and
+// temporary directories. It returns an error if the directories cannot be
+// created.
+func (w *workspace) Initialize() error {
 	homeDir, err := w.env.UserHomeDir()
 	if err != nil {
 		slog.Default().Error("failed to get user home directory", "err", err)
