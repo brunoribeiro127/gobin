@@ -29,7 +29,6 @@ type BinaryInfo struct {
 // returns "latest".
 func (b BinaryInfo) GetPinnedVersion() Version {
 	parts := strings.Split(b.Name, "-")
-	//nolint:mnd // expected version format: name-v<major> or name-v<major>.<minor>
 	if len(parts) > 1 {
 		if version := NewVersion(parts[len(parts)-1]); version.IsValid() {
 			return version

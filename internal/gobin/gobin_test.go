@@ -163,10 +163,18 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 		Vulnerabilities:       nil,
 	}
 
+	workspace, err := system.NewWorkspace(
+		system.NewEnvironment(),
+		nil,
+		system.NewRuntime(),
+	)
+	require.NoError(t, err)
+
+	goBinPath := workspace.GetGoBinPath()
+
 	cases := map[string]struct {
 		stdOut                  io.ReadWriter
 		parallelism             int
-		mockGetGoBinPath        string
 		mockListBinaries        []string
 		mockListBinariesErr     error
 		mockDiagnoseBinaryCalls []mockDiagnoseBinaryCall
@@ -175,18 +183,17 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 		expectedStdErr          string
 	}{
 		"success": {
-			stdOut:           &bytes.Buffer{},
-			parallelism:      1,
-			mockGetGoBinPath: "/home/user/go/bin",
+			stdOut:      &bytes.Buffer{},
+			parallelism: 1,
 			mockListBinaries: []string{
-				"/home/user/go/bin/mockproj1",
-				"/home/user/go/bin/mockproj2",
-				"/home/user/go/bin/mockproj3",
+				filepath.Join(goBinPath, "mockproj1"),
+				filepath.Join(goBinPath, "mockproj2"),
+				filepath.Join(goBinPath, "mockproj3"),
 			},
 			mockDiagnoseBinaryCalls: []mockDiagnoseBinaryCall{
-				{bin: "/home/user/go/bin/mockproj1", info: mockproj1Diagnostic},
-				{bin: "/home/user/go/bin/mockproj2", info: mockproj2Diagnostic},
-				{bin: "/home/user/go/bin/mockproj3", info: mockproj3Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj1"), info: mockproj1Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj2"), info: mockproj2Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj3"), info: mockproj3Diagnostic},
 			},
 			expectedStdOut: `🛠️  mockproj1
     ❗ not in PATH
@@ -219,18 +226,17 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 `,
 		},
 		"success-with-parallelism": {
-			stdOut:           &bytes.Buffer{},
-			parallelism:      2,
-			mockGetGoBinPath: "/home/user/go/bin",
+			stdOut:      &bytes.Buffer{},
+			parallelism: 2,
 			mockListBinaries: []string{
-				"/home/user/go/bin/mockproj1",
-				"/home/user/go/bin/mockproj2",
-				"/home/user/go/bin/mockproj3",
+				filepath.Join(goBinPath, "mockproj1"),
+				filepath.Join(goBinPath, "mockproj2"),
+				filepath.Join(goBinPath, "mockproj3"),
 			},
 			mockDiagnoseBinaryCalls: []mockDiagnoseBinaryCall{
-				{bin: "/home/user/go/bin/mockproj1", info: mockproj1Diagnostic},
-				{bin: "/home/user/go/bin/mockproj2", info: mockproj2Diagnostic},
-				{bin: "/home/user/go/bin/mockproj3", info: mockproj3Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj1"), info: mockproj1Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj2"), info: mockproj2Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj3"), info: mockproj3Diagnostic},
 			},
 			expectedStdOut: `🛠️  mockproj1
     ❗ not in PATH
@@ -263,18 +269,17 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 `,
 		},
 		"partial-success-error-diagnose-binary": {
-			stdOut:           &bytes.Buffer{},
-			parallelism:      1,
-			mockGetGoBinPath: "/home/user/go/bin",
+			stdOut:      &bytes.Buffer{},
+			parallelism: 1,
 			mockListBinaries: []string{
-				"/home/user/go/bin/mockproj1",
-				"/home/user/go/bin/mockproj2",
-				"/home/user/go/bin/mockproj3",
+				filepath.Join(goBinPath, "mockproj1"),
+				filepath.Join(goBinPath, "mockproj2"),
+				filepath.Join(goBinPath, "mockproj3"),
 			},
 			mockDiagnoseBinaryCalls: []mockDiagnoseBinaryCall{
-				{bin: "/home/user/go/bin/mockproj1", info: mockproj1Diagnostic},
-				{bin: "/home/user/go/bin/mockproj2", err: errors.New("unexpected error")},
-				{bin: "/home/user/go/bin/mockproj3", info: mockproj3Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj1"), info: mockproj1Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj2"), err: errors.New("unexpected error")},
+				{bin: filepath.Join(goBinPath, "mockproj3"), info: mockproj3Diagnostic},
 			},
 			expectedErr:    errors.New("unexpected error"),
 			expectedStdErr: "❌ error diagnosing binary \"mockproj2\"\n",
@@ -298,38 +303,35 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 `,
 		},
 		"success-no-issues": {
-			stdOut:           &bytes.Buffer{},
-			parallelism:      1,
-			mockGetGoBinPath: "/home/user/go/bin",
+			stdOut:      &bytes.Buffer{},
+			parallelism: 1,
 			mockListBinaries: []string{
-				"/home/user/go/bin/mockproj1",
-				"/home/user/go/bin/mockproj2",
-				"/home/user/go/bin/mockproj3",
+				filepath.Join(goBinPath, "mockproj1"),
+				filepath.Join(goBinPath, "mockproj2"),
+				filepath.Join(goBinPath, "mockproj3"),
 			},
 			mockDiagnoseBinaryCalls: []mockDiagnoseBinaryCall{
-				{bin: "/home/user/go/bin/mockproj1", info: model.BinaryDiagnostic{}},
-				{bin: "/home/user/go/bin/mockproj2", info: model.BinaryDiagnostic{}},
-				{bin: "/home/user/go/bin/mockproj3", info: model.BinaryDiagnostic{}},
+				{bin: filepath.Join(goBinPath, "mockproj1"), info: model.BinaryDiagnostic{}},
+				{bin: filepath.Join(goBinPath, "mockproj2"), info: model.BinaryDiagnostic{}},
+				{bin: filepath.Join(goBinPath, "mockproj3"), info: model.BinaryDiagnostic{}},
 			},
 			expectedStdOut: "3 binaries checked, 0 with issues\n",
 		},
 		"error-list-binaries": {
 			stdOut:              &bytes.Buffer{},
-			mockGetGoBinPath:    "/home/user/go/bin",
 			mockListBinariesErr: os.ErrNotExist,
 			expectedErr:         os.ErrNotExist,
 		},
 		"error-write-error": {
-			stdOut:           &errorWriter{},
-			parallelism:      1,
-			mockGetGoBinPath: "/home/user/go/bin",
+			stdOut:      &errorWriter{},
+			parallelism: 1,
 			mockListBinaries: []string{
-				"/home/user/go/bin/mockproj1",
-				"/home/user/go/bin/mockproj2",
+				filepath.Join(goBinPath, "mockproj1"),
+				filepath.Join(goBinPath, "mockproj2"),
 			},
 			mockDiagnoseBinaryCalls: []mockDiagnoseBinaryCall{
-				{bin: "/home/user/go/bin/mockproj1", info: mockproj1Diagnostic},
-				{bin: "/home/user/go/bin/mockproj2", info: mockproj2Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj1"), info: mockproj1Diagnostic},
+				{bin: filepath.Join(goBinPath, "mockproj2"), info: mockproj2Diagnostic},
 			},
 			expectedErr: errMockWriteError,
 		},
@@ -339,14 +341,9 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var stdErr bytes.Buffer
 			fs := systemmocks.NewFileSystem(t)
-			workspace := systemmocks.NewWorkspace(t)
 			binaryManager := managermocks.NewBinaryManager(t)
 
-			workspace.EXPECT().GetGoBinPath().
-				Return(tc.mockGetGoBinPath).
-				Once()
-
-			fs.EXPECT().ListBinaries(tc.mockGetGoBinPath).
+			fs.EXPECT().ListBinaries(goBinPath).
 				Return(tc.mockListBinaries, tc.mockListBinariesErr).
 				Once()
 
@@ -357,12 +354,12 @@ func TestGobin_DiagnoseBinaries(t *testing.T) {
 			}
 
 			gobin := gobin.NewGobin(binaryManager, fs, nil, &stdErr, tc.stdOut, workspace)
-			err := gobin.DiagnoseBinaries(context.Background(), tc.parallelism)
-			assert.Equal(t, tc.expectedErr, err)
+			diagErr := gobin.DiagnoseBinaries(context.Background(), tc.parallelism)
+			assert.Equal(t, tc.expectedErr, diagErr)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 
-			bytes, err := io.ReadAll(tc.stdOut)
-			require.NoError(t, err)
+			bytes, readErr := io.ReadAll(tc.stdOut)
+			require.NoError(t, readErr)
 			assert.Equal(t, tc.expectedStdOut, string(bytes))
 		})
 	}
@@ -964,9 +961,17 @@ mockproj2 → example.com/mockorg/mockproj2 @ ` + "\033[31m" + `v1.1.0 ` + "\033
 }
 
 func TestGobin_MigrateBinaries(t *testing.T) {
+	workspace, err := system.NewWorkspace(
+		system.NewEnvironment(),
+		nil,
+		system.NewRuntime(),
+	)
+	require.NoError(t, err)
+
+	goBinPath := workspace.GetGoBinPath()
+
 	cases := map[string]struct {
 		bins                   []model.Binary
-		mockGetGoBinPath       string
 		callListBinaries       bool
 		mockListBinaries       []string
 		mockListBinariesErr    error
@@ -975,11 +980,10 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 		expectedStdErr         string
 	}{
 		"success-single-binary": {
-			bins:             []model.Binary{model.NewBinary("mockproj1")},
-			mockGetGoBinPath: "/home/user/go/bin",
+			bins: []model.Binary{model.NewBinary("mockproj1")},
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
-					path: "/home/user/go/bin/mockproj1",
+					path: filepath.Join(goBinPath, "mockproj1"),
 				},
 			},
 		},
@@ -989,45 +993,42 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 				model.NewBinary("mockproj2"),
 				model.NewBinary("mockproj3"),
 			},
-			mockGetGoBinPath: "/home/user/go/bin",
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
-					path: "/home/user/go/bin/mockproj1",
+					path: filepath.Join(goBinPath, "mockproj1"),
 				},
 				{
-					path: "/home/user/go/bin/mockproj2",
+					path: filepath.Join(goBinPath, "mockproj2"),
 				},
 				{
-					path: "/home/user/go/bin/mockproj3",
+					path: filepath.Join(goBinPath, "mockproj3"),
 				},
 			},
 		},
 		"success-all-binaries": {
-			mockGetGoBinPath: "/home/user/go/bin",
 			callListBinaries: true,
 			mockListBinaries: []string{
-				"/home/user/go/bin/mockproj1",
-				"/home/user/go/bin/mockproj2",
-				"/home/user/go/bin/mockproj3",
+				filepath.Join(goBinPath, "mockproj1"),
+				filepath.Join(goBinPath, "mockproj2"),
+				filepath.Join(goBinPath, "mockproj3"),
 			},
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
-					path: "/home/user/go/bin/mockproj1",
+					path: filepath.Join(goBinPath, "mockproj1"),
 				},
 				{
-					path: "/home/user/go/bin/mockproj2",
+					path: filepath.Join(goBinPath, "mockproj2"),
 				},
 				{
-					path: "/home/user/go/bin/mockproj3",
+					path: filepath.Join(goBinPath, "mockproj3"),
 				},
 			},
 		},
 		"success-skip-binary-already-managed": {
-			bins:             []model.Binary{model.NewBinary("mockproj1")},
-			mockGetGoBinPath: "/home/user/go/bin",
+			bins: []model.Binary{model.NewBinary("mockproj1")},
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
-					path: "/home/user/go/bin/mockproj1",
+					path: filepath.Join(goBinPath, "mockproj1"),
 					err:  manager.ErrBinaryAlreadyManaged,
 				},
 			},
@@ -1035,11 +1036,10 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 			expectedStdErr: "❌ binary \"mockproj1\" already managed\n",
 		},
 		"partial-success-skip-binary-not-found": {
-			bins:             []model.Binary{model.NewBinary("mockproj1")},
-			mockGetGoBinPath: "/home/user/go/bin",
+			bins: []model.Binary{model.NewBinary("mockproj1")},
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
-					path: "/home/user/go/bin/mockproj1",
+					path: filepath.Join(goBinPath, "mockproj1"),
 					err:  toolchain.ErrBinaryNotFound,
 				},
 			},
@@ -1047,18 +1047,16 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 			expectedStdErr: "❌ binary \"mockproj1\" not found\n",
 		},
 		"error-list-binaries": {
-			mockGetGoBinPath:    "/home/user/go/bin",
 			callListBinaries:    true,
 			mockListBinariesErr: errors.New("unexpected error"),
 			expectedErr:         errors.New("unexpected error"),
 		},
 		"error-migrate-binary": {
-			mockGetGoBinPath: "/home/user/go/bin",
 			callListBinaries: true,
-			mockListBinaries: []string{"/home/user/go/bin/mockproj1"},
+			mockListBinaries: []string{filepath.Join(goBinPath, "mockproj1")},
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
-					path: "/home/user/go/bin/mockproj1",
+					path: filepath.Join(goBinPath, "mockproj1"),
 					err:  errors.New("unexpected error"),
 				},
 			},
@@ -1071,15 +1069,10 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var stdErr bytes.Buffer
 			fs := systemmocks.NewFileSystem(t)
-			workspace := systemmocks.NewWorkspace(t)
 			binaryManager := managermocks.NewBinaryManager(t)
 
-			workspace.EXPECT().GetGoBinPath().
-				Return(tc.mockGetGoBinPath).
-				Once()
-
 			if tc.callListBinaries {
-				fs.EXPECT().ListBinaries(tc.mockGetGoBinPath).
+				fs.EXPECT().ListBinaries(goBinPath).
 					Return(tc.mockListBinaries, tc.mockListBinariesErr).
 					Once()
 			}
@@ -1091,8 +1084,8 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 			}
 
 			gobin := gobin.NewGobin(binaryManager, fs, nil, &stdErr, nil, workspace)
-			err := gobin.MigrateBinaries(tc.bins...)
-			assert.Equal(t, tc.expectedErr, err)
+			migrateErr := gobin.MigrateBinaries(tc.bins...)
+			assert.Equal(t, tc.expectedErr, migrateErr)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 		})
 	}
@@ -1192,10 +1185,19 @@ func TestGobin_PinBinaries(t *testing.T) {
 }
 
 func TestGobin_PrintBinaryInfo(t *testing.T) {
+	workspace, err := system.NewWorkspace(
+		system.NewEnvironment(),
+		nil,
+		system.NewRuntime(),
+	)
+	require.NoError(t, err)
+
+	goBinPath := workspace.GetGoBinPath()
+	intBinPath := workspace.GetInternalBinPath()
+
 	cases := map[string]struct {
 		stdOut               io.ReadWriter
 		binary               model.Binary
-		mockGetGoBinPath     string
 		callGetBinaryInfo    bool
 		mockGetBinaryInfo    model.BinaryInfo
 		mockGetBinaryInfoErr error
@@ -1206,12 +1208,11 @@ func TestGobin_PrintBinaryInfo(t *testing.T) {
 		"success-base-info": {
 			stdOut:            &bytes.Buffer{},
 			binary:            model.NewBinary("mockproj1"),
-			mockGetGoBinPath:  "/home/user/go/bin",
 			callGetBinaryInfo: true,
 			mockGetBinaryInfo: model.BinaryInfo{
 				Name:        "mockproj",
-				FullPath:    "/home/user/go/bin/mockproj",
-				InstallPath: "/home/user/.gobin/bin/mockproj@v0.1.0",
+				FullPath:    filepath.Join(goBinPath, "mockproj"),
+				InstallPath: filepath.Join(intBinPath, "mockproj@v0.1.0"),
 				PackagePath: "example.com/mockorg/mockproj/cmd/mockproj",
 				Module:      model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),
 				ModuleSum:   "h1:Zn6y0QZqqixH1kGqbYWR/Ce4eG9FD4xZ8buAi7rStQc=",
@@ -1221,8 +1222,8 @@ func TestGobin_PrintBinaryInfo(t *testing.T) {
 				Feature:     "v8.0",
 				EnvVars:     []string{"CGO_ENABLED=1"},
 			},
-			expectedStdOut: `Path          /home/user/go/bin/mockproj
-Location      /home/user/.gobin/bin/mockproj@v0.1.0
+			expectedStdOut: `Path          ` + filepath.Join(goBinPath, "mockproj") + `
+Location      ` + filepath.Join(intBinPath, "mockproj@v0.1.0") + `
 Package       example.com/mockorg/mockproj/cmd/mockproj
 Module        example.com/mockorg/mockproj@v0.1.0
 Module Sum    h1:Zn6y0QZqqixH1kGqbYWR/Ce4eG9FD4xZ8buAi7rStQc=
@@ -1234,12 +1235,11 @@ Env Vars      CGO_ENABLED=1
 		"success-all-info": {
 			stdOut:            &bytes.Buffer{},
 			binary:            model.NewBinary("mockproj1"),
-			mockGetGoBinPath:  "/home/user/go/bin",
 			callGetBinaryInfo: true,
 			mockGetBinaryInfo: model.BinaryInfo{
 				Name:        "mockproj",
-				FullPath:    "/home/user/go/bin/mockproj",
-				InstallPath: "/home/user/go/bin/mockproj",
+				FullPath:    filepath.Join(goBinPath, "mockproj"),
+				InstallPath: filepath.Join(goBinPath, "mockproj"),
 				PackagePath: "example.com/mockorg/mockproj/cmd/mockproj",
 				Module: model.NewModule(
 					"example.com/mockorg/mockproj",
@@ -1253,7 +1253,7 @@ Env Vars      CGO_ENABLED=1
 				Feature:        "v8.0",
 				EnvVars:        []string{"CGO_ENABLED=1"},
 			},
-			expectedStdOut: `Path          /home/user/go/bin/mockproj
+			expectedStdOut: `Path          ` + filepath.Join(goBinPath, "mockproj") + `
 Location      <unmanaged>
 Package       example.com/mockorg/mockproj/cmd/mockproj
 Module        example.com/mockorg/mockproj@v0.1.2-0.20250729191454-dac745d99aac
@@ -1267,7 +1267,6 @@ Env Vars      CGO_ENABLED=1
 		"error-binary-not-found": {
 			stdOut:               &bytes.Buffer{},
 			binary:               model.NewBinary("mockproj1"),
-			mockGetGoBinPath:     "/home/user/go/bin",
 			callGetBinaryInfo:    true,
 			mockGetBinaryInfoErr: toolchain.ErrBinaryNotFound,
 			expectedErr:          toolchain.ErrBinaryNotFound,
@@ -1276,7 +1275,6 @@ Env Vars      CGO_ENABLED=1
 		"error-get-binary-info": {
 			stdOut:               &bytes.Buffer{},
 			binary:               model.NewBinary("mockproj1"),
-			mockGetGoBinPath:     "/home/user/go/bin",
 			callGetBinaryInfo:    true,
 			mockGetBinaryInfoErr: errors.New("unexpected error"),
 			expectedErr:          errors.New("unexpected error"),
@@ -1285,7 +1283,6 @@ Env Vars      CGO_ENABLED=1
 		"error-write-error": {
 			stdOut:            &errorWriter{},
 			binary:            model.NewBinary("mockproj1"),
-			mockGetGoBinPath:  "/home/user/go/bin",
 			callGetBinaryInfo: true,
 			mockGetBinaryInfo: model.BinaryInfo{},
 			expectedErr:       errMockWriteError,
@@ -1295,26 +1292,21 @@ Env Vars      CGO_ENABLED=1
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			var stdErr bytes.Buffer
-			workspace := systemmocks.NewWorkspace(t)
 			binaryManager := managermocks.NewBinaryManager(t)
 
-			workspace.EXPECT().GetGoBinPath().
-				Return(tc.mockGetGoBinPath).
-				Once()
-
 			if tc.callGetBinaryInfo {
-				binaryManager.EXPECT().GetBinaryInfo(filepath.Join(tc.mockGetGoBinPath, tc.binary.Name)).
+				binaryManager.EXPECT().GetBinaryInfo(filepath.Join(goBinPath, tc.binary.Name)).
 					Return(tc.mockGetBinaryInfo, tc.mockGetBinaryInfoErr).
 					Once()
 			}
 
 			gobin := gobin.NewGobin(binaryManager, nil, nil, &stdErr, tc.stdOut, workspace)
-			err := gobin.PrintBinaryInfo(tc.binary)
-			assert.Equal(t, tc.expectedErr, err)
+			infoErr := gobin.PrintBinaryInfo(tc.binary)
+			assert.Equal(t, tc.expectedErr, infoErr)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
 
-			bytes, err := io.ReadAll(tc.stdOut)
-			require.NoError(t, err)
+			bytes, readErr := io.ReadAll(tc.stdOut)
+			require.NoError(t, readErr)
 			assert.Equal(t, tc.expectedStdOut, string(bytes))
 		})
 	}
@@ -1408,11 +1400,12 @@ func TestGobin_PrintVersion(t *testing.T) {
 }
 
 func TestGobin_PruneBinaries(t *testing.T) {
-	workspace := system.NewWorkspace(
+	workspace, err := system.NewWorkspace(
 		system.NewEnvironment(),
 		nil,
 		system.NewRuntime(),
 	)
+	require.NoError(t, err)
 
 	intBinPath := workspace.GetInternalBinPath()
 
@@ -1484,8 +1477,8 @@ func TestGobin_PruneBinaries(t *testing.T) {
 			}
 
 			gobin := gobin.NewGobin(binaryManager, fs, nil, nil, nil, workspace)
-			err := gobin.PruneBinaries(tc.bins...)
-			assert.Equal(t, tc.expectedErr, err)
+			pruneErr := gobin.PruneBinaries(tc.bins...)
+			assert.Equal(t, tc.expectedErr, pruneErr)
 		})
 	}
 }
@@ -1625,12 +1618,20 @@ func TestGobin_UninstallBinaries(t *testing.T) {
 }
 
 func TestGobin_UpgradeBinaries(t *testing.T) {
+	workspace, err := system.NewWorkspace(
+		system.NewEnvironment(),
+		nil,
+		system.NewRuntime(),
+	)
+	require.NoError(t, err)
+
+	goBinPath := workspace.GetGoBinPath()
+
 	cases := map[string]struct {
 		majorUpgrade           bool
 		rebuild                bool
 		parallelism            int
 		bins                   []model.Binary
-		mockGetGoBinPath       string
 		callListBinaries       bool
 		mockListBinaries       []string
 		mockListBinariesErr    error
@@ -1640,17 +1641,16 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 	}{
 		"success-all-bins": {
 			parallelism:      1,
-			mockGetGoBinPath: "/home/user/go/bin",
 			callListBinaries: true,
 			mockListBinaries: []string{
-				"/home/user/go/bin/mockproj1",
-				"/home/user/go/bin/mockproj2",
-				"/home/user/go/bin/mockproj3-v2",
+				filepath.Join(goBinPath, "mockproj1"),
+				filepath.Join(goBinPath, "mockproj2"),
+				filepath.Join(goBinPath, "mockproj3-v2"),
 			},
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
-				{path: "/home/user/go/bin/mockproj1"},
-				{path: "/home/user/go/bin/mockproj2"},
-				{path: "/home/user/go/bin/mockproj3-v2"},
+				{path: filepath.Join(goBinPath, "mockproj1")},
+				{path: filepath.Join(goBinPath, "mockproj2")},
+				{path: filepath.Join(goBinPath, "mockproj3-v2")},
 			},
 		},
 		"success-specific-bins": {
@@ -1659,50 +1659,45 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 				model.NewBinary("mockproj2"),
 				model.NewBinary("mockproj3-v2"),
 			},
-			mockGetGoBinPath: "/home/user/go/bin",
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
-				{path: "/home/user/go/bin/mockproj2"},
-				{path: "/home/user/go/bin/mockproj3-v2"},
+				{path: filepath.Join(goBinPath, "mockproj2")},
+				{path: filepath.Join(goBinPath, "mockproj3-v2")},
 			},
 		},
 		"success-with-parallelism": {
 			parallelism:      2,
-			mockGetGoBinPath: "/home/user/go/bin",
 			callListBinaries: true,
 			mockListBinaries: []string{
-				"/home/user/go/bin/mockproj1",
-				"/home/user/go/bin/mockproj2",
-				"/home/user/go/bin/mockproj3-v2",
+				filepath.Join(goBinPath, "mockproj1"),
+				filepath.Join(goBinPath, "mockproj2"),
+				filepath.Join(goBinPath, "mockproj3-v2"),
 			},
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
-				{path: "/home/user/go/bin/mockproj1"},
-				{path: "/home/user/go/bin/mockproj2"},
-				{path: "/home/user/go/bin/mockproj3-v2"},
+				{path: filepath.Join(goBinPath, "mockproj1")},
+				{path: filepath.Join(goBinPath, "mockproj2")},
+				{path: filepath.Join(goBinPath, "mockproj3-v2")},
 			},
 		},
 		"error-list-binaries-full-paths": {
 			parallelism:         1,
-			mockGetGoBinPath:    "/home/user/go/bin",
 			callListBinaries:    true,
 			mockListBinariesErr: errors.New("unexpected error"),
 			expectedErr:         errors.New("unexpected error"),
 		},
 		"error-binary-not-found": {
-			parallelism:      1,
-			bins:             []model.Binary{model.NewBinary("mockproj1")},
-			mockGetGoBinPath: "/home/user/go/bin",
+			parallelism: 1,
+			bins:        []model.Binary{model.NewBinary("mockproj1")},
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
-				{path: "/home/user/go/bin/mockproj1", err: toolchain.ErrBinaryNotFound},
+				{path: filepath.Join(goBinPath, "mockproj1"), err: toolchain.ErrBinaryNotFound},
 			},
 			expectedErr:    toolchain.ErrBinaryNotFound,
 			expectedStdErr: "❌ binary \"mockproj1\" not found\n",
 		},
 		"error-upgrade-binary": {
-			parallelism:      1,
-			bins:             []model.Binary{model.NewBinary("mockproj1")},
-			mockGetGoBinPath: "/home/user/go/bin",
+			parallelism: 1,
+			bins:        []model.Binary{model.NewBinary("mockproj1")},
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
-				{path: "/home/user/go/bin/mockproj1", err: errors.New("unexpected error")},
+				{path: filepath.Join(goBinPath, "mockproj1"), err: errors.New("unexpected error")},
 			},
 			expectedErr:    errors.New("unexpected error"),
 			expectedStdErr: "❌ error upgrading binary \"mockproj1\"\n",
@@ -1713,15 +1708,10 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var stdErr bytes.Buffer
 			fs := systemmocks.NewFileSystem(t)
-			workspace := systemmocks.NewWorkspace(t)
 			binaryManager := managermocks.NewBinaryManager(t)
 
-			workspace.EXPECT().GetGoBinPath().
-				Return(tc.mockGetGoBinPath).
-				Once()
-
 			if tc.callListBinaries {
-				fs.EXPECT().ListBinaries(tc.mockGetGoBinPath).
+				fs.EXPECT().ListBinaries(goBinPath).
 					Return(tc.mockListBinaries, tc.mockListBinariesErr).
 					Once()
 			}
@@ -1736,7 +1726,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 			}
 
 			gobin := gobin.NewGobin(binaryManager, fs, nil, &stdErr, nil, workspace)
-			err := gobin.UpgradeBinaries(
+			upgradeErr := gobin.UpgradeBinaries(
 				context.Background(),
 				tc.majorUpgrade,
 				tc.rebuild,
@@ -1744,7 +1734,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 				tc.bins...,
 			)
 			assert.Equal(t, tc.expectedStdErr, stdErr.String())
-			assert.Equal(t, tc.expectedErr, err)
+			assert.Equal(t, tc.expectedErr, upgradeErr)
 		})
 	}
 }

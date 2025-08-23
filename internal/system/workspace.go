@@ -37,12 +37,23 @@ func NewWorkspace(
 	env Environment,
 	fs FileSystem,
 	runtime Runtime,
-) Workspace {
-	return &workspace{
+) (Workspace, error) {
+	w := &workspace{
 		env:     env,
 		fs:      fs,
 		runtime: runtime,
 	}
+
+	homeDir, err := w.env.UserHomeDir()
+	if err != nil {
+		slog.Default().Error("failed to get user home directory", "err", err)
+		return nil, err
+	}
+
+	w.loadGoBinPath(homeDir)
+	w.loadInternalPaths(homeDir)
+
+	return w, nil
 }
 
 // GetGoBinPath returns the Go binary path.
@@ -69,18 +80,9 @@ func (w *workspace) GetInternalTempPath() string {
 // temporary directories. It returns an error if the directories cannot be
 // created.
 func (w *workspace) Initialize() error {
-	homeDir, err := w.env.UserHomeDir()
-	if err != nil {
-		slog.Default().Error("failed to get user home directory", "err", err)
-		return err
-	}
-
-	w.loadGoBinPath(homeDir)
-	w.loadInternalPaths(homeDir)
-
 	for _, dir := range []string{w.internalBasePath, w.internalBinPath, w.internalTempPath} {
 		//nolint:mnd // owner only permissions
-		if err = w.fs.CreateDir(dir, 0700); err != nil {
+		if err := w.fs.CreateDir(dir, 0700); err != nil {
 			slog.Default().Error("failed to create directory", "dir", dir, "err", err)
 			return err
 		}
@@ -108,7 +110,7 @@ func (w *workspace) loadGoBinPath(homeDir string) {
 func (w *workspace) loadInternalPaths(homeDir string) {
 	var baseDir, binDir, tmpDir string
 	switch w.runtime.OS() {
-	case "windows": //nolint:goconst // windows is a valid OS
+	case "windows": //nolint:goconst,nolintlint
 		baseDir = filepath.Join(homeDir, "AppData", "Local", "gobin")
 		binDir = filepath.Join(baseDir, "bin")
 		tmpDir = filepath.Join(baseDir, "tmp")

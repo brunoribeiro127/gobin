@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -57,24 +58,24 @@ func TestKind_GetTargetBinPath(t *testing.T) {
 	}{
 		"latest": {
 			kind:     model.KindLatest,
-			basePath: "/usr/local/bin",
+			basePath: filepath.Join("usr", "local", "bin"),
 			name:     "mockproj",
 			version:  model.NewLatestVersion(),
-			expected: "/usr/local/bin/mockproj",
+			expected: filepath.Join("usr", "local", "bin", "mockproj"),
 		},
 		"major": {
 			kind:     model.KindMajor,
-			basePath: "/usr/local/bin",
+			basePath: filepath.Join("usr", "local", "bin"),
 			name:     "mockproj",
 			version:  model.NewVersion("v1.2.3"),
-			expected: "/usr/local/bin/mockproj-v1",
+			expected: filepath.Join("usr", "local", "bin", "mockproj-v1"),
 		},
 		"minor": {
 			kind:     model.KindMinor,
-			basePath: "/usr/local/bin",
+			basePath: filepath.Join("usr", "local", "bin"),
 			name:     "mockproj",
 			version:  model.NewVersion("v1.2.3"),
-			expected: "/usr/local/bin/mockproj-v1.2",
+			expected: filepath.Join("usr", "local", "bin", "mockproj-v1.2"),
 		},
 	}
 

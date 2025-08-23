@@ -3,9 +3,11 @@ package toolchain_test
 import (
 	"context"
 	"debug/buildinfo"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"testing"
 
@@ -79,7 +81,9 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 		wd, err := os.Getwd()
 		require.NoError(t, err)
 		testFile := filepath.Join(wd, "testdata", modFile)
-		return []byte(`{"GoMod":"` + testFile + `","Version":"` + version + `"}`)
+		bytes, err := json.Marshal(map[string]string{"GoMod": testFile, "Version": version})
+		require.NoError(t, err)
+		return bytes
 	}
 
 	cases := map[string]struct {
@@ -137,7 +141,13 @@ func TestGoToolchain_GetLatestModuleVersion(t *testing.T) {
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"GoMod":"./go.mod","Version":"v0.1.0"}`)
 			}(),
-			expectedErr: errors.New("open ./go.mod: no such file or directory"),
+			expectedErr: func() error {
+				if runtime.GOOS == "windows" {
+					//nolint:revive // windows error message
+					return errors.New("open ./go.mod: The system cannot find the file specified.")
+				}
+				return errors.New("open ./go.mod: no such file or directory")
+			}(),
 		},
 		"error-go-mod-file-not-available": {
 			module: model.NewLatestModule("example.com/mockorg/mockproj"),
@@ -190,7 +200,9 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 		wd, err := os.Getwd()
 		require.NoError(t, err)
 		testFile := filepath.Join(wd, "testdata", modFile)
-		return []byte(`{"GoMod":"` + testFile + `"}`)
+		bytes, err := json.Marshal(map[string]string{"GoMod": testFile})
+		require.NoError(t, err)
+		return bytes
 	}
 
 	cases := map[string]struct {
@@ -266,7 +278,13 @@ func TestGoToolchain_GetModuleFile(t *testing.T) {
 			mockExecCmdOutput: func() []byte {
 				return []byte(`{"GoMod":"./go.mod"}`)
 			}(),
-			expectedErr: errors.New("open ./go.mod: no such file or directory"),
+			expectedErr: func() error {
+				if runtime.GOOS == "windows" {
+					//nolint:revive // windows error message
+					return errors.New("open ./go.mod: The system cannot find the file specified.")
+				}
+				return errors.New("open ./go.mod: no such file or directory")
+			}(),
 		},
 		"error-parsing-go-mod-file": {
 			module:            model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v0.1.0")),

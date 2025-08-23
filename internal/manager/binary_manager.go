@@ -202,6 +202,8 @@ func (m *GoBinaryManager) GetAllBinaryInfos(managed bool) ([]model.BinaryInfo, e
 // It constructs the binary info from the binary's build info. It fails if the
 // binary does not exist, is not a Go binary, or the binary was built without
 // Go modules.
+//
+//nolint:gocognit
 func (m *GoBinaryManager) GetBinaryInfo(path string) (model.BinaryInfo, error) {
 	info, err := m.toolchain.GetBuildInfo(path)
 	if err != nil {
@@ -228,13 +230,13 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (model.BinaryInfo, error) {
 	}
 
 	if strings.HasPrefix(path, internalBinPath) {
-		binPaths, err := m.fs.ListBinaries(m.workspace.GetGoBinPath())
-		if err != nil {
-			return model.BinaryInfo{}, err
+		binPaths, listErr := m.fs.ListBinaries(m.workspace.GetGoBinPath())
+		if listErr != nil {
+			return model.BinaryInfo{}, listErr
 		}
 
 		for _, bin := range binPaths {
-			if target, err := m.fs.GetSymlinkTarget(bin); err == nil {
+			if target, err = m.fs.GetSymlinkTarget(bin); err == nil {
 				if target == path {
 					binInfo.IsPinned = true
 					break
@@ -497,9 +499,9 @@ func (m *GoBinaryManager) PruneBinary(bin model.Binary) error {
 	for _, binPath := range binPaths {
 		intBin := model.NewBinary(filepath.Base(binPath))
 		if intBin.IsPartOf(bin) {
-			info, err := m.GetBinaryInfo(binPath)
-			if err != nil {
-				return err
+			info, infoErr := m.GetBinaryInfo(binPath)
+			if infoErr != nil {
+				return infoErr
 			}
 
 			if info.IsPinned {

@@ -17,7 +17,6 @@ packages:
       FileSystem:
       Resource:
       Runtime:
-      Workspace:
   github.com/brunoribeiro127/gobin/internal/toolchain:
     interfaces:
       Toolchain:
