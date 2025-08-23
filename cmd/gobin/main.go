@@ -245,7 +245,7 @@ Examples:
   gobin install github.com/go-delve/delve/cmd/dlv@v1.25.1 --kind major # Install and pin major version (dlv-v1)
   gobin install github.com/go-delve/delve/cmd/dlv@v1.25.1 --kind minor # Install and pin minor version (dlv-v1.25)
 
-The package version is optional, defaulting to "latest".
+The package version is optional, defaults to "latest".
 The GOFLAGS environment variable can be used to define build flags.`,
 		Args:          cobra.MinimumNArgs(1),
 		SilenceErrors: true,
@@ -296,6 +296,8 @@ func newListCmd(gobin *gobin.Gobin) *cobra.Command {
 		Use:   "list",
 		Short: "List binaries",
 		Long: `List binaries in the Go binary path, or if managed is true, list all managed binaries.
+For installed binaries, the green color indicates that the binary is managed by gobin. For managed binaries,
+the green color indicates that the binary is pinned.
 
 Examples:
   gobin list                   # List binaries in the Go binary path
@@ -403,14 +405,13 @@ func newOutdatedCmd(gobin *gobin.Gobin) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "outdated",
 		Short: "List outdated binaries",
-		Long: `List binaries that have newer versions available.
+		Long: `List binaries that have newer versions available. By default, only minor and patch
+updates are shown. Use --major to include potentially breaking major version upgrades. If a binary
+is pinned, it will check the latest version available for the pinned version. 
 
 Examples:
   gobin outdated                       # Show outdated binaries (minor/patch only)
-  gobin outdated --major               # Include major version upgrades
-
-By default, only minor and patch updates are shown. Use --major to include
-potentially breaking major version upgrades.`,
+  gobin outdated --major               # Include major version upgrades`,
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -593,7 +594,7 @@ Examples:
   gobin repo dlv --open                # Open repository in browser
 
 The repository URL is determined from the module's origin information,
-falling back to constructing the URL from the module path.`,
+falling back to constructing the URL from the module path if not available.`,
 		Args: cobra.ExactArgs(1),
 		ValidArgsFunction: func(
 			_ *cobra.Command, _ []string, toComplete string,
@@ -686,16 +687,17 @@ func newUpgradeCmd(
 		Use:   "upgrade [binaries]",
 		Short: "Upgrade specific binaries or all with --all",
 		Long: `Upgrade binaries to their latest versions. You can upgrade specific binaries or all outdated ones.
+If a binary is pinned, it will be upgraded to the latest pinned version available.
+If --major flag is specified, the binary will be upgraded to the latest major version available.
+If --rebuild flag is specified, the binary will be rebuilt even if it is up-to-date.
 
 Examples:
   gobin upgrade dlv                        # Upgrade specific binary
   gobin upgrade dlv golangci-lint mockery  # Upgrade multiple binaries  
   gobin upgrade --all                 	   # Upgrade all outdated binaries
   gobin upgrade --all --major              # Include major version upgrades
-  gobin upgrade dlv --rebuild              # Force rebuild even if up-to-date
-  gobin upgrade --all --rebuild            # Rebuild all binaries with current Go version
-
-The --rebuild flag is useful when binaries are up-to-date but compiled with older Go versions.`,
+  gobin upgrade dlv-v1 --rebuild           # Force rebuild even if up-to-date
+  gobin upgrade --all --rebuild            # Rebuild all binaries with current Go version`,
 		Args: cobra.ArbitraryArgs,
 		ValidArgsFunction: func(
 			_ *cobra.Command, _ []string, toComplete string,
