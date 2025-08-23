@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -134,16 +136,16 @@ func run(ctx context.Context) int {
 	)
 
 	cmd.AddCommand(newDoctorCmd(gobin))
-	cmd.AddCommand(newInfoCmd(gobin))
+	cmd.AddCommand(newInfoCmd(gobin, fs, workspace))
 	cmd.AddCommand(newInstallCmd(gobin))
 	cmd.AddCommand(newListCmd(gobin))
-	cmd.AddCommand(newMigrateCmd(gobin))
+	cmd.AddCommand(newMigrateCmd(gobin, fs, workspace))
 	cmd.AddCommand(newOutdatedCmd(gobin))
-	cmd.AddCommand(newPinCmd(gobin))
-	cmd.AddCommand(newPruneCmd(gobin))
-	cmd.AddCommand(newRepoCmd(gobin))
-	cmd.AddCommand(newUninstallCmd(gobin))
-	cmd.AddCommand(newUpgradeCmd(gobin))
+	cmd.AddCommand(newPinCmd(gobin, fs, workspace))
+	cmd.AddCommand(newPruneCmd(gobin, fs, workspace))
+	cmd.AddCommand(newRepoCmd(gobin, fs, workspace))
+	cmd.AddCommand(newUninstallCmd(gobin, fs, workspace))
+	cmd.AddCommand(newUpgradeCmd(gobin, fs, workspace))
 	cmd.AddCommand(newVersionCmd(gobin))
 
 	if err = cmd.ExecuteContext(ctx); err != nil {
@@ -186,11 +188,25 @@ Run this command regularly to make sure everything is ok with your installed bin
 }
 
 // newInfoCmd creates a info command to print information about a binary.
-func newInfoCmd(gobin *gobin.Gobin) *cobra.Command {
+func newInfoCmd(
+	gobin *gobin.Gobin,
+	fs system.FileSystem,
+	workspace system.Workspace,
+) *cobra.Command {
 	return &cobra.Command{
-		Use:           "info [binary]",
-		Short:         "Print information about a binary",
-		Args:          cobra.ExactArgs(1),
+		Use:   "info [binary]",
+		Short: "Print information about a binary",
+		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(
+			_ *cobra.Command, _ []string, toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			bins, err := getBinariesAutoComplete(fs, workspace.GetGoBinPath(), toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+
+			return bins, cobra.ShellCompDirectiveDefault
+		},
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -306,7 +322,11 @@ Examples:
 
 // newMigrateCmd creates a migrate command to migrate binaries to be managed
 // internally.
-func newMigrateCmd(gobin *gobin.Gobin) *cobra.Command {
+func newMigrateCmd(
+	gobin *gobin.Gobin,
+	fs system.FileSystem,
+	workspace system.Workspace,
+) *cobra.Command {
 	var migrateAll bool
 
 	cmd := &cobra.Command{
@@ -318,7 +338,17 @@ Examples:
   gobin migrate dlv                        # Migrate specific binary
   gobin migrate dlv golangci-lint mockery  # Migrate multiple binaries  
   gobin migrate --all                 	   # Migrate all binaries`,
-		Args:          cobra.ArbitraryArgs,
+		Args: cobra.ArbitraryArgs,
+		ValidArgsFunction: func(
+			_ *cobra.Command, _ []string, toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			bins, err := getBinariesAutoComplete(fs, workspace.GetGoBinPath(), toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+
+			return bins, cobra.ShellCompDirectiveDefault
+		},
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -404,7 +434,11 @@ potentially breaking major version upgrades.`,
 }
 
 // newPinCmd creates a pin command to pin managed binaries.
-func newPinCmd(gobin *gobin.Gobin) *cobra.Command {
+func newPinCmd(
+	gobin *gobin.Gobin,
+	fs system.FileSystem,
+	workspace system.Workspace,
+) *cobra.Command {
 	kind := model.KindLatest
 
 	cmd := &cobra.Command{
@@ -420,7 +454,17 @@ Examples:
   gobin pin dlv mockery@3.5                  # Pin multiple binaries to latest version (dlv, mockery)
   gobin pin dlv@v1 --kind major              # Pin latest v1 minor version (dlv-v1)
   gobin pin dlv@v1.25 --kind minor           # Pin latest v1.25 patch version (dlv-v1.25)`,
-		Args:          cobra.MinimumNArgs(1),
+		Args: cobra.MinimumNArgs(1),
+		ValidArgsFunction: func(
+			_ *cobra.Command, _ []string, toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			bins, err := getBinariesAutoComplete(fs, workspace.GetInternalBinPath(), toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+
+			return bins, cobra.ShellCompDirectiveDefault
+		},
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -452,7 +496,11 @@ Examples:
 }
 
 // newPruneCmd creates a prune command to prune binaries.
-func newPruneCmd(gobin *gobin.Gobin) *cobra.Command {
+func newPruneCmd(
+	gobin *gobin.Gobin,
+	fs system.FileSystem,
+	workspace system.Workspace,
+) *cobra.Command {
 	var pruneAll bool
 
 	cmd := &cobra.Command{
@@ -467,7 +515,17 @@ Examples:
   gobin prune dlv@v1.25.1                # Prune specific binary with patch version
   gobin prune dlv golangci-lint mockery  # Prune multiple binaries
   gobin prune --all                 	 # Prune all binaries`,
-		Args:          cobra.ArbitraryArgs,
+		Args: cobra.ArbitraryArgs,
+		ValidArgsFunction: func(
+			_ *cobra.Command, _ []string, toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			bins, err := getBinariesAutoComplete(fs, workspace.GetInternalBinPath(), toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+
+			return bins, cobra.ShellCompDirectiveDefault
+		},
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -518,7 +576,11 @@ Examples:
 
 // newRepoCmd creates a repo command to show/open the repository URL for a
 // binary.
-func newRepoCmd(gobin *gobin.Gobin) *cobra.Command {
+func newRepoCmd(
+	gobin *gobin.Gobin,
+	fs system.FileSystem,
+	workspace system.Workspace,
+) *cobra.Command {
 	var open bool
 
 	cmd := &cobra.Command{
@@ -532,7 +594,17 @@ Examples:
 
 The repository URL is determined from the module's origin information,
 falling back to constructing the URL from the module path.`,
-		Args:          cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
+		ValidArgsFunction: func(
+			_ *cobra.Command, _ []string, toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			bins, err := getBinariesAutoComplete(fs, workspace.GetGoBinPath(), toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+
+			return bins, cobra.ShellCompDirectiveDefault
+		},
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -560,11 +632,25 @@ falling back to constructing the URL from the module path.`,
 }
 
 // newUninstallCmd creates a uninstall command to uninstall a binary.
-func newUninstallCmd(gobin *gobin.Gobin) *cobra.Command {
+func newUninstallCmd(
+	gobin *gobin.Gobin,
+	fs system.FileSystem,
+	workspace system.Workspace,
+) *cobra.Command {
 	return &cobra.Command{
-		Use:           "uninstall [binaries]",
-		Short:         "Uninstall binaries",
-		Args:          cobra.MinimumNArgs(1),
+		Use:   "uninstall [binaries]",
+		Short: "Uninstall binaries",
+		Args:  cobra.MinimumNArgs(1),
+		ValidArgsFunction: func(
+			_ *cobra.Command, _ []string, toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			bins, err := getBinariesAutoComplete(fs, workspace.GetGoBinPath(), toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+
+			return bins, cobra.ShellCompDirectiveDefault
+		},
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -587,7 +673,11 @@ func newUninstallCmd(gobin *gobin.Gobin) *cobra.Command {
 }
 
 // newUpgradeCmd creates a upgrade command to upgrade a binary.
-func newUpgradeCmd(gobin *gobin.Gobin) *cobra.Command {
+func newUpgradeCmd(
+	gobin *gobin.Gobin,
+	fs system.FileSystem,
+	workspace system.Workspace,
+) *cobra.Command {
 	var upgradeAll bool
 	var majorUpgrade bool
 	var rebuild bool
@@ -606,7 +696,17 @@ Examples:
   gobin upgrade --all --rebuild            # Rebuild all binaries with current Go version
 
 The --rebuild flag is useful when binaries are up-to-date but compiled with older Go versions.`,
-		Args:          cobra.ArbitraryArgs,
+		Args: cobra.ArbitraryArgs,
+		ValidArgsFunction: func(
+			_ *cobra.Command, _ []string, toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			bins, err := getBinariesAutoComplete(fs, workspace.GetGoBinPath(), toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+
+			return bins, cobra.ShellCompDirectiveDefault
+		},
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -717,4 +817,27 @@ func newVersionCmd(gobin *gobin.Gobin) *cobra.Command {
 	)
 
 	return cmd
+}
+
+// getBinariesAutoComplete returns a list of binaries from the given path that
+// match the given prefix to complete.
+func getBinariesAutoComplete(
+	fs system.FileSystem,
+	path string,
+	toComplete string,
+) ([]string, error) {
+	bins, err := fs.ListBinaries(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var matches []string
+	for _, bin := range bins {
+		b := filepath.Base(bin)
+		if strings.HasPrefix(b, toComplete) {
+			matches = append(matches, b)
+		}
+	}
+
+	return matches, nil
 }
