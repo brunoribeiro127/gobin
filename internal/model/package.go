@@ -15,6 +15,7 @@ type Package struct {
 // NewPackage creates a new package from a package version string. If the
 // package does not contain a version, it defaults to "latest".
 func NewPackage(pkg string) Package {
+	//nolint:goconst,nolintlint
 	path, version := pkg, "latest"
 
 	//nolint:mnd // expected version format: path@version

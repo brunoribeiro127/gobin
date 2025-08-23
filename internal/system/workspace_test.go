@@ -3,10 +3,10 @@ package system_test
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/brunoribeiro127/gobin/internal/system"
 	"github.com/brunoribeiro127/gobin/internal/system/mocks"
@@ -38,179 +38,183 @@ func TestWorkspace(t *testing.T) {
 		expectedErr              error
 	}{
 		"success-unix-default-go-bin-path": {
-			mockUserHomeDir:     "/home/user",
+			mockUserHomeDir:     filepath.Join("home", "user"),
 			callGetGOBINEnvVar:  true,
 			callGetGOPATHEnvVar: true,
 			callRuntimeOS:       true,
 			mockRuntimeOS:       "linux",
 			mockMkdirAllCalls: []mockMkdirAllCall{
 				{
-					dir:  "/home/user/.gobin",
+					dir:  filepath.Join("home", "user", ".gobin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/.gobin/bin",
+					dir:  filepath.Join("home", "user", ".gobin", "bin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/.gobin/.tmp",
+					dir:  filepath.Join("home", "user", ".gobin", ".tmp"),
 					perm: 0700,
 				},
 			},
-			expectedGoBinPath:        "/home/user/go/bin",
-			expectedInternalBasePath: "/home/user/.gobin",
-			expectedInternalBinPath:  "/home/user/.gobin/bin",
-			expectedInternalTempPath: "/home/user/.gobin/.tmp",
+			expectedGoBinPath:        filepath.Join("home", "user", "go", "bin"),
+			expectedInternalBasePath: filepath.Join("home", "user", ".gobin"),
+			expectedInternalBinPath:  filepath.Join("home", "user", ".gobin", "bin"),
+			expectedInternalTempPath: filepath.Join("home", "user", ".gobin", ".tmp"),
 		},
 		"success-unix-gobin-env-var": {
-			mockUserHomeDir:    "/home/user",
+			mockUserHomeDir:    filepath.Join("home", "user"),
 			callGetGOBINEnvVar: true,
-			mockGOBINEnvVar:    "/home/user/go/bin",
+			mockGOBINEnvVar:    filepath.Join("home", "user", "go", "bin"),
 			mockGOBINEnvVarOk:  true,
 			callRuntimeOS:      true,
 			mockRuntimeOS:      "linux",
 			mockMkdirAllCalls: []mockMkdirAllCall{
 				{
-					dir:  "/home/user/.gobin",
+					dir:  filepath.Join("home", "user", ".gobin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/.gobin/bin",
+					dir:  filepath.Join("home", "user", ".gobin", "bin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/.gobin/.tmp",
+					dir:  filepath.Join("home", "user", ".gobin", ".tmp"),
 					perm: 0700,
 				},
 			},
-			expectedGoBinPath:        "/home/user/go/bin",
-			expectedInternalBasePath: "/home/user/.gobin",
-			expectedInternalBinPath:  "/home/user/.gobin/bin",
-			expectedInternalTempPath: "/home/user/.gobin/.tmp",
+			expectedGoBinPath:        filepath.Join("home", "user", "go", "bin"),
+			expectedInternalBasePath: filepath.Join("home", "user", ".gobin"),
+			expectedInternalBinPath:  filepath.Join("home", "user", ".gobin", "bin"),
+			expectedInternalTempPath: filepath.Join("home", "user", ".gobin", ".tmp"),
 		},
 		"success-unix-gopath-env-var": {
-			mockUserHomeDir:     "/home/user",
+			mockUserHomeDir:     filepath.Join("home", "user"),
 			callGetGOBINEnvVar:  true,
 			callGetGOPATHEnvVar: true,
-			mockGOPATHEnvVar:    "/home/user/go",
+			mockGOPATHEnvVar:    filepath.Join("home", "user", "go"),
 			mockGOPATHEnvVarOk:  true,
 			callRuntimeOS:       true,
 			mockRuntimeOS:       "linux",
 			mockMkdirAllCalls: []mockMkdirAllCall{
 				{
-					dir:  "/home/user/.gobin",
+					dir:  filepath.Join("home", "user", ".gobin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/.gobin/bin",
+					dir:  filepath.Join("home", "user", ".gobin", "bin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/.gobin/.tmp",
+					dir:  filepath.Join("home", "user", ".gobin", ".tmp"),
 					perm: 0700,
 				},
 			},
-			expectedGoBinPath:        "/home/user/go/bin",
-			expectedInternalBasePath: "/home/user/.gobin",
-			expectedInternalBinPath:  "/home/user/.gobin/bin",
-			expectedInternalTempPath: "/home/user/.gobin/.tmp",
+			expectedGoBinPath:        filepath.Join("home", "user", "go", "bin"),
+			expectedInternalBasePath: filepath.Join("home", "user", ".gobin"),
+			expectedInternalBinPath:  filepath.Join("home", "user", ".gobin", "bin"),
+			expectedInternalTempPath: filepath.Join("home", "user", ".gobin", ".tmp"),
 		},
 		"success-windows-default-go-bin-path": {
-			mockUserHomeDir:     "/home/user",
+			mockUserHomeDir:     filepath.Join("home", "user"),
 			callGetGOBINEnvVar:  true,
 			callGetGOPATHEnvVar: true,
 			callRuntimeOS:       true,
 			mockRuntimeOS:       "windows",
 			mockMkdirAllCalls: []mockMkdirAllCall{
 				{
-					dir:  "/home/user/AppData/Local/gobin",
+					dir:  filepath.Join("home", "user", "AppData", "Local", "gobin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/AppData/Local/gobin/bin",
+					dir:  filepath.Join("home", "user", "AppData", "Local", "gobin", "bin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/AppData/Local/gobin/tmp",
+					dir:  filepath.Join("home", "user", "AppData", "Local", "gobin", "tmp"),
 					perm: 0700,
 				},
 			},
-			expectedGoBinPath:        "/home/user/go/bin",
-			expectedInternalBasePath: "/home/user/AppData/Local/gobin",
-			expectedInternalBinPath:  "/home/user/AppData/Local/gobin/bin",
-			expectedInternalTempPath: "/home/user/AppData/Local/gobin/tmp",
+			expectedGoBinPath:        filepath.Join("home", "user", "go", "bin"),
+			expectedInternalBasePath: filepath.Join("home", "user", "AppData", "Local", "gobin"),
+			expectedInternalBinPath:  filepath.Join("home", "user", "AppData", "Local", "gobin", "bin"),
+			expectedInternalTempPath: filepath.Join("home", "user", "AppData", "Local", "gobin", "tmp"),
 		},
 		"success-windows-gobin-env-var": {
-			mockUserHomeDir:    "/home/user",
+			mockUserHomeDir:    filepath.Join("home", "user"),
 			callGetGOBINEnvVar: true,
-			mockGOBINEnvVar:    "/home/user/go/bin",
+			mockGOBINEnvVar:    filepath.Join("home", "user", "go", "bin"),
 			mockGOBINEnvVarOk:  true,
 			callRuntimeOS:      true,
 			mockRuntimeOS:      "windows",
 			mockMkdirAllCalls: []mockMkdirAllCall{
 				{
-					dir:  "/home/user/AppData/Local/gobin",
+					dir:  filepath.Join("home", "user", "AppData", "Local", "gobin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/AppData/Local/gobin/bin",
+					dir:  filepath.Join("home", "user", "AppData", "Local", "gobin", "bin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/AppData/Local/gobin/tmp",
+					dir:  filepath.Join("home", "user", "AppData", "Local", "gobin", "tmp"),
 					perm: 0700,
 				},
 			},
-			expectedGoBinPath:        "/home/user/go/bin",
-			expectedInternalBasePath: "/home/user/AppData/Local/gobin",
-			expectedInternalBinPath:  "/home/user/AppData/Local/gobin/bin",
-			expectedInternalTempPath: "/home/user/AppData/Local/gobin/tmp",
+			expectedGoBinPath:        filepath.Join("home", "user", "go", "bin"),
+			expectedInternalBasePath: filepath.Join("home", "user", "AppData", "Local", "gobin"),
+			expectedInternalBinPath:  filepath.Join("home", "user", "AppData", "Local", "gobin", "bin"),
+			expectedInternalTempPath: filepath.Join("home", "user", "AppData", "Local", "gobin", "tmp"),
 		},
 		"success-windows-gopath-env-var": {
-			mockUserHomeDir:     "/home/user",
+			mockUserHomeDir:     filepath.Join("home", "user"),
 			callGetGOBINEnvVar:  true,
 			callGetGOPATHEnvVar: true,
-			mockGOPATHEnvVar:    "/home/user/go",
+			mockGOPATHEnvVar:    filepath.Join("home", "user", "go"),
 			mockGOPATHEnvVarOk:  true,
 			callRuntimeOS:       true,
 			mockRuntimeOS:       "windows",
 			mockMkdirAllCalls: []mockMkdirAllCall{
 				{
-					dir:  "/home/user/AppData/Local/gobin",
+					dir:  filepath.Join("home", "user", "AppData", "Local", "gobin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/AppData/Local/gobin/bin",
+					dir:  filepath.Join("home", "user", "AppData", "Local", "gobin", "bin"),
 					perm: 0700,
 				},
 				{
-					dir:  "/home/user/AppData/Local/gobin/tmp",
+					dir:  filepath.Join("home", "user", "AppData", "Local", "gobin", "tmp"),
 					perm: 0700,
 				},
 			},
-			expectedGoBinPath:        "/home/user/go/bin",
-			expectedInternalBasePath: "/home/user/AppData/Local/gobin",
-			expectedInternalBinPath:  "/home/user/AppData/Local/gobin/bin",
-			expectedInternalTempPath: "/home/user/AppData/Local/gobin/tmp",
+			expectedGoBinPath:        filepath.Join("home", "user", "go", "bin"),
+			expectedInternalBasePath: filepath.Join("home", "user", "AppData", "Local", "gobin"),
+			expectedInternalBinPath:  filepath.Join("home", "user", "AppData", "Local", "gobin", "bin"),
+			expectedInternalTempPath: filepath.Join("home", "user", "AppData", "Local", "gobin", "tmp"),
 		},
 		"error-user-home-dir": {
 			mockUserHomeDirErr: errors.New("unexpected error"),
 			expectedErr:        errors.New("unexpected error"),
 		},
 		"error-mkdir-all": {
-			mockUserHomeDir:     "/home/user",
+			mockUserHomeDir:     filepath.Join("home", "user"),
 			callGetGOBINEnvVar:  true,
 			callGetGOPATHEnvVar: true,
 			callRuntimeOS:       true,
 			mockRuntimeOS:       "linux",
 			mockMkdirAllCalls: []mockMkdirAllCall{
 				{
-					dir:  "/home/user/.gobin",
+					dir:  filepath.Join("home", "user", ".gobin"),
 					perm: 0700,
 					err:  errors.New("unexpected error"),
 				},
 			},
-			expectedErr: errors.New("unexpected error"),
+			expectedGoBinPath:        filepath.Join("home", "user", "go", "bin"),
+			expectedInternalBasePath: filepath.Join("home", "user", ".gobin"),
+			expectedInternalBinPath:  filepath.Join("home", "user", ".gobin", "bin"),
+			expectedInternalTempPath: filepath.Join("home", "user", ".gobin", ".tmp"),
+			expectedErr:              errors.New("unexpected error"),
 		},
 	}
 
@@ -248,16 +252,17 @@ func TestWorkspace(t *testing.T) {
 					Once()
 			}
 
-			workspace := system.NewWorkspace(env, fs, rt)
-			err := workspace.Initialize()
-			if tc.expectedErr != nil {
+			workspace, err := system.NewWorkspace(env, fs, rt)
+			if err != nil {
 				assert.Equal(t, tc.expectedErr, err)
 			} else {
-				require.NoError(t, err)
 				assert.Equal(t, tc.expectedGoBinPath, workspace.GetGoBinPath())
 				assert.Equal(t, tc.expectedInternalBasePath, workspace.GetInternalBasePath())
 				assert.Equal(t, tc.expectedInternalBinPath, workspace.GetInternalBinPath())
 				assert.Equal(t, tc.expectedInternalTempPath, workspace.GetInternalTempPath())
+
+				err = workspace.Initialize()
+				assert.Equal(t, tc.expectedErr, err)
 			}
 		})
 	}

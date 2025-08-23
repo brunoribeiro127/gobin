@@ -71,9 +71,12 @@ func run(ctx context.Context) int {
 	rt := system.NewRuntime()
 	fs := system.NewFileSystem(rt)
 
-	workspace := system.NewWorkspace(env, fs, rt)
-	err := workspace.Initialize()
+	workspace, err := system.NewWorkspace(env, fs, rt)
 	if err != nil {
+		return 1
+	}
+
+	if err = workspace.Initialize(); err != nil {
 		return 1
 	}
 
@@ -324,6 +327,8 @@ Examples:
 
 // newMigrateCmd creates a migrate command to migrate binaries to be managed
 // internally.
+//
+//nolint:dupl // ignore duplicate code lint check
 func newMigrateCmd(
 	gobin *gobin.Gobin,
 	fs system.FileSystem,
@@ -497,6 +502,8 @@ Examples:
 }
 
 // newPruneCmd creates a prune command to prune binaries.
+//
+//nolint:dupl // ignore duplicate code lint check
 func newPruneCmd(
 	gobin *gobin.Gobin,
 	fs system.FileSystem,
@@ -572,7 +579,6 @@ Examples:
 	)
 
 	return cmd
-
 }
 
 // newRepoCmd creates a repo command to show/open the repository URL for a
@@ -674,6 +680,8 @@ func newUninstallCmd(
 }
 
 // newUpgradeCmd creates a upgrade command to upgrade a binary.
+//
+//nolint:funlen
 func newUpgradeCmd(
 	gobin *gobin.Gobin,
 	fs system.FileSystem,

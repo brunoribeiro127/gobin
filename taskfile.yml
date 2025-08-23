@@ -5,13 +5,21 @@ silent: true
 
 vars:
   PACKAGES:
-    sh: go list github.com/brunoribeiro127/gobin/... | grep -v mocks
+    sh: |
+      go list github.com/brunoribeiro127/gobin/... \
+        | {{if eq "windows" OS}}findstr /V{{else}}grep -v{{end}} mocks
   INTERNAL_PACKAGES:
-    sh: go list github.com/brunoribeiro127/gobin/internal... | grep -v mocks
+    sh: |
+      go list github.com/brunoribeiro127/gobin/internal... \
+        | {{if eq "windows" OS}}findstr /V{{else}}grep -v{{end}} mocks
 
 tasks:
   build:
-    cmd: CGO_ENABLED=0 go build -v -trimpath -ldflags="-s -w" -o ./bin/gobin github.com/brunoribeiro127/gobin/cmd/gobin
+    cmds:
+      - cmd: CGO_ENABLED=0 go build -v -trimpath -ldflags="-s -w" -o ./bin/gobin github.com/brunoribeiro127/gobin/cmd/gobin
+        platforms: [darwin, linux]
+      - cmd: CGO_ENABLED=0 go build -v -trimpath -ldflags="-s -w" -o ./bin/gobin.exe github.com/brunoribeiro127/gobin/cmd/gobin
+        platforms: [windows]
 
   check:
     deps:
@@ -23,15 +31,25 @@ tasks:
       - vulncheck
 
   clean:
-    cmd: rm -rf ./bin ./coverage ./dist
+    cmds:
+      - cmd: rm -rf ./bin ./coverage ./dist
+        platforms: [darwin, linux]
+      - cmd: |
+          powershell -Command "
+            if (Test-Path .\bin) { Remove-Item -Recurse -Force .\bin }
+            if (Test-Path .\coverage) { Remove-Item -Recurse -Force .\coverage }
+            if (Test-Path .\dist) { Remove-Item -Recurse -Force .\dist }
+          "
+        platforms: [windows]
 
   coverage:
-    cmd: |
-        if command -v open >/dev/null; then
-          open coverage/coverage.html
-        else
-          xdg-open coverage/coverage.html
-        fi
+    cmds:
+      - cmd: open ./coverage/coverage.html
+        platforms: [darwin]
+      - cmd: xdg-open ./coverage/coverage.html
+        platforms: [linux]
+      - cmd: powershell -Command "Invoke-Item .\coverage\coverage.html"
+        platforms: [windows]
 
   fmt:
     cmd: go fmt ./...
@@ -56,7 +74,10 @@ tasks:
 
   test:
     cmds:
-      - mkdir -p coverage
+      - cmd: mkdir -p coverage
+        platforms: [darwin, linux]
+      - cmd: powershell -Command "New-Item -ItemType Directory -Path .\coverage -Force"
+        platforms: [windows]
       - go clean -testcache
       - go test -coverprofile=coverage/coverage.txt -covermode count {{ catLines .INTERNAL_PACKAGES }}
       - go tool cover -func coverage/coverage.txt

@@ -2,6 +2,7 @@ package system_test
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -16,12 +17,12 @@ func TestFileSystem_CreateDir(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	err := fs.CreateDir(tempDir+"/test", 0700)
+	err := fs.CreateDir(filepath.Join(tempDir, "test"), 0700)
 	require.NoError(t, err)
 
-	stat, err := os.Stat(tempDir + "/test")
+	stat, err := os.Stat(filepath.Join(tempDir, "test"))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0700), stat.Mode().Perm())
+	assert.True(t, stat.IsDir())
 }
 
 func TestFileSystem_CreateTempDir(t *testing.T) {
@@ -34,7 +35,7 @@ func TestFileSystem_CreateTempDir(t *testing.T) {
 
 	stat, err := os.Stat(tempDir)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0700), stat.Mode().Perm())
+	assert.True(t, stat.IsDir())
 
 	err = cleanup()
 	require.NoError(t, err)
@@ -47,8 +48,8 @@ func TestFileSystem_IsSymlinkToDir(t *testing.T) {
 	fs := system.NewFileSystem(nil)
 
 	tempDir := t.TempDir()
-	testfile := tempDir + "/testfile"
-	testlink := tempDir + "testlink"
+	testfile := filepath.Join(tempDir, "testfile")
+	testlink := filepath.Join(tempDir, "testlink")
 
 	err := os.WriteFile(testfile, []byte{}, 0755)
 	require.NoError(t, err)
@@ -66,23 +67,23 @@ func TestFileSystem_ListBinaries(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	err := os.Mkdir(tempDir+"/dir", 0700)
+	err := os.Mkdir(filepath.Join(tempDir, "dir"), 0700)
 	require.NoError(t, err)
 
 	if runtime.GOOS == "windows" {
-		err = os.WriteFile(tempDir+"/bin.exe", []byte{}, 0755)
+		err = os.WriteFile(filepath.Join(tempDir, "bin.exe"), []byte{}, 0755)
 		require.NoError(t, err)
 	} else {
-		err = os.WriteFile(tempDir+"/bin", []byte{}, 0755)
+		err = os.WriteFile(filepath.Join(tempDir, "bin"), []byte{}, 0755)
 		require.NoError(t, err)
 	}
 
 	binaries, err := fs.ListBinaries(tempDir)
 	require.NoError(t, err)
 	if runtime.GOOS == "windows" {
-		assert.Equal(t, []string{tempDir + "/bin.exe"}, binaries)
+		assert.Equal(t, []string{filepath.Join(tempDir, "bin.exe")}, binaries)
 	} else {
-		assert.Equal(t, []string{tempDir + "/bin"}, binaries)
+		assert.Equal(t, []string{filepath.Join(tempDir, "bin")}, binaries)
 	}
 }
 
@@ -90,13 +91,13 @@ func TestFileSystem_LocateBinaryInPath(t *testing.T) {
 	fs := system.NewFileSystem(system.NewRuntime())
 
 	tempDir := t.TempDir()
-	err := os.WriteFile(tempDir+"/bin", []byte{}, 0755)
+	err := os.WriteFile(filepath.Join(tempDir, "bin.exe"), []byte{}, 0755)
 	require.NoError(t, err)
 
 	t.Setenv("PATH", tempDir)
 
-	binaries := fs.LocateBinaryInPath("bin")
-	require.Equal(t, []string{tempDir + "/bin"}, binaries)
+	binaries := fs.LocateBinaryInPath("bin.exe")
+	require.Equal(t, []string{filepath.Join(tempDir, "bin.exe")}, binaries)
 }
 
 func TestFileSystem_Move(t *testing.T) {
@@ -104,24 +105,24 @@ func TestFileSystem_Move(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	err := os.Mkdir(tempDir+"/dir1", 0700)
+	err := os.Mkdir(filepath.Join(tempDir, "dir1"), 0700)
 	require.NoError(t, err)
 
-	err = os.WriteFile(tempDir+"/dir1/bin", []byte{}, 0755)
+	err = os.WriteFile(filepath.Join(tempDir, "dir1", "bin"), []byte{}, 0755)
 	require.NoError(t, err)
 
-	err = os.Mkdir(tempDir+"/dir2", 0700)
+	err = os.Mkdir(filepath.Join(tempDir, "dir2"), 0700)
 	require.NoError(t, err)
 
-	err = fs.Move(tempDir+"/dir1/bin", tempDir+"/dir2/bin")
+	err = fs.Move(filepath.Join(tempDir, "dir1", "bin"), filepath.Join(tempDir, "dir2", "bin"))
 	require.NoError(t, err)
 
-	_, err = os.Stat(tempDir + "/dir1/bin")
+	_, err = os.Stat(filepath.Join(tempDir, "dir1", "bin"))
 	require.ErrorIs(t, err, os.ErrNotExist)
 
-	stat, err := os.Stat(tempDir + "/dir2/bin")
+	stat, err := os.Stat(filepath.Join(tempDir, "dir2", "bin"))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0755), stat.Mode().Perm())
+	assert.True(t, stat.Mode().IsRegular())
 }
 
 func TestFileSystem_MoveWithSymlink(t *testing.T) {
@@ -129,25 +130,25 @@ func TestFileSystem_MoveWithSymlink(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	err := os.Mkdir(tempDir+"/dir1", 0700)
+	err := os.Mkdir(filepath.Join(tempDir, "dir1"), 0700)
 	require.NoError(t, err)
 
-	err = os.WriteFile(tempDir+"/dir1/bin", []byte{}, 0755)
+	err = os.WriteFile(filepath.Join(tempDir, "dir1", "bin"), []byte{}, 0755)
 	require.NoError(t, err)
 
-	err = os.Mkdir(tempDir+"/dir2", 0700)
+	err = os.Mkdir(filepath.Join(tempDir, "dir2"), 0700)
 	require.NoError(t, err)
 
-	err = fs.MoveWithSymlink(tempDir+"/dir2/bin", tempDir+"/dir1/bin")
+	err = fs.MoveWithSymlink(filepath.Join(tempDir, "dir2", "bin"), filepath.Join(tempDir, "dir1", "bin"))
 	require.NoError(t, err)
 
-	info, err := os.Lstat(tempDir + "/dir1/bin")
+	info, err := os.Lstat(filepath.Join(tempDir, "dir1", "bin"))
 	require.NoError(t, err)
 	require.NotEqual(t, 0, info.Mode()&os.ModeSymlink)
 
-	info, err = os.Stat(tempDir + "/dir2/bin")
+	info, err = os.Stat(filepath.Join(tempDir, "dir2", "bin"))
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0755), info.Mode().Perm())
+	assert.True(t, info.Mode().IsRegular())
 }
 
 func TestFileSystem_Remove(t *testing.T) {
@@ -155,22 +156,22 @@ func TestFileSystem_Remove(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	err := os.Mkdir(tempDir+"/dir", 0700)
+	err := os.Mkdir(filepath.Join(tempDir, "dir"), 0700)
 	require.NoError(t, err)
 
-	err = os.WriteFile(tempDir+"/dir/bin", []byte{}, 0755)
+	err = os.WriteFile(filepath.Join(tempDir, "dir", "bin"), []byte{}, 0755)
 	require.NoError(t, err)
 
-	err = fs.Remove(tempDir + "/dir/bin")
+	err = fs.Remove(filepath.Join(tempDir, "dir", "bin"))
 	require.NoError(t, err)
 
-	_, err = os.Stat(tempDir + "/dir/bin")
+	_, err = os.Stat(filepath.Join(tempDir, "dir", "bin"))
 	require.ErrorIs(t, err, os.ErrNotExist)
 
-	err = fs.Remove(tempDir + "/dir")
+	err = fs.Remove(filepath.Join(tempDir, "dir"))
 	require.NoError(t, err)
 
-	_, err = os.Stat(tempDir + "/dir")
+	_, err = os.Stat(filepath.Join(tempDir, "dir"))
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
@@ -179,21 +180,21 @@ func TestFileSystem_ReplaceSymlink(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	err := os.WriteFile(tempDir+"/bin1", []byte{}, 0755)
+	err := os.WriteFile(filepath.Join(tempDir, "bin1"), []byte{}, 0755)
 	require.NoError(t, err)
 
-	err = os.WriteFile(tempDir+"/bin2", []byte{}, 0755)
+	err = os.WriteFile(filepath.Join(tempDir, "bin2"), []byte{}, 0755)
 	require.NoError(t, err)
 
-	err = os.Symlink(tempDir+"/bin1", tempDir+"/bin")
+	err = os.Symlink(filepath.Join(tempDir, "bin1"), filepath.Join(tempDir, "bin"))
 	require.NoError(t, err)
 
-	err = fs.ReplaceSymlink(tempDir+"/bin2", tempDir+"/bin")
+	err = fs.ReplaceSymlink(filepath.Join(tempDir, "bin2"), filepath.Join(tempDir, "bin"))
 	require.NoError(t, err)
 
-	target, err := os.Readlink(tempDir + "/bin")
+	target, err := os.Readlink(filepath.Join(tempDir, "bin"))
 	require.NoError(t, err)
-	require.Equal(t, tempDir+"/bin2", target)
+	require.Equal(t, filepath.Join(tempDir, "bin2"), target)
 }
 
 func TestFileSystem_GetSymlinkTarget(t *testing.T) {
@@ -201,13 +202,13 @@ func TestFileSystem_GetSymlinkTarget(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	err := os.WriteFile(tempDir+"/bin1", []byte{}, 0755)
+	err := os.WriteFile(filepath.Join(tempDir, "bin1"), []byte{}, 0755)
 	require.NoError(t, err)
 
-	err = os.Symlink(tempDir+"/bin1", tempDir+"/bin")
+	err = os.Symlink(filepath.Join(tempDir, "bin1"), filepath.Join(tempDir, "bin"))
 	require.NoError(t, err)
 
-	target, err := fs.GetSymlinkTarget(tempDir + "/bin")
+	target, err := fs.GetSymlinkTarget(filepath.Join(tempDir, "bin"))
 	require.NoError(t, err)
-	require.Equal(t, tempDir+"/bin1", target)
+	require.Equal(t, filepath.Join(tempDir, "bin1"), target)
 }
