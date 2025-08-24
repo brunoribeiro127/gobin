@@ -81,6 +81,8 @@ task install
 | `upgrade [binaries]`   | Upgrade specific binaries or all with --all       | `-a`, `--all` – upgrade all binaries<br>`-m`, `--major` – allow major version upgrade<br>`-r`, `--rebuild` – force binary rebuild |
 | `version`              | Show version info                                 | `-s`, `--short` – print short version                                                                    |
 
+For more information for each command, run `gobin help <command>`.
+
 ### Global Flags
 
 These flags can be used with any command:

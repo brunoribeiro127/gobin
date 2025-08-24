@@ -13,14 +13,14 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     env:
-      SYFT_VERSION: v1.29.1
+      SYFT_VERSION: v1.31.0
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Install Syft
