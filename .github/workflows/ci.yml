@@ -24,13 +24,13 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     env:
-      GOLANGCI_LINT_VERSION: v2.3.1
+      GOLANGCI_LINT_VERSION: v2.4.0
       GOVULNCHECK_VERSION: v1.1.4
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Install govulncheck
