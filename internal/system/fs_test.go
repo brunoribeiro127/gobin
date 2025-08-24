@@ -13,7 +13,7 @@ import (
 )
 
 func TestFileSystem_CreateDir(t *testing.T) {
-	fs := system.NewFileSystem(nil)
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
 
@@ -26,7 +26,7 @@ func TestFileSystem_CreateDir(t *testing.T) {
 }
 
 func TestFileSystem_CreateTempDir(t *testing.T) {
-	fs := system.NewFileSystem(nil)
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
 
@@ -45,25 +45,29 @@ func TestFileSystem_CreateTempDir(t *testing.T) {
 }
 
 func TestFileSystem_IsSymlinkToDir(t *testing.T) {
-	fs := system.NewFileSystem(nil)
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
-	testfile := filepath.Join(tempDir, "testfile")
-	testlink := filepath.Join(tempDir, "testlink")
+	file := filepath.Join(tempDir, "file")
+	link := filepath.Join(tempDir, "link")
 
-	err := os.WriteFile(testfile, []byte{}, 0755)
+	err := os.WriteFile(file, []byte{}, 0755)
 	require.NoError(t, err)
 
-	err = os.Symlink(testfile, testlink)
+	err = os.Symlink(file, link)
 	require.NoError(t, err)
 
-	isSymlink, err := fs.IsSymlinkToDir(testlink, tempDir)
+	isSymlink, err := fs.IsSymlinkToDir(link, tempDir)
 	require.NoError(t, err)
 	assert.True(t, isSymlink)
+
+	isSymlink, err = fs.IsSymlinkToDir(file, tempDir)
+	require.NoError(t, err)
+	assert.False(t, isSymlink)
 }
 
 func TestFileSystem_ListBinaries(t *testing.T) {
-	fs := system.NewFileSystem(system.NewRuntime())
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
 
@@ -71,10 +75,16 @@ func TestFileSystem_ListBinaries(t *testing.T) {
 	require.NoError(t, err)
 
 	if runtime.GOOS == "windows" {
-		err = os.WriteFile(filepath.Join(tempDir, "bin.exe"), []byte{}, 0755)
+		err = os.WriteFile(filepath.Join(tempDir, "bin.exe"), []byte{'M', 'Z'}, 0755)
+		require.NoError(t, err)
+
+		err = os.WriteFile(filepath.Join(tempDir, "file"), []byte{}, 0644)
 		require.NoError(t, err)
 	} else {
 		err = os.WriteFile(filepath.Join(tempDir, "bin"), []byte{}, 0755)
+		require.NoError(t, err)
+
+		err = os.WriteFile(filepath.Join(tempDir, "file"), []byte{}, 0644)
 		require.NoError(t, err)
 	}
 
@@ -88,20 +98,31 @@ func TestFileSystem_ListBinaries(t *testing.T) {
 }
 
 func TestFileSystem_LocateBinaryInPath(t *testing.T) {
-	fs := system.NewFileSystem(system.NewRuntime())
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
-	err := os.WriteFile(filepath.Join(tempDir, "bin.exe"), []byte{}, 0755)
-	require.NoError(t, err)
+
+	if runtime.GOOS == "windows" {
+		err := os.WriteFile(filepath.Join(tempDir, "bin.exe"), []byte{'M', 'Z'}, 0755)
+		require.NoError(t, err)
+	} else {
+		err := os.WriteFile(filepath.Join(tempDir, "bin"), []byte{}, 0755)
+		require.NoError(t, err)
+	}
 
 	t.Setenv("PATH", tempDir)
 
-	binaries := fs.LocateBinaryInPath("bin.exe")
-	require.Equal(t, []string{filepath.Join(tempDir, "bin.exe")}, binaries)
+	if runtime.GOOS == "windows" {
+		binaries := fs.LocateBinaryInPath("bin.exe")
+		assert.Equal(t, []string{filepath.Join(tempDir, "bin.exe")}, binaries)
+	} else {
+		binaries := fs.LocateBinaryInPath("bin")
+		assert.Equal(t, []string{filepath.Join(tempDir, "bin")}, binaries)
+	}
 }
 
 func TestFileSystem_Move(t *testing.T) {
-	fs := system.NewFileSystem(nil)
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
 
@@ -126,7 +147,7 @@ func TestFileSystem_Move(t *testing.T) {
 }
 
 func TestFileSystem_MoveWithSymlink(t *testing.T) {
-	fs := system.NewFileSystem(nil)
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
 
@@ -152,7 +173,7 @@ func TestFileSystem_MoveWithSymlink(t *testing.T) {
 }
 
 func TestFileSystem_Remove(t *testing.T) {
-	fs := system.NewFileSystem(nil)
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
 
@@ -176,7 +197,7 @@ func TestFileSystem_Remove(t *testing.T) {
 }
 
 func TestFileSystem_ReplaceSymlink(t *testing.T) {
-	fs := system.NewFileSystem(nil)
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
 
@@ -198,7 +219,7 @@ func TestFileSystem_ReplaceSymlink(t *testing.T) {
 }
 
 func TestFileSystem_GetSymlinkTarget(t *testing.T) {
-	fs := system.NewFileSystem(nil)
+	fs := system.NewFileSystem()
 
 	tempDir := t.TempDir()
 
