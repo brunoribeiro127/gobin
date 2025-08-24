@@ -92,7 +92,7 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 	listInstalledTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Version"}}
 {{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth 6)}}
 {{range .Binaries -}}
-{{if .IsManaged}}{{color (printf "%-*s" $.NameWidth .Name) "green"}}{{else}}{{printf "%-*s" $.NameWidth .Name}}{{end}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{printf "%-*s" $.ModuleVersionWidth .Module.Version.String}}
+{{if .IsManaged}}{{color (printf "%-*s" $.NameWidth .Binary.Name) "green"}}{{else}}{{printf "%-*s" $.NameWidth .Binary.Name}}{{end}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{printf "%-*s" $.ModuleVersionWidth .Module.Version.String}}
 {{end -}}
 `
 
@@ -101,7 +101,7 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 	listManagedTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Version"}}
 {{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth 6)}}
 {{range .Binaries -}}
-{{if .IsPinned}}{{color (printf "%-*s" $.NameWidth .Name) "green"}}{{else}}{{printf "%-*s" $.NameWidth .Name}}{{end}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{printf "%-*s" $.ModuleVersionWidth .Module.Version.String}}
+{{if .IsPinned}}{{color (printf "%-*s" $.NameWidth .Binary.Name) "green"}}{{else}}{{printf "%-*s" $.NameWidth .Binary.Name}}{{end}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{printf "%-*s" $.ModuleVersionWidth .Module.Version.String}}
 {{end -}}
 `
 
@@ -109,7 +109,7 @@ Env Vars      {{range $index, $env := .EnvVars}}{{if eq $index 0}}{{$env}}{{else
 	outdatedTemplate = `{{printf "%-*s" $.NameWidth "Name"}} → {{printf "%-*s" $.ModulePathWidth "Module"}} @ {{printf "%-*s" $.ModuleVersionWidth "Current"}} ↑ {{printf "%-*s" $.LatestVersionWidth "Latest"}}
 {{repeat "-" (add $.NameWidth $.ModulePathWidth $.ModuleVersionWidth $.LatestVersionWidth 9)}}
 {{range .Binaries -}}
-{{printf "%-*s" $.NameWidth .Name}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{color (printf "%-*s" $.ModuleVersionWidth .Module.Version.String) "red"}} ↑ {{color (printf "%-*s" $.LatestVersionWidth .LatestModule.Version.String) "green"}}
+{{printf "%-*s" $.NameWidth .Binary.Name}} → {{printf "%-*s" $.ModulePathWidth .Module.Path}} @ {{color (printf "%-*s" $.ModuleVersionWidth .Module.Version.String) "red"}} ↑ {{color (printf "%-*s" $.LatestVersionWidth .LatestModule.Version.String) "green"}}
 {{end -}}
 `
 )
@@ -301,7 +301,7 @@ func (g *Gobin) MigrateBinaries(bins ...model.Binary) error {
 		}
 	} else {
 		for _, bin := range bins {
-			binPaths = append(binPaths, filepath.Join(goBinPath, bin.Name))
+			binPaths = append(binPaths, filepath.Join(goBinPath, bin.String()))
 		}
 	}
 
@@ -347,7 +347,7 @@ func (g *Gobin) PinBinaries(kind model.Kind, bins ...model.Binary) error {
 // io.Writer), or an error if the binary cannot be found.
 func (g *Gobin) PrintBinaryInfo(bin model.Binary) error {
 	binInfo, err := g.binaryManager.GetBinaryInfo(
-		filepath.Join(g.workspace.GetGoBinPath(), bin.Name),
+		filepath.Join(g.workspace.GetGoBinPath(), bin.String()),
 	)
 	if err != nil {
 		if errors.Is(err, toolchain.ErrBinaryNotFound) {
@@ -414,8 +414,8 @@ func (g *Gobin) PruneBinaries(bins ...model.Binary) error {
 		}
 
 		for _, path := range binPaths {
-			bin := model.NewBinary(filepath.Base(path))
-			bins = append(bins, model.NewBinary(bin.Name))
+			bin := model.NewBinaryFromString(filepath.Base(path))
+			bins = append(bins, model.NewBinaryFromString(bin.Name+bin.Extension))
 		}
 
 		bins = slices.Compact(bins)
@@ -498,7 +498,7 @@ func (g *Gobin) UpgradeBinaries(
 		}
 	} else {
 		for _, bin := range bins {
-			binPaths = append(binPaths, filepath.Join(binFullPath, bin.Name))
+			binPaths = append(binPaths, filepath.Join(binFullPath, bin.String()))
 		}
 	}
 
@@ -560,16 +560,17 @@ func (g *Gobin) printBinaryDiagnostics(diags []model.BinaryDiagnostic) error {
 // binaries, highlighting the pinned binaries in green.
 func (g *Gobin) printBinaries(binInfos []model.BinaryInfo, managed bool) error {
 	sort.Slice(binInfos, func(i, j int) bool {
-		if binInfos[i].Name != binInfos[j].Name {
-			return binInfos[i].Name < binInfos[j].Name
+		if binInfos[i].Binary.Name != binInfos[j].Binary.Name {
+			return binInfos[i].Binary.Name < binInfos[j].Binary.Name
 		}
+
 		return binInfos[i].Module.Version.Compare(binInfos[j].Module.Version) > 0
 	})
 
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
-		func(bin model.BinaryInfo) string { return bin.Name },
+		func(bin model.BinaryInfo) string { return bin.Binary.Name },
 	)
 	maxModulePathWidth := getColumnMaxWidth(
 		"Module",
@@ -617,13 +618,13 @@ func (g *Gobin) printBinaries(binInfos []model.BinaryInfo, managed bool) error {
 // (or another defined io.Writer).
 func (g *Gobin) printOutdatedBinaries(binInfos []model.BinaryUpgradeInfo) error {
 	sort.Slice(binInfos, func(i, j int) bool {
-		return binInfos[i].Name < binInfos[j].Name
+		return binInfos[i].Binary.Name < binInfos[j].Binary.Name
 	})
 
 	maxNameWidth := getColumnMaxWidth(
 		"Name",
 		binInfos,
-		func(bin model.BinaryUpgradeInfo) string { return bin.Name },
+		func(bin model.BinaryUpgradeInfo) string { return bin.Binary.Name },
 	)
 	maxModulePathWidth := getColumnMaxWidth(
 		"Module",

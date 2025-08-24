@@ -214,7 +214,7 @@ func newInfoCmd(
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			bin := model.NewBinary(args[0])
+			bin := model.NewBinaryFromString(args[0])
 			if !bin.IsValid() {
 				err := fmt.Errorf("invalid binary argument: %s", args[0])
 				fmt.Fprintln(os.Stderr, err.Error())
@@ -362,7 +362,7 @@ Examples:
 
 			bins := make([]model.Binary, len(args))
 			for i, arg := range args {
-				bin := model.NewBinary(arg)
+				bin := model.NewBinaryFromString(arg)
 				if !bin.IsValid() {
 					err := fmt.Errorf("invalid binary argument: %s", arg)
 					fmt.Fprintln(os.Stderr, err.Error())
@@ -477,7 +477,7 @@ Examples:
 
 			bins := make([]model.Binary, len(args))
 			for i, arg := range args {
-				bin := model.NewBinary(arg)
+				bin := model.NewBinaryFromString(arg)
 				if !bin.IsValid() {
 					err := fmt.Errorf("invalid binary argument: %s", arg)
 					fmt.Fprintln(os.Stderr, err.Error())
@@ -540,7 +540,7 @@ Examples:
 
 			bins := make([]model.Binary, len(args))
 			for i, arg := range args {
-				bin := model.NewBinary(arg)
+				bin := model.NewBinaryFromString(arg)
 				if !bin.IsValid() {
 					err := fmt.Errorf("invalid binary argument: %s", arg)
 					fmt.Fprintln(os.Stderr, err.Error())
@@ -616,7 +616,7 @@ falling back to constructing the URL from the module path if not available.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			bin := model.NewBinary(args[0])
+			bin := model.NewBinaryFromString(args[0])
 			if !bin.IsValid() {
 				err := fmt.Errorf("invalid binary argument: %s", args[0])
 				fmt.Fprintln(os.Stderr, err.Error())
@@ -664,7 +664,7 @@ func newUninstallCmd(
 
 			bins := make([]model.Binary, len(args))
 			for i, arg := range args {
-				bin := model.NewBinary(arg)
+				bin := model.NewBinaryFromString(arg)
 				if !bin.IsValid() {
 					err := fmt.Errorf("invalid binary argument: %s", arg)
 					fmt.Fprintln(os.Stderr, err.Error())
@@ -725,7 +725,7 @@ Examples:
 
 			bins := make([]model.Binary, len(args))
 			for i, arg := range args {
-				bin := model.NewBinary(arg)
+				bin := model.NewBinaryFromString(arg)
 				if !bin.IsValid() {
 					err := fmt.Errorf("invalid binary argument: %s", arg)
 					fmt.Fprintln(os.Stderr, err.Error())

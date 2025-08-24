@@ -2,90 +2,12 @@ package model_test
 
 import (
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/brunoribeiro127/gobin/internal/model"
 )
-
-func TestKind_GetKindFromName(t *testing.T) {
-	cases := map[string]struct {
-		name     string
-		expected model.Kind
-	}{
-		"latest": {
-			name:     "mockproj",
-			expected: model.KindLatest,
-		},
-		"latest-multiple-parts": {
-			name:     "mockproj-test",
-			expected: model.KindLatest,
-		},
-		"major": {
-			name:     "mockproj-v1",
-			expected: model.KindMajor,
-		},
-		"major-multiple-parts": {
-			name:     "mockproj-test-v1",
-			expected: model.KindMajor,
-		},
-		"minor": {
-			name:     "mockproj-v1.2",
-			expected: model.KindMinor,
-		},
-		"minor-multiple-parts": {
-			name:     "mockproj-test-v1.2",
-			expected: model.KindMinor,
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, model.GetKindFromName(tc.name))
-		})
-	}
-}
-
-func TestKind_GetTargetBinPath(t *testing.T) {
-	cases := map[string]struct {
-		kind     model.Kind
-		basePath string
-		name     string
-		version  model.Version
-		expected string
-	}{
-		"latest": {
-			kind:     model.KindLatest,
-			basePath: filepath.Join("usr", "local", "bin"),
-			name:     "mockproj",
-			version:  model.NewLatestVersion(),
-			expected: filepath.Join("usr", "local", "bin", "mockproj"),
-		},
-		"major": {
-			kind:     model.KindMajor,
-			basePath: filepath.Join("usr", "local", "bin"),
-			name:     "mockproj",
-			version:  model.NewVersion("v1.2.3"),
-			expected: filepath.Join("usr", "local", "bin", "mockproj-v1"),
-		},
-		"minor": {
-			kind:     model.KindMinor,
-			basePath: filepath.Join("usr", "local", "bin"),
-			name:     "mockproj",
-			version:  model.NewVersion("v1.2.3"),
-			expected: filepath.Join("usr", "local", "bin", "mockproj-v1.2"),
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			result := tc.kind.GetTargetBinPath(tc.basePath, tc.name, tc.version)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
 
 func TestKind_IsValid(t *testing.T) {
 	cases := map[string]struct {

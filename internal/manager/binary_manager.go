@@ -219,7 +219,7 @@ func (m *GoBinaryManager) GetBinaryInfo(path string) (model.BinaryInfo, error) {
 	internalBinPath := m.workspace.GetInternalBinPath()
 
 	binInfo := model.BinaryInfo{
-		Name:        strings.Split(filepath.Base(path), "@")[0],
+		Binary:      model.NewBinaryFromString(filepath.Base(path)),
 		FullPath:    path,
 		InstallPath: installPath,
 		PackagePath: info.Path,
@@ -275,7 +275,7 @@ func (m *GoBinaryManager) GetBinaryRepository(
 	ctx context.Context,
 	bin model.Binary,
 ) (string, error) {
-	binInfo, err := m.GetBinaryInfo(filepath.Join(m.workspace.GetGoBinPath(), bin.Name))
+	binInfo, err := m.GetBinaryInfo(filepath.Join(m.workspace.GetGoBinPath(), bin.String()))
 	if err != nil {
 		return "", err
 	}
@@ -310,7 +310,7 @@ func (m *GoBinaryManager) GetBinaryUpgradeInfo(
 		BinaryInfo: info,
 	}
 
-	version := info.GetPinnedVersion()
+	version := info.Binary.GetPinnedVersion()
 	mod, err := m.toolchain.GetLatestModuleVersion(ctx, model.NewModule(binUpInfo.Module.Path, version))
 	if err != nil {
 		return model.BinaryUpgradeInfo{}, err
@@ -356,15 +356,18 @@ func (m *GoBinaryManager) InstallPackage(
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = cleanup()
-	}()
+	defer func() { _ = cleanup() }()
 
 	if err = m.toolchain.Install(ctx, binTempDir, pkg, rebuild); err != nil {
 		return err
 	}
 
-	tempBinPath := filepath.Join(binTempDir, binName)
+	var extension string
+	if m.runtime.OS() == "windows" {
+		extension = ".exe"
+	}
+	tempBinPath := filepath.Join(binTempDir, binName+extension)
+
 	buildInfo, err := m.toolchain.GetBuildInfo(tempBinPath)
 	if err != nil {
 		logger.ErrorContext(
@@ -374,8 +377,8 @@ func (m *GoBinaryManager) InstallPackage(
 		return err
 	}
 
-	binDir := m.workspace.GetInternalBinPath()
-	binPath := filepath.Join(binDir, binName+"@"+buildInfo.Main.Version)
+	bin := model.NewBinary(binName, model.NewVersion(buildInfo.Main.Version), extension)
+	binPath := filepath.Join(m.workspace.GetInternalBinPath(), bin.String())
 
 	logger.InfoContext(
 		ctx, "moving binary from temp path to bin path",
@@ -390,11 +393,7 @@ func (m *GoBinaryManager) InstallPackage(
 		return err
 	}
 
-	goBinPath := kind.GetTargetBinPath(
-		m.workspace.GetGoBinPath(),
-		binName,
-		model.NewVersion(buildInfo.Main.Version),
-	)
+	goBinPath := filepath.Join(m.workspace.GetGoBinPath(), bin.GetTargetBinName(kind))
 
 	logger.InfoContext(
 		ctx, "replacing existing symlink for binary",
@@ -423,10 +422,8 @@ func (m *GoBinaryManager) MigrateBinary(path string) error {
 		return ErrBinaryAlreadyManaged
 	}
 
-	internalBinPath := filepath.Join(
-		m.workspace.GetInternalBinPath(),
-		info.Name+"@"+info.Module.Version.String(),
-	)
+	bin := model.NewBinary(info.Binary.Name, info.Module.Version, filepath.Ext(path))
+	internalBinPath := filepath.Join(m.workspace.GetInternalBinPath(), bin.String())
 
 	logger.Info(
 		"moving binary from go bin path to internal bin path",
@@ -453,17 +450,17 @@ func (m *GoBinaryManager) PinBinary(bin model.Binary, kind model.Kind) error {
 	}
 
 	var matchPath string
-	var matchVersion model.Version
+	var matchBin model.Binary
 	for _, binPath := range binPaths {
-		intBin := model.NewBinary(filepath.Base(binPath))
+		intBin := model.NewBinaryFromString(filepath.Base(binPath))
 
 		if !intBin.IsPartOf(bin) {
 			continue
 		}
 
-		if matchPath == "" || intBin.Version.Compare(matchVersion) > 0 {
+		if matchPath == "" || intBin.Version.Compare(matchBin.Version) > 0 {
 			matchPath = binPath
-			matchVersion = intBin.Version
+			matchBin = intBin
 		}
 	}
 
@@ -474,7 +471,7 @@ func (m *GoBinaryManager) PinBinary(bin model.Binary, kind model.Kind) error {
 
 	logger.Info("found binary to pin", "path", matchPath)
 
-	targetPath := kind.GetTargetBinPath(m.workspace.GetGoBinPath(), bin.Name, matchVersion)
+	targetPath := filepath.Join(m.workspace.GetGoBinPath(), matchBin.GetTargetBinName(kind))
 
 	logger.Info("removing existing symlink for binary", "path", targetPath)
 
@@ -497,7 +494,7 @@ func (m *GoBinaryManager) PruneBinary(bin model.Binary) error {
 	}
 
 	for _, binPath := range binPaths {
-		intBin := model.NewBinary(filepath.Base(binPath))
+		intBin := model.NewBinaryFromString(filepath.Base(binPath))
 		if intBin.IsPartOf(bin) {
 			info, infoErr := m.GetBinaryInfo(binPath)
 			if infoErr != nil {
@@ -524,9 +521,9 @@ func (m *GoBinaryManager) PruneBinary(bin model.Binary) error {
 // symlink for managed binaries. It returns an error if the binary cannot be
 // found or removed.
 func (m *GoBinaryManager) UninstallBinary(bin model.Binary) error {
-	logger := slog.Default().With("bin", bin.Name)
+	logger := slog.Default().With("bin", bin.String())
 
-	err := m.fs.Remove(filepath.Join(m.workspace.GetGoBinPath(), bin.Name))
+	err := m.fs.Remove(filepath.Join(m.workspace.GetGoBinPath(), bin.String()))
 	if errors.Is(err, os.ErrNotExist) {
 		logger.Warn("binary not found")
 	} else if err != nil {
@@ -556,7 +553,7 @@ func (m *GoBinaryManager) UpgradeBinary(
 	}
 
 	if binUpInfo.IsUpgradeAvailable || rebuild {
-		kind := model.GetKindFromName(binUpInfo.Name)
+		kind := binUpInfo.Binary.GetPinKind()
 		return m.InstallPackage(ctx, binUpInfo.GetUpgradePackage(), kind, rebuild)
 	}
 

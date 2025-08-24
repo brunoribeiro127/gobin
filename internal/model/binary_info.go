@@ -6,7 +6,7 @@ import (
 
 // BinaryInfo represents the information for a binary.
 type BinaryInfo struct {
-	Name           string
+	Binary         Binary
 	FullPath       string
 	InstallPath    string
 	PackagePath    string
@@ -22,20 +22,6 @@ type BinaryInfo struct {
 
 	IsManaged bool
 	IsPinned  bool
-}
-
-// GetPinnedVersion returns the pinned version of the binary. If the binary
-// name contains a version suffix, it returns the version. Otherwise, it
-// returns "latest".
-func (b BinaryInfo) GetPinnedVersion() Version {
-	parts := strings.Split(b.Name, "-")
-	if len(parts) > 1 {
-		if version := NewVersion(parts[len(parts)-1]); version.IsValid() {
-			return version
-		}
-	}
-
-	return NewLatestVersion()
 }
 
 // BinaryUpgradeInfo represents the upgrade information for a binary.

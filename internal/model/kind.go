@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -26,38 +25,6 @@ var allowedKinds = []Kind{
 	KindLatest,
 	KindMajor,
 	KindMinor,
-}
-
-// GetKindFromName returns the kind of the binary name. If the binary name
-// contains a version suffix, it returns the kind. Otherwise, it returns latest.
-func GetKindFromName(name string) Kind {
-	parts := strings.Split(name, "-")
-	if version := NewVersion(parts[len(parts)-1]); version.IsValid() {
-		if strings.Contains(version.String(), ".") {
-			return KindMinor
-		}
-
-		return KindMajor
-	}
-
-	return KindLatest
-}
-
-// GetTargetBinPath returns the target path for a binary based on the base path,
-// binary name, and version.
-func (k *Kind) GetTargetBinPath(basePath, name string, version Version) string {
-	var targetPath string
-
-	switch *k {
-	case KindLatest:
-		targetPath = filepath.Join(basePath, name)
-	case KindMajor:
-		targetPath = filepath.Join(basePath, name+"-"+version.Major())
-	case KindMinor:
-		targetPath = filepath.Join(basePath, name+"-"+version.MajorMinor())
-	}
-
-	return targetPath
 }
 
 // IsValid checks if the kind is valid.

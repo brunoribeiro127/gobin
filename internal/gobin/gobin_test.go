@@ -430,7 +430,7 @@ func TestGobin_ListBinaries(t *testing.T) {
 			managed: false,
 			mockGetAllBinaryInfos: []model.BinaryInfo{
 				{
-					Name: "mockproj1",
+					Binary: model.NewBinaryFromString("mockproj1"),
 					Module: model.NewModule(
 						"example.com/mockorg/mockproj",
 						model.NewVersion("v0.1.0"),
@@ -438,7 +438,7 @@ func TestGobin_ListBinaries(t *testing.T) {
 					IsManaged: false,
 				},
 				{
-					Name: "mockproj2",
+					Binary: model.NewBinaryFromString("mockproj2"),
 					Module: model.NewModule(
 						"example.com/mockorg/mockproj",
 						model.NewVersion("v1.1.0"),
@@ -446,7 +446,7 @@ func TestGobin_ListBinaries(t *testing.T) {
 					IsManaged: false,
 				},
 				{
-					Name: "mockproj3",
+					Binary: model.NewBinaryFromString("mockproj3"),
 					Module: model.NewModule(
 						"example.com/mockorg/mockproj/v2",
 						model.NewVersion("v2.1.0"),
@@ -466,21 +466,21 @@ mockproj2 → example.com/mockorg/mockproj    @ v1.1.0
 			managed: true,
 			mockGetAllBinaryInfos: []model.BinaryInfo{
 				{
-					Name: "mockproj",
+					Binary: model.NewBinaryFromString("mockproj"),
 					Module: model.NewModule(
 						"example.com/mockorg/mockproj",
 						model.NewVersion("v0.1.0"),
 					),
 				},
 				{
-					Name: "mockproj",
+					Binary: model.NewBinaryFromString("mockproj"),
 					Module: model.NewModule(
 						"example.com/mockorg/mockproj",
 						model.NewVersion("v1.1.0"),
 					),
 				},
 				{
-					Name: "mockproj",
+					Binary: model.NewBinaryFromString("mockproj"),
 					Module: model.NewModule(
 						"example.com/mockorg/mockproj/v2",
 						model.NewVersion("v2.1.0"),
@@ -506,7 +506,7 @@ mockproj → example.com/mockorg/mockproj    @ v0.1.0
 			managed: false,
 			mockGetAllBinaryInfos: []model.BinaryInfo{
 				{
-					Name: "mockproj",
+					Binary: model.NewBinaryFromString("mockproj"),
 					Module: model.NewModule(
 						"example.com/mockorg/mockproj",
 						model.NewVersion("v0.1.0"),
@@ -538,7 +538,7 @@ mockproj → example.com/mockorg/mockproj    @ v0.1.0
 
 func TestGobin_ListOutdatedBinaries(t *testing.T) {
 	binInfo1 := model.BinaryInfo{
-		Name: "mockproj1",
+		Binary: model.NewBinaryFromString("mockproj1"),
 		Module: model.NewModule(
 			"example.com/mockorg/mockproj1",
 			model.NewVersion("v0.1.0"),
@@ -546,7 +546,7 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 	}
 
 	binInfo2 := model.BinaryInfo{
-		Name: "mockproj2",
+		Binary: model.NewBinaryFromString("mockproj2"),
 		Module: model.NewModule(
 			"example.com/mockorg/mockproj2",
 			model.NewVersion("v1.1.0"),
@@ -554,7 +554,7 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 	}
 
 	binInfo3 := model.BinaryInfo{
-		Name: "mockproj3-v2",
+		Binary: model.NewBinaryFromString("mockproj3-v2"),
 		Module: model.NewModule(
 			"example.com/mockorg/mockproj3/v2",
 			model.NewVersion("v2.1.0"),
@@ -562,7 +562,7 @@ func TestGobin_ListOutdatedBinaries(t *testing.T) {
 	}
 
 	binInfo4 := model.BinaryInfo{
-		Name: "mockproj3-v2.1",
+		Binary: model.NewBinaryFromString("mockproj3-v2.1"),
 		Module: model.NewModule(
 			"example.com/mockorg/mockproj3/v2",
 			model.NewVersion("v2.1.0"),
@@ -980,7 +980,7 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 		expectedStdErr         string
 	}{
 		"success-single-binary": {
-			bins: []model.Binary{model.NewBinary("mockproj1")},
+			bins: []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
 					path: filepath.Join(goBinPath, "mockproj1"),
@@ -989,9 +989,9 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 		},
 		"success-multiple-binaries": {
 			bins: []model.Binary{
-				model.NewBinary("mockproj1"),
-				model.NewBinary("mockproj2"),
-				model.NewBinary("mockproj3"),
+				model.NewBinaryFromString("mockproj1"),
+				model.NewBinaryFromString("mockproj2"),
+				model.NewBinaryFromString("mockproj3"),
 			},
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
@@ -1025,7 +1025,7 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 			},
 		},
 		"success-skip-binary-already-managed": {
-			bins: []model.Binary{model.NewBinary("mockproj1")},
+			bins: []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
 					path: filepath.Join(goBinPath, "mockproj1"),
@@ -1036,7 +1036,7 @@ func TestGobin_MigrateBinaries(t *testing.T) {
 			expectedStdErr: "❌ binary \"mockproj1\" already managed\n",
 		},
 		"partial-success-skip-binary-not-found": {
-			bins: []model.Binary{model.NewBinary("mockproj1")},
+			bins: []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockMigrateBinaryCalls: []mockMigrateBinaryCall{
 				{
 					path: filepath.Join(goBinPath, "mockproj1"),
@@ -1101,64 +1101,68 @@ func TestGobin_PinBinaries(t *testing.T) {
 	}{
 		"success-single-binary-with-latest-kind": {
 			kind: model.KindLatest,
-			bins: []model.Binary{model.NewBinary("mockproj1")},
+			bins: []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockPinBinaryCalls: []mockPinBinaryCall{
-				{bin: model.NewBinary("mockproj1"), kind: model.KindLatest},
+				{bin: model.NewBinaryFromString("mockproj1"), kind: model.KindLatest},
 			},
 		},
 		"success-multiple-binaries-with-versions-and-latest-kind": {
 			kind: model.KindLatest,
 			bins: []model.Binary{
-				model.NewBinary("mockproj1"),
-				model.NewBinary("mockproj2@v1"),
-				model.NewBinary("mockproj3@v2.1"),
+				model.NewBinaryFromString("mockproj1"),
+				model.NewBinaryFromString("mockproj2@v1"),
+				model.NewBinaryFromString("mockproj3@v2.1"),
 			},
 			mockPinBinaryCalls: []mockPinBinaryCall{
-				{bin: model.NewBinary("mockproj1"), kind: model.KindLatest},
-				{bin: model.NewBinary("mockproj2@v1"), kind: model.KindLatest},
-				{bin: model.NewBinary("mockproj3@v2.1"), kind: model.KindLatest},
+				{bin: model.NewBinaryFromString("mockproj1"), kind: model.KindLatest},
+				{bin: model.NewBinaryFromString("mockproj2@v1"), kind: model.KindLatest},
+				{bin: model.NewBinaryFromString("mockproj3@v2.1"), kind: model.KindLatest},
 			},
 		},
 		"success-multiple-binaries-with-versions-and-major-kind": {
 			kind: model.KindMajor,
 			bins: []model.Binary{
-				model.NewBinary("mockproj1"),
-				model.NewBinary("mockproj2@v1"),
-				model.NewBinary("mockproj3@v2.1"),
+				model.NewBinaryFromString("mockproj1"),
+				model.NewBinaryFromString("mockproj2@v1"),
+				model.NewBinaryFromString("mockproj3@v2.1"),
 			},
 			mockPinBinaryCalls: []mockPinBinaryCall{
-				{bin: model.NewBinary("mockproj1"), kind: model.KindMajor},
-				{bin: model.NewBinary("mockproj2@v1"), kind: model.KindMajor},
-				{bin: model.NewBinary("mockproj3@v2.1"), kind: model.KindMajor},
+				{bin: model.NewBinaryFromString("mockproj1"), kind: model.KindMajor},
+				{bin: model.NewBinaryFromString("mockproj2@v1"), kind: model.KindMajor},
+				{bin: model.NewBinaryFromString("mockproj3@v2.1"), kind: model.KindMajor},
 			},
 		},
 		"success-multiple-binaries-with-versions-and-minor-kind": {
 			kind: model.KindMinor,
 			bins: []model.Binary{
-				model.NewBinary("mockproj1"),
-				model.NewBinary("mockproj2@v1"),
-				model.NewBinary("mockproj3@v2.1"),
+				model.NewBinaryFromString("mockproj1"),
+				model.NewBinaryFromString("mockproj2@v1"),
+				model.NewBinaryFromString("mockproj3@v2.1"),
 			},
 			mockPinBinaryCalls: []mockPinBinaryCall{
-				{bin: model.NewBinary("mockproj1"), kind: model.KindMinor},
-				{bin: model.NewBinary("mockproj2@v1"), kind: model.KindMinor},
-				{bin: model.NewBinary("mockproj3@v2.1"), kind: model.KindMinor},
+				{bin: model.NewBinaryFromString("mockproj1"), kind: model.KindMinor},
+				{bin: model.NewBinaryFromString("mockproj2@v1"), kind: model.KindMinor},
+				{bin: model.NewBinaryFromString("mockproj3@v2.1"), kind: model.KindMinor},
 			},
 		},
 		"error-pin-binary-not-found": {
 			kind: model.KindLatest,
-			bins: []model.Binary{model.NewBinary("mockproj1")},
+			bins: []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockPinBinaryCalls: []mockPinBinaryCall{
-				{bin: model.NewBinary("mockproj1"), kind: model.KindLatest, err: toolchain.ErrBinaryNotFound},
+				{bin: model.NewBinaryFromString("mockproj1"), kind: model.KindLatest, err: toolchain.ErrBinaryNotFound},
 			},
 			expectedErr:    toolchain.ErrBinaryNotFound,
 			expectedStdErr: "❌ binary \"mockproj1\" not found\n",
 		},
 		"error-pin-binary-unexpected-error": {
 			kind: model.KindLatest,
-			bins: []model.Binary{model.NewBinary("mockproj1")},
+			bins: []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockPinBinaryCalls: []mockPinBinaryCall{
-				{bin: model.NewBinary("mockproj1"), kind: model.KindLatest, err: errors.New("unexpected error")},
+				{
+					bin:  model.NewBinaryFromString("mockproj1"),
+					kind: model.KindLatest,
+					err:  errors.New("unexpected error"),
+				},
 			},
 			expectedErr:    errors.New("unexpected error"),
 			expectedStdErr: "❌ error pinning binary \"mockproj1\"\n",
@@ -1207,10 +1211,10 @@ func TestGobin_PrintBinaryInfo(t *testing.T) {
 	}{
 		"success-base-info": {
 			stdOut:            &bytes.Buffer{},
-			binary:            model.NewBinary("mockproj1"),
+			binary:            model.NewBinaryFromString("mockproj1"),
 			callGetBinaryInfo: true,
 			mockGetBinaryInfo: model.BinaryInfo{
-				Name:        "mockproj",
+				Binary:      model.NewBinaryFromString("mockproj"),
 				FullPath:    filepath.Join(goBinPath, "mockproj"),
 				InstallPath: filepath.Join(intBinPath, "mockproj@v0.1.0"),
 				PackagePath: "example.com/mockorg/mockproj/cmd/mockproj",
@@ -1234,10 +1238,10 @@ Env Vars      CGO_ENABLED=1
 		},
 		"success-all-info": {
 			stdOut:            &bytes.Buffer{},
-			binary:            model.NewBinary("mockproj1"),
+			binary:            model.NewBinaryFromString("mockproj1"),
 			callGetBinaryInfo: true,
 			mockGetBinaryInfo: model.BinaryInfo{
-				Name:        "mockproj",
+				Binary:      model.NewBinaryFromString("mockproj"),
 				FullPath:    filepath.Join(goBinPath, "mockproj"),
 				InstallPath: filepath.Join(goBinPath, "mockproj"),
 				PackagePath: "example.com/mockorg/mockproj/cmd/mockproj",
@@ -1266,7 +1270,7 @@ Env Vars      CGO_ENABLED=1
 		},
 		"error-binary-not-found": {
 			stdOut:               &bytes.Buffer{},
-			binary:               model.NewBinary("mockproj1"),
+			binary:               model.NewBinaryFromString("mockproj1"),
 			callGetBinaryInfo:    true,
 			mockGetBinaryInfoErr: toolchain.ErrBinaryNotFound,
 			expectedErr:          toolchain.ErrBinaryNotFound,
@@ -1274,7 +1278,7 @@ Env Vars      CGO_ENABLED=1
 		},
 		"error-get-binary-info": {
 			stdOut:               &bytes.Buffer{},
-			binary:               model.NewBinary("mockproj1"),
+			binary:               model.NewBinaryFromString("mockproj1"),
 			callGetBinaryInfo:    true,
 			mockGetBinaryInfoErr: errors.New("unexpected error"),
 			expectedErr:          errors.New("unexpected error"),
@@ -1282,7 +1286,7 @@ Env Vars      CGO_ENABLED=1
 		},
 		"error-write-error": {
 			stdOut:            &errorWriter{},
-			binary:            model.NewBinary("mockproj1"),
+			binary:            model.NewBinaryFromString("mockproj1"),
 			callGetBinaryInfo: true,
 			mockGetBinaryInfo: model.BinaryInfo{},
 			expectedErr:       errMockWriteError,
@@ -1295,7 +1299,7 @@ Env Vars      CGO_ENABLED=1
 			binaryManager := managermocks.NewBinaryManager(t)
 
 			if tc.callGetBinaryInfo {
-				binaryManager.EXPECT().GetBinaryInfo(filepath.Join(goBinPath, tc.binary.Name)).
+				binaryManager.EXPECT().GetBinaryInfo(filepath.Join(goBinPath, tc.binary.String())).
 					Return(tc.mockGetBinaryInfo, tc.mockGetBinaryInfoErr).
 					Once()
 			}
@@ -1419,12 +1423,12 @@ func TestGobin_PruneBinaries(t *testing.T) {
 	}{
 		"success-specific-binaries": {
 			bins: []model.Binary{
-				model.NewBinary("mockproj1"),
-				model.NewBinary("mockproj2@v2"),
+				model.NewBinaryFromString("mockproj1"),
+				model.NewBinaryFromString("mockproj2@v2"),
 			},
 			mockPruneBinaryCalls: []mockPruneBinaryCall{
-				{bin: model.NewBinary("mockproj1")},
-				{bin: model.NewBinary("mockproj2@v2")},
+				{bin: model.NewBinaryFromString("mockproj1")},
+				{bin: model.NewBinaryFromString("mockproj2@v2")},
 			},
 		},
 		"success-all-binaries": {
@@ -1436,8 +1440,8 @@ func TestGobin_PruneBinaries(t *testing.T) {
 				filepath.Join(intBinPath, "mockproj2@v2.1.0"),
 			},
 			mockPruneBinaryCalls: []mockPruneBinaryCall{
-				{bin: model.NewBinary("mockproj1")},
-				{bin: model.NewBinary("mockproj2")},
+				{bin: model.NewBinaryFromString("mockproj1")},
+				{bin: model.NewBinaryFromString("mockproj2")},
 			},
 		},
 		"error-list-binaries": {
@@ -1447,11 +1451,11 @@ func TestGobin_PruneBinaries(t *testing.T) {
 		},
 		"error-prune-binary": {
 			bins: []model.Binary{
-				model.NewBinary("mockproj1"),
+				model.NewBinaryFromString("mockproj1"),
 			},
 			mockPruneBinaryCalls: []mockPruneBinaryCall{
 				{
-					bin: model.NewBinary("mockproj1"),
+					bin: model.NewBinaryFromString("mockproj1"),
 					err: errors.New("unexpected error"),
 				},
 			},
@@ -1496,33 +1500,33 @@ func TestGobin_ShowBinaryRepository(t *testing.T) {
 		expectedStdOut             string
 	}{
 		"success-print-repository-url": {
-			binary:                  model.NewBinary("mockproj1"),
+			binary:                  model.NewBinaryFromString("mockproj1"),
 			open:                    false,
 			mockGetBinaryRepository: "https://github.com/mockproj1",
 			expectedStdOut:          "https://github.com/mockproj1\n",
 		},
 		"success-open-repository-url": {
-			binary:                  model.NewBinary("mockproj1"),
+			binary:                  model.NewBinaryFromString("mockproj1"),
 			open:                    true,
 			mockGetBinaryRepository: "https://github.com/mockproj1",
 			callOpen:                true,
 		},
 		"error-binary-not-found": {
-			binary:                     model.NewBinary("mockproj1"),
+			binary:                     model.NewBinaryFromString("mockproj1"),
 			open:                       true,
 			mockGetBinaryRepositoryErr: toolchain.ErrBinaryNotFound,
 			expectedErr:                toolchain.ErrBinaryNotFound,
 			expectedStdErr:             "❌ binary \"mockproj1\" not found\n",
 		},
 		"error-get-binary-repository": {
-			binary:                     model.NewBinary("mockproj1"),
+			binary:                     model.NewBinaryFromString("mockproj1"),
 			open:                       true,
 			mockGetBinaryRepositoryErr: errors.New("unexpected error"),
 			expectedErr:                errors.New("unexpected error"),
 			expectedStdErr:             "❌ error getting repository for binary \"mockproj1\"\n",
 		},
 		"error-open-repository-url": {
-			binary:                  model.NewBinary("mockproj1"),
+			binary:                  model.NewBinaryFromString("mockproj1"),
 			open:                    true,
 			mockGetBinaryRepository: "https://github.com/mockproj1",
 			callOpen:                true,
@@ -1567,31 +1571,31 @@ func TestGobin_UninstallBinaries(t *testing.T) {
 			bins: []model.Binary{},
 		},
 		"success-single-binary": {
-			bins:                     []model.Binary{model.NewBinary("mockproj1")},
-			mockUninstallBinaryCalls: []mockUninstallBinaryCall{{bin: model.NewBinary("mockproj1")}},
+			bins:                     []model.Binary{model.NewBinaryFromString("mockproj1")},
+			mockUninstallBinaryCalls: []mockUninstallBinaryCall{{bin: model.NewBinaryFromString("mockproj1")}},
 		},
 		"success-multiple-binaries": {
 			bins: []model.Binary{
-				model.NewBinary("mockproj1"),
-				model.NewBinary("mockproj2"),
+				model.NewBinaryFromString("mockproj1"),
+				model.NewBinaryFromString("mockproj2"),
 			},
 			mockUninstallBinaryCalls: []mockUninstallBinaryCall{
-				{bin: model.NewBinary("mockproj1")},
-				{bin: model.NewBinary("mockproj2")},
+				{bin: model.NewBinaryFromString("mockproj1")},
+				{bin: model.NewBinaryFromString("mockproj2")},
 			},
 		},
 		"error-binary-not-found": {
-			bins: []model.Binary{model.NewBinary("mockproj1")},
+			bins: []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockUninstallBinaryCalls: []mockUninstallBinaryCall{
-				{bin: model.NewBinary("mockproj1"), err: os.ErrNotExist},
+				{bin: model.NewBinaryFromString("mockproj1"), err: os.ErrNotExist},
 			},
 			expectedErr:    os.ErrNotExist,
 			expectedStdErr: "❌ binary \"mockproj1\" not found\n",
 		},
 		"error-remove-binary": {
-			bins: []model.Binary{model.NewBinary("mockproj1")},
+			bins: []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockUninstallBinaryCalls: []mockUninstallBinaryCall{
-				{bin: model.NewBinary("mockproj1"), err: errors.New("unexpected error")},
+				{bin: model.NewBinaryFromString("mockproj1"), err: errors.New("unexpected error")},
 			},
 			expectedErr:    errors.New("unexpected error"),
 			expectedStdErr: "❌ error uninstalling binary \"mockproj1\"\n",
@@ -1656,8 +1660,8 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 		"success-specific-bins": {
 			parallelism: 1,
 			bins: []model.Binary{
-				model.NewBinary("mockproj2"),
-				model.NewBinary("mockproj3-v2"),
+				model.NewBinaryFromString("mockproj2"),
+				model.NewBinaryFromString("mockproj3-v2"),
 			},
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
 				{path: filepath.Join(goBinPath, "mockproj2")},
@@ -1686,7 +1690,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 		},
 		"error-binary-not-found": {
 			parallelism: 1,
-			bins:        []model.Binary{model.NewBinary("mockproj1")},
+			bins:        []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
 				{path: filepath.Join(goBinPath, "mockproj1"), err: toolchain.ErrBinaryNotFound},
 			},
@@ -1695,7 +1699,7 @@ func TestGobin_UpgradeBinaries(t *testing.T) {
 		},
 		"error-upgrade-binary": {
 			parallelism: 1,
-			bins:        []model.Binary{model.NewBinary("mockproj1")},
+			bins:        []model.Binary{model.NewBinaryFromString("mockproj1")},
 			mockUpgradeBinaryCalls: []mockUpgradeBinaryCall{
 				{path: filepath.Join(goBinPath, "mockproj1"), err: errors.New("unexpected error")},
 			},
