@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -35,17 +36,11 @@ type FileSystem interface {
 }
 
 // fileSystem is the default implementation of the FileSystem interface.
-type fileSystem struct {
-	runtime Runtime
-}
+type fileSystem struct{}
 
 // NewFileSystem creates a new file system.
-func NewFileSystem(
-	runtime Runtime,
-) FileSystem {
-	return &fileSystem{
-		runtime: runtime,
-	}
+func NewFileSystem() FileSystem {
+	return &fileSystem{}
 }
 
 // CreateDir creates a directory with the given path and permissions. It returns
@@ -201,8 +196,20 @@ func (fs *fileSystem) isBinary(path string) bool {
 		return false
 	}
 
-	if fs.runtime.OS() == "windows" { //nolint:goconst,nolintlint
-		return strings.EqualFold(filepath.Ext(info.Name()), ".exe")
+	//nolint:goconst,nolintlint
+	if runtime.GOOS == "windows" {
+		f, openErr := os.Open(path)
+		if openErr != nil {
+			return false
+		}
+		defer f.Close()
+
+		var header [2]byte
+		if _, readErr := f.Read(header[:]); readErr != nil {
+			return false
+		}
+
+		return header[0] == 'M' && header[1] == 'Z'
 	}
 
 	return info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0

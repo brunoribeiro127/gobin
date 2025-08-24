@@ -69,7 +69,7 @@ func run(ctx context.Context) int {
 	env := system.NewEnvironment()
 	exec := system.NewExec()
 	rt := system.NewRuntime()
-	fs := system.NewFileSystem(rt)
+	fs := system.NewFileSystem()
 
 	workspace, err := system.NewWorkspace(env, fs, rt)
 	if err != nil {
