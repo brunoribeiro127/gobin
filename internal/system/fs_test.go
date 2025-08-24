@@ -139,7 +139,7 @@ func TestFileSystem_MoveWithSymlink(t *testing.T) {
 	err = os.Mkdir(filepath.Join(tempDir, "dir2"), 0700)
 	require.NoError(t, err)
 
-	err = fs.MoveWithSymlink(filepath.Join(tempDir, "dir2", "bin"), filepath.Join(tempDir, "dir1", "bin"))
+	err = fs.MoveWithSymlink(filepath.Join(tempDir, "dir1", "bin"), filepath.Join(tempDir, "dir2", "bin"))
 	require.NoError(t, err)
 
 	info, err := os.Lstat(filepath.Join(tempDir, "dir1", "bin"))
