@@ -595,7 +595,7 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 				{path: filepath.Join(goBinPath, "mockproj"), err: os.ErrInvalid},
 			},
 			expectedInfo: model.BinaryInfo{
-				Name:        "mockproj",
+				Binary:      model.NewBinaryFromString("mockproj"),
 				FullPath:    filepath.Join(goBinPath, "mockproj"),
 				InstallPath: filepath.Join(goBinPath, "mockproj"),
 				PackagePath: "example.com/mockorg/mockproj/cmd/mockproj",
@@ -637,7 +637,7 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 				filepath.Join(goBinPath, "mockproj-v0"),
 			},
 			expectedInfo: model.BinaryInfo{
-				Name:        "mockproj",
+				Binary:      model.NewBinary("mockproj", model.NewVersion("v0.1.0"), ""),
 				FullPath:    filepath.Join(intBinPath, "mockproj@v0.1.0"),
 				InstallPath: filepath.Join(intBinPath, "mockproj@v0.1.0"),
 				PackagePath: "example.com/mockorg/mockproj/cmd/mockproj",
@@ -677,7 +677,7 @@ func TestGoBinaryManager_GetBinaryInfo(t *testing.T) {
 				},
 			},
 			expectedInfo: model.BinaryInfo{
-				Name:        "mockproj",
+				Binary:      model.NewBinaryFromString("mockproj"),
 				FullPath:    filepath.Join(goBinPath, "mockproj"),
 				InstallPath: filepath.Join(intBinPath, "mockproj@v0.1.2-0.20250729191454-dac745d99aac"),
 				PackagePath: "example.com/mockorg/mockproj/cmd/mockproj",
@@ -780,7 +780,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 		expectedErr             error
 	}{
 		"success-module-origin": {
-			binary:               model.NewBinary("mockproj"),
+			binary:               model.NewBinaryFromString("mockproj"),
 			mockGetBuildInfo:     getBuildInfo("mockproj", "v0.1.0"),
 			callGetSymlinkTarget: true,
 			mockGetSymlinkTarget: filepath.Join(intBinPath, "mockproj@v0.1.0"),
@@ -791,7 +791,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			expectedRepository: "https://github.com/mockorg/mockproj",
 		},
 		"success-module-origin-not-available": {
-			binary:                 model.NewBinary("mockproj"),
+			binary:                 model.NewBinaryFromString("mockproj"),
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
 			callGetSymlinkTarget:   true,
 			mockGetSymlinkTarget:   filepath.Join(intBinPath, "mockproj@v0.1.0"),
@@ -800,7 +800,7 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			expectedRepository:     "https://example.com/mockorg/mockproj",
 		},
 		"success-module-not-found": {
-			binary:                 model.NewBinary("mockproj"),
+			binary:                 model.NewBinaryFromString("mockproj"),
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
 			callGetSymlinkTarget:   true,
 			mockGetSymlinkTarget:   filepath.Join(intBinPath, "mockproj@v0.1.0"),
@@ -808,13 +808,13 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			mockGetModuleOriginErr: toolchain.ErrModuleNotFound,
 			expectedRepository:     "https://example.com/mockorg/mockproj",
 		},
-		"error-get-build-info": {
-			binary:              model.NewBinary("mockproj"),
+		"error-get-binary-info": {
+			binary:              model.NewBinaryFromString("mockproj"),
 			mockGetBuildInfoErr: toolchain.ErrBinaryBuiltWithoutGoModules,
 			expectedErr:         toolchain.ErrBinaryBuiltWithoutGoModules,
 		},
 		"error-get-module-origin": {
-			binary:                 model.NewBinary("mockproj"),
+			binary:                 model.NewBinaryFromString("mockproj"),
 			mockGetBuildInfo:       getBuildInfo("mockproj", "v0.1.0"),
 			callGetSymlinkTarget:   true,
 			mockGetSymlinkTarget:   filepath.Join(intBinPath, "mockproj@v0.1.0"),
@@ -830,12 +830,12 @@ func TestGoBinaryManager_GetBinaryRepository(t *testing.T) {
 			toolchain := toolchainmocks.NewToolchain(t)
 
 			toolchain.EXPECT().
-				GetBuildInfo(filepath.Join(goBinPath, tc.binary.Name)).
+				GetBuildInfo(filepath.Join(goBinPath, tc.binary.String())).
 				Return(tc.mockGetBuildInfo, tc.mockGetBuildInfoErr).
 				Once()
 
 			if tc.callGetSymlinkTarget {
-				fs.EXPECT().GetSymlinkTarget(filepath.Join(goBinPath, tc.binary.Name)).
+				fs.EXPECT().GetSymlinkTarget(filepath.Join(goBinPath, tc.binary.String())).
 					Return(tc.mockGetSymlinkTarget, tc.mockGetSymlinkTargetErr).
 					Once()
 			}
@@ -1092,6 +1092,8 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 		callInstall              bool
 		mockInstallPackage       model.Package
 		mockInstallErr           error
+		callRuntimeOS            bool
+		mockRuntimeOS            string
 		callGetBuildInfo         bool
 		mockGetBuildInfoPath     string
 		mockGetBuildInfo         *buildinfo.BuildInfo
@@ -1115,6 +1117,8 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
 			callInstall:              true,
 			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@latest"),
+			callRuntimeOS:            true,
+			mockRuntimeOS:            "linux",
 			callGetBuildInfo:         true,
 			mockGetBuildInfoPath:     filepath.Join(tempPath, "mockproj-0123456789/mockproj"),
 			mockGetBuildInfo:         getBuildInfo("mockproj", "v1.0.0"),
@@ -1125,6 +1129,27 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 			mockReplaceSymlinkSrc:    filepath.Join(intBinPath, "mockproj@v1.0.0"),
 			mockReplaceSymlinkDst:    filepath.Join(goBinPath, "mockproj"),
 		},
+		"success-windows": {
+			pkg:                      model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj"),
+			kind:                     model.KindLatest,
+			rebuild:                  false,
+			callCreateTempDir:        true,
+			mockCreateTempDirPattern: "mockproj-*",
+			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
+			callInstall:              true,
+			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@latest"),
+			callRuntimeOS:            true,
+			mockRuntimeOS:            "windows",
+			callGetBuildInfo:         true,
+			mockGetBuildInfoPath:     filepath.Join(tempPath, "mockproj-0123456789/mockproj.exe"),
+			mockGetBuildInfo:         getBuildInfo("mockproj.exe", "v1.0.0"),
+			callMove:                 true,
+			mockMoveSrc:              filepath.Join(tempPath, "mockproj-0123456789/mockproj.exe"),
+			mockMoveDst:              filepath.Join(intBinPath, "mockproj@v1.0.0.exe"),
+			callReplaceSymlink:       true,
+			mockReplaceSymlinkSrc:    filepath.Join(intBinPath, "mockproj@v1.0.0.exe"),
+			mockReplaceSymlinkDst:    filepath.Join(goBinPath, "mockproj.exe"),
+		},
 		"success-package-with-version": {
 			pkg:                      model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.0.0"),
 			kind:                     model.KindLatest,
@@ -1134,6 +1159,8 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
 			callInstall:              true,
 			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.0.0"),
+			callRuntimeOS:            true,
+			mockRuntimeOS:            "linux",
 			callGetBuildInfo:         true,
 			mockGetBuildInfoPath:     filepath.Join(tempPath, "mockproj-0123456789/mockproj"),
 			mockGetBuildInfo:         getBuildInfo("mockproj", "v1.0.0"),
@@ -1153,6 +1180,8 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
 			callInstall:              true,
 			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/v2@v2.0.0"),
+			callRuntimeOS:            true,
+			mockRuntimeOS:            "linux",
 			callGetBuildInfo:         true,
 			mockGetBuildInfoPath:     filepath.Join(tempPath, "mockproj-0123456789/mockproj"),
 			mockGetBuildInfo:         getBuildInfo("mockproj", "v2.0.0"),
@@ -1172,6 +1201,8 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
 			callInstall:              true,
 			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.0.0"),
+			callRuntimeOS:            true,
+			mockRuntimeOS:            "linux",
 			callGetBuildInfo:         true,
 			mockGetBuildInfoPath:     filepath.Join(tempPath, "mockproj-0123456789/mockproj"),
 			mockGetBuildInfo:         getBuildInfo("mockproj", "v1.0.0"),
@@ -1191,6 +1222,8 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
 			callInstall:              true,
 			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.0.0"),
+			callRuntimeOS:            true,
+			mockRuntimeOS:            "linux",
 			callGetBuildInfo:         true,
 			mockGetBuildInfoPath:     filepath.Join(tempPath, "mockproj-0123456789/mockproj"),
 			mockGetBuildInfo:         getBuildInfo("mockproj", "v1.0.0"),
@@ -1231,6 +1264,8 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
 			callInstall:              true,
 			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.1.0"),
+			callRuntimeOS:            true,
+			mockRuntimeOS:            "linux",
 			callGetBuildInfo:         true,
 			mockGetBuildInfoPath:     filepath.Join(tempPath, "mockproj-0123456789/mockproj"),
 			mockGetBuildInfo:         getBuildInfo("mockproj", "v1.1.0"),
@@ -1246,6 +1281,8 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
 			callInstall:              true,
 			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.1.0"),
+			callRuntimeOS:            true,
+			mockRuntimeOS:            "linux",
 			callGetBuildInfo:         true,
 			mockGetBuildInfoPath:     filepath.Join(tempPath, "mockproj-0123456789/mockproj"),
 			mockGetBuildInfo:         getBuildInfo("mockproj", "v1.1.0"),
@@ -1264,6 +1301,8 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
 			callInstall:              true,
 			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.1.0"),
+			callRuntimeOS:            true,
+			mockRuntimeOS:            "linux",
 			callGetBuildInfo:         true,
 			mockGetBuildInfoPath:     filepath.Join(tempPath, "mockproj-0123456789/mockproj"),
 			mockGetBuildInfo:         getBuildInfo("mockproj", "v1.1.0"),
@@ -1281,6 +1320,7 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := systemmocks.NewFileSystem(t)
+			rt := systemmocks.NewRuntime(t)
 			toolchain := toolchainmocks.NewToolchain(t)
 
 			if tc.callCreateTempDir {
@@ -1295,6 +1335,10 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 					tc.pkg,
 					tc.rebuild,
 				).Return(tc.mockInstallErr).Once()
+			}
+
+			if tc.callRuntimeOS {
+				rt.EXPECT().OS().Return(tc.mockRuntimeOS).Once()
 			}
 
 			if tc.callGetBuildInfo {
@@ -1313,7 +1357,7 @@ func TestGoBinaryManager_InstallPackage(t *testing.T) {
 					Return(tc.mockReplaceSymlinkErr).Once()
 			}
 
-			binaryManager := manager.NewGoBinaryManager(fs, nil, toolchain, workspace)
+			binaryManager := manager.NewGoBinaryManager(fs, rt, toolchain, workspace)
 			err = binaryManager.InstallPackage(context.Background(), tc.pkg, tc.kind, tc.rebuild)
 			assert.Equal(t, tc.expectedErr, err)
 		})
@@ -1353,7 +1397,7 @@ func TestGoBinaryManager_MigrateBinary(t *testing.T) {
 			mockMoveWithSymlinkSrc: filepath.Join(goBinPath, "mockproj"),
 			mockMoveWithSymlinkDst: filepath.Join(intBinPath, "mockproj@v0.1.0"),
 		},
-		"error-get-build-info": {
+		"error-get-binary-info": {
 			path:                filepath.Join(goBinPath, "mockproj"),
 			mockGetBuildInfo:    getBuildInfo("mockproj", "v0.1.0"),
 			mockGetBuildInfoErr: toolchain.ErrBinaryNotFound,
@@ -1431,7 +1475,7 @@ func TestGoBinaryManager_PinBinary(t *testing.T) {
 		expectedErr           error
 	}{
 		"success-version-latest-kind-latest": {
-			bin:  model.NewBinary("mockproj2"),
+			bin:  model.NewBinaryFromString("mockproj2"),
 			kind: model.KindLatest,
 			mockListBinaries: []string{
 				filepath.Join(intBinPath, "mockproj1@v0.3.0"),
@@ -1448,7 +1492,7 @@ func TestGoBinaryManager_PinBinary(t *testing.T) {
 			mockReplaceSymlinkDst: filepath.Join(goBinPath, "mockproj2"),
 		},
 		"success-version-latest-kind-major": {
-			bin:  model.NewBinary("mockproj2"),
+			bin:  model.NewBinaryFromString("mockproj2"),
 			kind: model.KindMajor,
 			mockListBinaries: []string{
 				filepath.Join(intBinPath, "mockproj1@v0.3.0"),
@@ -1465,7 +1509,7 @@ func TestGoBinaryManager_PinBinary(t *testing.T) {
 			mockReplaceSymlinkDst: filepath.Join(goBinPath, "mockproj2-v2"),
 		},
 		"success-version-latest-kind-minor": {
-			bin:  model.NewBinary("mockproj2"),
+			bin:  model.NewBinaryFromString("mockproj2"),
 			kind: model.KindMinor,
 			mockListBinaries: []string{
 				filepath.Join(intBinPath, "mockproj1@v0.3.0"),
@@ -1482,7 +1526,7 @@ func TestGoBinaryManager_PinBinary(t *testing.T) {
 			mockReplaceSymlinkDst: filepath.Join(goBinPath, "mockproj2-v2.2"),
 		},
 		"success-version-v1-kind-latest": {
-			bin:  model.NewBinary("mockproj2@v1"),
+			bin:  model.NewBinaryFromString("mockproj2@v1"),
 			kind: model.KindLatest,
 			mockListBinaries: []string{
 				filepath.Join(intBinPath, "mockproj1@v0.3.0"),
@@ -1499,7 +1543,7 @@ func TestGoBinaryManager_PinBinary(t *testing.T) {
 			mockReplaceSymlinkDst: filepath.Join(goBinPath, "mockproj2"),
 		},
 		"success-version-v1.2-kind-latest": {
-			bin:  model.NewBinary("mockproj2@v1.2"),
+			bin:  model.NewBinaryFromString("mockproj2@v1.2"),
 			kind: model.KindLatest,
 			mockListBinaries: []string{
 				filepath.Join(intBinPath, "mockproj1@v0.3.0"),
@@ -1516,7 +1560,7 @@ func TestGoBinaryManager_PinBinary(t *testing.T) {
 			mockReplaceSymlinkDst: filepath.Join(goBinPath, "mockproj2"),
 		},
 		"success-version-v1.3.0-kind-latest": {
-			bin:  model.NewBinary("mockproj2@v1.3.0"),
+			bin:  model.NewBinaryFromString("mockproj2@v1.3.0"),
 			kind: model.KindLatest,
 			mockListBinaries: []string{
 				filepath.Join(intBinPath, "mockproj1@v0.3.0"),
@@ -1533,13 +1577,13 @@ func TestGoBinaryManager_PinBinary(t *testing.T) {
 			mockReplaceSymlinkDst: filepath.Join(goBinPath, "mockproj2"),
 		},
 		"error-list-binaries": {
-			bin:                 model.NewBinary("mockproj1"),
+			bin:                 model.NewBinaryFromString("mockproj1"),
 			kind:                model.KindLatest,
 			mockListBinariesErr: os.ErrNotExist,
 			expectedErr:         os.ErrNotExist,
 		},
 		"error-binary-not-found": {
-			bin:  model.NewBinary("mockproj1@v0.4"),
+			bin:  model.NewBinaryFromString("mockproj1@v0.4"),
 			kind: model.KindLatest,
 			mockListBinaries: []string{
 				filepath.Join(intBinPath, "mockproj1@v0.3.0"),
@@ -1547,7 +1591,7 @@ func TestGoBinaryManager_PinBinary(t *testing.T) {
 			expectedErr: toolchain.ErrBinaryNotFound,
 		},
 		"error-replace-symlink": {
-			bin:  model.NewBinary("mockproj1"),
+			bin:  model.NewBinaryFromString("mockproj1"),
 			kind: model.KindLatest,
 			mockListBinaries: []string{
 				filepath.Join(intBinPath, "mockproj1@v0.3.0"),
@@ -1603,7 +1647,7 @@ func TestGoBinaryManager_PruneBinary(t *testing.T) {
 		expectedErr               error
 	}{
 		"success-no-binaries-to-prune": {
-			bin: model.NewBinary("mockproj"),
+			bin: model.NewBinaryFromString("mockproj"),
 			mockListBinariesCalls: []mockListBinariesCall{
 				{
 					path: intBinPath,
@@ -1616,7 +1660,7 @@ func TestGoBinaryManager_PruneBinary(t *testing.T) {
 			},
 		},
 		"success-binaries-to-prune": {
-			bin: model.NewBinary("mockproj2@v2"),
+			bin: model.NewBinaryFromString("mockproj2@v2"),
 			mockListBinariesCalls: []mockListBinariesCall{
 				{
 					path: intBinPath,
@@ -1655,7 +1699,7 @@ func TestGoBinaryManager_PruneBinary(t *testing.T) {
 			},
 		},
 		"success-skip-pinned-binary": {
-			bin: model.NewBinary("mockproj2"),
+			bin: model.NewBinaryFromString("mockproj2"),
 			mockListBinariesCalls: []mockListBinariesCall{
 				{
 					path: intBinPath,
@@ -1688,7 +1732,7 @@ func TestGoBinaryManager_PruneBinary(t *testing.T) {
 			},
 		},
 		"error-list-binaries": {
-			bin: model.NewBinary("mockproj2@v2"),
+			bin: model.NewBinaryFromString("mockproj2@v2"),
 			mockListBinariesCalls: []mockListBinariesCall{
 				{
 					path: intBinPath,
@@ -1698,7 +1742,7 @@ func TestGoBinaryManager_PruneBinary(t *testing.T) {
 			expectedErr: os.ErrNotExist,
 		},
 		"error-get-binary-info": {
-			bin: model.NewBinary("mockproj2"),
+			bin: model.NewBinaryFromString("mockproj2"),
 			mockListBinariesCalls: []mockListBinariesCall{
 				{
 					path: intBinPath,
@@ -1716,7 +1760,7 @@ func TestGoBinaryManager_PruneBinary(t *testing.T) {
 			expectedErr: toolchain.ErrBinaryBuiltWithoutGoModules,
 		},
 		"error-remove-binary": {
-			bin: model.NewBinary("mockproj2@v2"),
+			bin: model.NewBinaryFromString("mockproj2@v2"),
 			mockListBinariesCalls: []mockListBinariesCall{
 				{
 					path: intBinPath,
@@ -1810,18 +1854,18 @@ func TestGoBinaryManager_UninstallBinary(t *testing.T) {
 		expectedErr   error
 	}{
 		"success-unmanaged-binary": {
-			bin: model.NewBinary("mockproj"),
+			bin: model.NewBinaryFromString("mockproj"),
 		},
 		"success-managed-binary": {
-			bin: model.NewBinary("mockproj"),
+			bin: model.NewBinaryFromString("mockproj"),
 		},
 		"error-binary-not-found": {
-			bin:           model.NewBinary("mockproj"),
+			bin:           model.NewBinaryFromString("mockproj"),
 			mockRemoveErr: os.ErrNotExist,
 			expectedErr:   os.ErrNotExist,
 		},
 		"error-remove-binary": {
-			bin:           model.NewBinary("mockproj"),
+			bin:           model.NewBinaryFromString("mockproj"),
 			mockRemoveErr: errors.New("unexpected error"),
 			expectedErr:   errors.New("unexpected error"),
 		},
@@ -1831,7 +1875,7 @@ func TestGoBinaryManager_UninstallBinary(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fs := systemmocks.NewFileSystem(t)
 
-			fs.EXPECT().Remove(filepath.Join(goBinPath, tc.bin.Name)).
+			fs.EXPECT().Remove(filepath.Join(goBinPath, tc.bin.String())).
 				Return(tc.mockRemoveErr).
 				Once()
 
@@ -2066,14 +2110,14 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockReplaceSymlinkSrc:    filepath.Join(intBinPath, "mockproj@v0.1.1"),
 			mockReplaceSymlinkDst:    filepath.Join(goBinPath, "mockproj-v0.1"),
 		},
-		"error-get-build-info": {
+		"error-get-binary-info": {
 			binFullPath:         filepath.Join(goBinPath, "mockproj"),
 			majorUpgrade:        false,
 			rebuild:             false,
 			mockGetBuildInfoErr: toolchain.ErrBinaryBuiltWithoutGoModules,
 			expectedErr:         toolchain.ErrBinaryBuiltWithoutGoModules,
 		},
-		"error-get-latest-module-version": {
+		"error-get-binary-upgrade-info": {
 			binFullPath:          filepath.Join(goBinPath, "mockproj"),
 			majorUpgrade:         false,
 			rebuild:              false,
@@ -2088,25 +2132,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			},
 			expectedErr: toolchain.ErrModuleInfoNotAvailable,
 		},
-		"error-mkdir-temp": {
-			binFullPath:          filepath.Join(goBinPath, "mockproj"),
-			majorUpgrade:         false,
-			rebuild:              false,
-			mockGetBuildInfo:     getBuildInfo("mockproj", "v1.0.0"),
-			callGetSymlinkTarget: true,
-			mockGetSymlinkTarget: filepath.Join(intBinPath, "mockproj@v0.1.0"),
-			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
-				{
-					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
-					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
-				},
-			},
-			callCreateTempDir:        true,
-			mockCreateTempDirPattern: "mockproj-*",
-			mockCreateTempDirErr:     os.ErrNotExist,
-			expectedErr:              os.ErrNotExist,
-		},
-		"error-install": {
+		"error-install-package": {
 			binFullPath:          filepath.Join(goBinPath, "mockproj"),
 			majorUpgrade:         false,
 			rebuild:              false,
@@ -2127,92 +2153,12 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			mockInstallErr:           errors.New("exit status 1: unexpected error"),
 			expectedErr:              errors.New("exit status 1: unexpected error"),
 		},
-		"error-get-build-info-2": {
-			binFullPath:          filepath.Join(goBinPath, "mockproj"),
-			majorUpgrade:         false,
-			rebuild:              false,
-			mockGetBuildInfo:     getBuildInfo("mockproj", "v1.0.0"),
-			callGetSymlinkTarget: true,
-			mockGetSymlinkTarget: filepath.Join(intBinPath, "mockproj@v0.1.0"),
-			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
-				{
-					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
-					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
-				},
-			},
-			callCreateTempDir:        true,
-			mockCreateTempDirPattern: "mockproj-*",
-			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
-			callInstall:              true,
-			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.1.0"),
-			callGetBuildInfo2:        true,
-			mockGetBuildInfo2Path:    filepath.Join(tempPath, "mockproj-0123456789", "mockproj"),
-			mockGetBuildInfo2:        getBuildInfo("mockproj", "v1.1.0"),
-			mockGetBuildInfo2Err:     os.ErrNotExist,
-			expectedErr:              os.ErrNotExist,
-		},
-		"error-move": {
-			binFullPath:          filepath.Join(goBinPath, "mockproj"),
-			majorUpgrade:         false,
-			rebuild:              false,
-			mockGetBuildInfo:     getBuildInfo("mockproj", "v1.0.0"),
-			callGetSymlinkTarget: true,
-			mockGetSymlinkTarget: filepath.Join(intBinPath, "mockproj@v0.1.0"),
-			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
-				{
-					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
-					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
-				},
-			},
-			callCreateTempDir:        true,
-			mockCreateTempDirPattern: "mockproj-*",
-			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
-			callInstall:              true,
-			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.1.0"),
-			callGetBuildInfo2:        true,
-			mockGetBuildInfo2Path:    filepath.Join(tempPath, "mockproj-0123456789", "mockproj"),
-			mockGetBuildInfo2:        getBuildInfo("mockproj", "v1.1.0"),
-			callMove:                 true,
-			mockMoveSrc:              filepath.Join(tempPath, "mockproj-0123456789", "mockproj"),
-			mockMoveDst:              filepath.Join(intBinPath, "mockproj@v1.1.0"),
-			mockMoveErr:              os.ErrExist,
-			expectedErr:              os.ErrExist,
-		},
-		"error-replace-symlink": {
-			binFullPath:          filepath.Join(goBinPath, "mockproj"),
-			majorUpgrade:         false,
-			rebuild:              false,
-			mockGetBuildInfo:     getBuildInfo("mockproj", "v1.0.0"),
-			callGetSymlinkTarget: true,
-			mockGetSymlinkTarget: filepath.Join(intBinPath, "mockproj@v0.1.0"),
-			mockGetLatestModuleVersionCalls: []mockGetLatestModuleVersionCall{
-				{
-					module:       model.NewLatestModule("example.com/mockorg/mockproj"),
-					latestModule: model.NewModule("example.com/mockorg/mockproj", model.NewVersion("v1.1.0")),
-				},
-			},
-			callCreateTempDir:        true,
-			mockCreateTempDirPattern: "mockproj-*",
-			mockCreateTempDirPath:    filepath.Join(tempPath, "mockproj-0123456789"),
-			callInstall:              true,
-			mockInstallPackage:       model.NewPackage("example.com/mockorg/mockproj/cmd/mockproj@v1.1.0"),
-			callGetBuildInfo2:        true,
-			mockGetBuildInfo2Path:    filepath.Join(tempPath, "mockproj-0123456789", "mockproj"),
-			mockGetBuildInfo2:        getBuildInfo("mockproj", "v1.1.0"),
-			callMove:                 true,
-			mockMoveSrc:              filepath.Join(tempPath, "mockproj-0123456789", "mockproj"),
-			mockMoveDst:              filepath.Join(intBinPath, "mockproj@v1.1.0"),
-			callReplaceSymlink:       true,
-			mockReplaceSymlinkSrc:    filepath.Join(intBinPath, "mockproj@v1.1.0"),
-			mockReplaceSymlinkDst:    filepath.Join(goBinPath, "mockproj"),
-			mockReplaceSymlinkErr:    errors.New("unexpected error"),
-			expectedErr:              errors.New("unexpected error"),
-		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := systemmocks.NewFileSystem(t)
+			rt := systemmocks.NewRuntime(t)
 			toolchain := toolchainmocks.NewToolchain(t)
 
 			toolchain.EXPECT().GetBuildInfo(tc.binFullPath).
@@ -2246,6 +2192,8 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 			}
 
 			if tc.callGetBuildInfo2 {
+				rt.EXPECT().OS().Return("linux").Once()
+
 				toolchain.EXPECT().GetBuildInfo(tc.mockGetBuildInfo2Path).
 					Return(tc.mockGetBuildInfo2, tc.mockGetBuildInfo2Err).
 					Once()
@@ -2261,7 +2209,7 @@ func TestGoBinaryManager_UpgradeBinary(t *testing.T) {
 					Return(tc.mockReplaceSymlinkErr).Once()
 			}
 
-			binaryManager := manager.NewGoBinaryManager(fs, nil, toolchain, workspace)
+			binaryManager := manager.NewGoBinaryManager(fs, rt, toolchain, workspace)
 			err = binaryManager.UpgradeBinary(
 				context.Background(),
 				tc.binFullPath,
@@ -2285,8 +2233,10 @@ func getBinaryInfo(
 		modulePath = modulePath + "/" + major
 	}
 
+	binary := model.NewBinaryFromString(name)
 	path := filepath.Join(workspace.GetGoBinPath(), name)
 	if internalBinPath {
+		binary = model.NewBinaryFromString(name + "@" + version)
 		path = filepath.Join(workspace.GetInternalBinPath(), name+"@"+version)
 	}
 
@@ -2296,7 +2246,7 @@ func getBinaryInfo(
 	}
 
 	return model.BinaryInfo{
-		Name:        name,
+		Binary:      binary,
 		FullPath:    path,
 		InstallPath: installPath,
 		PackagePath: packagePath,
