@@ -24,7 +24,7 @@ type FileSystem interface {
 	LocateBinaryInPath(name string) []string
 	// Move moves a file or directory.
 	Move(source, target string) error
-	// MoveWithSymlink moves a file or directory with a symlink.
+	// MoveWithSymlink moves a file and creates a symlink to the original file.
 	MoveWithSymlink(source, target string) error
 	// Remove removes a file or directory.
 	Remove(path string) error
@@ -146,18 +146,17 @@ func (fs *fileSystem) Move(source, target string) error {
 	return os.Rename(source, target)
 }
 
-// MoveWithSymlink moves a file or directory with a symlink. It returns an
-// error if the file or directory cannot be moved or the symlink cannot be
-// created.
+// MoveWithSymlink moves a file and creates a symlink to the original file. It
+// returns an error if the file cannot be moved or the symlink cannot be created.
 func (fs *fileSystem) MoveWithSymlink(source, target string) error {
 	logger := slog.Default().With("source", source, "target", target)
 
-	if err := os.Rename(target, source); err != nil {
+	if err := os.Rename(source, target); err != nil {
 		logger.Error("error while moving file", "err", err)
 		return err
 	}
 
-	if err := os.Symlink(source, target); err != nil {
+	if err := os.Symlink(target, source); err != nil {
 		logger.Error("error while creating symlink", "err", err)
 		return err
 	}
