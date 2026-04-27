@@ -30,7 +30,7 @@
 ### Via Go Module System
 
 ```sh
-go install github.com/brunoribeiro127/gobin@latest
+go install github.com/brunoribeiro127/gobin/cmd/gobin@latest
 ```
 
 ### Via Prebuilt Binaries
